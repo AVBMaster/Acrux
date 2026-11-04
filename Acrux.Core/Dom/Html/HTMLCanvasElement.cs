@@ -61,13 +61,13 @@ public class HTMLCanvasElement : HtmlElement
         switch (type.ToLowerInvariant())
         {
             case "2d":
-                _context2d ??= new CanvasRenderingContext2D();
+                _context2d ??= new CanvasRenderingContext2D(this);
                 _currentContextType = "2d";
                 return _context2d;
             case "webgl":
             case "webgl2":
             case "experimental-webgl":
-                _webglContext ??= new WebGLRenderingContext();
+                _webglContext ??= new WebGLRenderingContext(this);
                 _currentContextType = type;
                 return _webglContext;
             case "bitmaprenderer":
@@ -84,9 +84,28 @@ public class HTMLCanvasElement : HtmlElement
         => Task.FromResult(new Blob(new BlobPropertyBag { Type = "image/png" }));
 }
 
-public class CanvasRenderingContext2D
+public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
 {
     private SKSurface? _surface;
+
+    /// <summary>HTML §4.8.10.2: a context is an object of the interface the page named, and it
+    /// knows the canvas it was made from. The chain names the interface for the prototype fix-up,
+    /// and the tag is what a page reads when it asks what it holds.</summary>
+    private readonly HTMLCanvasElement? _owner;
+
+    public CanvasRenderingContext2D(HTMLCanvasElement? owner = null)
+    {
+        _owner = owner;
+        Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    }
+
+    public string[] __domTypeChain => new[] { "CanvasRenderingContext2D" };
+
+    /// <summary>The canvas is the one object the page already holds, so it goes back through the
+    /// engine's identity map rather than as a second wrapper for the same node.</summary>
+    public object? canvas => _owner is null ? null
+        : Acrux.Core.JavaScript.JsIntegrationService.WrapAny(_owner) ?? _owner;
+    public override string ToString() => "[object CanvasRenderingContext2D]";
 
     /// <summary>Publish a backing surface (from the JS canvas plumbing).</summary>
     public void AttachSurface(SKSurface surface) => _surface = surface;
@@ -94,7 +113,6 @@ public class CanvasRenderingContext2D
     /// <summary>Current pixels for painting; null until a surface is attached.</summary>
     public SKImage? SnapshotImage() => _surface?.Snapshot();
 
-    public CanvasElement? Canvas { get; set; }
     public double GlobalAlpha { get; set; } = 1.0;
     public string GlobalCompositeOperation { get; set; } = "source-over";
     public string? Filter { get; set; }
@@ -269,12 +287,34 @@ public class TextMetrics
     public double IdeographicBaseline { get; }
 }
 
-public class ImageBitmapRenderingContext
+public class ImageBitmapRenderingContext : Acrux.Core.JavaScript.IDomPrototypeHost
 {
+    public ImageBitmapRenderingContext() => Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    public string[] __domTypeChain => new[] { "ImageBitmapRenderingContext" };
+    public override string ToString() => "[object ImageBitmapRenderingContext]";
     public void TransferFromImageBitmap(ImageBitmap? bitmap) { }
 }
 
-public class WebGLRenderingContext { }
+/// <summary>HTML §4.8.10.2: the engine paints through its own pipeline and has no command surface
+/// behind a GL context yet, but the object a page holds is still one of the interface the page named
+/// — the two questions a page asks any object answer the same way they do in the reference.</summary>
+public class WebGLRenderingContext : Acrux.Core.JavaScript.IDomPrototypeHost
+{
+    private readonly HTMLCanvasElement? _owner;
+
+    public WebGLRenderingContext(HTMLCanvasElement? owner = null)
+    {
+        _owner = owner;
+        Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    }
+
+    public string[] __domTypeChain => new[] { "WebGLRenderingContext" };
+    public object? canvas => _owner is null ? null
+        : Acrux.Core.JavaScript.JsIntegrationService.WrapAny(_owner) ?? _owner;
+    public double drawingBufferWidth => _owner is null ? 300 : _owner.Width;
+    public double drawingBufferHeight => _owner is null ? 150 : _owner.Height;
+    public override string ToString() => "[object WebGLRenderingContext]";
+}
 
 public interface CanvasImageSource { }
 

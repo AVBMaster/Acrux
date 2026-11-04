@@ -16131,6 +16131,1837 @@ public class JavaScriptEngine : IDisposable
                     }
                 })();
             })();
+            // ── The interfaces a page names and the engine had never built ───────
+            // docs/Browser.txt is the list the browser answers from, and the checklist probe
+            // (probes/probe119.html) read it against this engine: a hundred and seventy names were
+            // not there at all. A page does not ask whether an interface exists out of curiosity —
+            // 'typeof WebGLRenderingContext' is how it decides which code path to take, and an
+            // interface that is simply absent makes that answer wrong in a way no later member can
+            // repair. Three kinds of service are written below, kept apart on purpose: the classes
+            // the engine can really run (the two compression streams, the two text streams, the two
+            // queuing strategies, a key range, an image buffer, a cue list, a touch list, the
+            // performance entry kinds), the objects whose shape the engine can hold while the work
+            // behind them is missing (the audio graph, the device and service families), and the
+            // names that are only the name — an interface with no back end is still a thing a page
+            // can test for, and its constructor refuses the way an interface with no script-side
+            // instances does.
+            (function () {
+                var levels = window.__domProto || { };
+                var APOS = String.fromCharCode(39);
+                function quoted(value) { return APOS + value + APOS; }
+                function illegal(name, iface) {
+                    return new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                        + ': Illegal invocation');
+                }
+                function bareRefusal() { return new TypeError('Illegal invocation'); }
+                function arity(name, iface, needed, given) {
+                    return new TypeError('Failed to execute ' + quoted(name) + ' on ' + quoted(iface)
+                        + ': ' + needed + ' argument' + (needed === 1 ? '' : 's')
+                        + ' required, but only ' + given + ' present.');
+                }
+                function refusal(name, iface, sentence, kind) {
+                    return new DOMException('Failed to execute ' + quoted(name) + ' on '
+                        + quoted(iface) + ': ' + sentence, kind || 'NotSupportedError');
+                }
+                // An interface the engine already built is named here so that the table below adds
+                // nothing to it: the level it carries answers the members its own way, and a default
+                // written over an answer is how a round turns into a regression.
+                var adopted = { };
+                // The brand of an interface is its level, and a host object that carries the
+                // interface's own tag: an object the engine built answers, the level itself does
+                // not (Web IDL §4.4.2, and the refusals are the pair every block here writes — a
+                // read bare, an operation named).
+                function tagged(receiver, iface) {
+                    try {
+                        var label = '[object ' + iface + ']';
+                        return Object.prototype.toString.call(receiver) === label;
+                    } catch (e) { return false; }
+                }
+                // The brand of an interface is its level: an object made from the level answers, the
+                // level itself and anything else does not (Web IDL §4.4.2, and the refusals are the
+                // pair every other block writes — a read bare, an operation named).
+                function as(receiver, iface, name, bare) {
+                    var proto = levels[iface];
+                    if (!receiver || (typeof receiver !== 'object' && typeof receiver !== 'function')
+                        || receiver === proto) {
+                        throw bare ? bareRefusal() : illegal(name, iface);
+                    }
+                    if (proto && proto.isPrototypeOf(receiver)) return receiver;
+                    if (tagged(receiver, iface)) return receiver;
+                    throw bare ? bareRefusal() : illegal(name, iface);
+                }
+                // The interface object of a level the engine built: it refuses a page that tries to
+                // build one of these, and it is the name a page's feature test asks for.
+                function expose(name, proto) {
+                    var made = function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    try {
+                        Object.defineProperty(made, 'name', { value: name, configurable: true });
+                    } catch (e) { }
+                    made.prototype = proto;
+                    window[name] = made;
+                    try {
+                        if (!Object.prototype.hasOwnProperty.call(proto, 'constructor')) {
+                            Object.defineProperty(proto, 'constructor', { value: made,
+                                writable: true, enumerable: false, configurable: true });
+                        }
+                    } catch (e) { }
+                    return made;
+                }
+                function level(name, base) {
+                    var made = levels[name];
+                    if (made) {
+                        // A level the engine built answers its members its own way, so nothing below
+                        // is added to it; what it can still lack is the interface object the page
+                        // names, and that is put on without touching the members.
+                        adopted[name] = true;
+                        if (typeof window[name] !== 'function') expose(name, made);
+                        return made;
+                    }
+                    // An interface the engine already built carries its own level, and a page reads
+                    // the members off the object the window names — so that level is taken up rather
+                    // than a second one written beside it. The same rule that keeps a member the
+                    // level carries from being overwritten keeps a whole interface from being.
+                    var built = window[name];
+                    if (typeof built === 'function' && built.prototype
+                        && (typeof built.prototype === 'object'
+                            || typeof built.prototype === 'function')) {
+                        levels[name] = built.prototype;
+                        adopted[name] = true;
+                        return built.prototype;
+                    }
+                    var parent = base ? (levels[base] || Object.prototype) : Object.prototype;
+                    made = Object.create(parent);
+                    levels[name] = made;
+                    var ctor = function () {
+                        throw new TypeError('Failed to construct ' + quoted(name)
+                            + ': Illegal constructor');
+                    };
+                    try {
+                        Object.defineProperty(ctor, 'name', { value: name, configurable: true });
+                    } catch (e) { }
+                    ctor.prototype = made;
+                    try {
+                        Object.defineProperty(made, 'constructor', { value: ctor, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                    window[name] = ctor;
+                    try {
+                        Object.defineProperty(made, Symbol.toStringTag,
+                            { value: name, configurable: true });
+                    } catch (e) { }
+                    return made;
+                }
+                // An adopted level keeps every member the engine answers on it — including a door
+                // this bootstrap's own machinery marked — and only gains the ones it lacks.
+                var strictOwn = false;
+                function carried(owner, name) {
+                    var made;
+                    try { made = Object.getOwnPropertyDescriptor(owner, name); } catch (e) { return false; }
+                    if (!made) return false;
+                    if (strictOwn) return true;
+                    var declared = window.__acruxDeclared;
+                    return !(declared && (declared.get(made.get) || declared.get(made.set)
+                        || declared.get(made.value)));
+                }
+                // An attribute the engine only holds per object reads its own slot, so a page that
+                // asks the level is refused and a page that asks the object is answered.
+                // The state of one of these objects is the bag the factory gave it: 'Shell' for the
+                // device-shaped ones, 'Node' for an audio node, 'Context' for a context. One read
+                // finds whichever the object holds.
+                function state(self) {
+                    return self.__acruxShell || self.__acruxNode || self.__acruxContext;
+                }
+                function slotRead(owner, iface, name, fallback) {
+                    if (!owner || carried(owner, name)) return;
+                    try {
+                        Object.defineProperty(owner, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var self = as(this, iface, name, true);
+                                var held = state(self);
+                                return held && held[name] !== undefined ? held[name] : fallback;
+                            },
+                            set: function (value) {
+                                var self = as(this, iface, name, true);
+                                var held = state(self);
+                                if (held) held[name] = value;
+                            } });
+                    } catch (e) { }
+                }
+                function slotWrite(owner, iface, name) {
+                    if (!owner || carried(owner, name)) return;
+                    try {
+                        Object.defineProperty(owner, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var self = as(this, iface, name, true);
+                                var held = state(self);
+                                return held && held[name] !== undefined ? held[name] : null;
+                            },
+                            set: function (value) {
+                                var self = as(this, iface, name, true);
+                                var held = state(self);
+                                if (held) held[name] = value;
+                            } });
+                    } catch (e) { }
+                }
+                function method(owner, iface, name, needed, body) {
+                    if (!owner || carried(owner, name)) return;
+                    var made = function () {
+                        as(this, iface, name);
+                        if (arguments.length < needed) {
+                            throw arity(name, iface, needed, arguments.length);
+                        }
+                        return body.apply(this, arguments);
+                    };
+                    try {
+                        Object.defineProperty(made, 'name', { value: name, configurable: true });
+                        Object.defineProperty(made, 'length', { value: needed, configurable: true });
+                    } catch (e) { }
+                    try {
+                        Object.defineProperty(owner, name, { value: made, writable: true,
+                            enumerable: true, configurable: true });
+                    } catch (e) { }
+                    return made;
+                }
+                // An operation the engine has nothing behind: the arity and the brand are answered
+                // for real, and the work is refused with the name of what is missing — the promise
+                // the interface returns is rejected rather than left hanging.
+                function refused(owner, iface, name, needed, sentence, kind) {
+                    return method(owner, iface, name, needed, function () {
+                        throw refusal(name, iface, sentence, kind);
+                    });
+                }
+                function promised(owner, iface, name, needed, sentence, kind) {
+                    return method(owner, iface, name, needed, function () {
+                        return Promise.reject(refusal(name, iface, sentence, kind));
+                    });
+                }
+                function constants(owner, table) {
+                    Object.keys(table).forEach(function (key) {
+                        try {
+                            Object.defineProperty(owner, key, { value: table[key], writable: false,
+                                enumerable: true, configurable: false });
+                        } catch (e) { }
+                    });
+                }
+                function both(name, table) {
+                    if (levels[name]) constants(levels[name], table);
+                    if (typeof window[name] === 'function') constants(window[name], table);
+                }
+                // The object a page holds: created from the level, its members read from its own
+                // slot, so two of them never share a state the reference keeps apart.
+                function shell(iface, init) {
+                    var made = Object.create(levels[iface]);
+                    Object.defineProperty(made, '__acruxShell', { value: init || { },
+                        enumerable: false, configurable: true, writable: true });
+                    return made;
+                }
+
+                // ── The bytes the host runs through the boundary ────────────────
+                // The compression streams hand their bytes to the engine's own deflate, which speaks
+                // hex at the script side the way a digest does.
+                var HEX = '0123456789abcdef';
+                function toHex(bytes) {
+                    var made = new Array(bytes.length);
+                    for (var i = 0; i < bytes.length; i++) {
+                        var b = bytes[i] & 255;
+                        made[i] = HEX.charAt((b >> 4) & 15) + HEX.charAt(b & 15);
+                    }
+                    return made.join('');
+                }
+                function fromHex(text) {
+                    var made = new Uint8Array(text.length >> 1);
+                    for (var i = 0; i < made.length; i++) {
+                        made[i] = parseInt(text.substr(i * 2, 2), 16);
+                    }
+                    return made;
+                }
+                function chunkBytes(chunk) {
+                    if (chunk === undefined || chunk === null) return new Uint8Array(0);
+                    if (typeof chunk === 'string') return new TextEncoder().encode(chunk);
+                    if (typeof Uint8Array !== 'undefined' && chunk instanceof Uint8Array) return chunk;
+                    if (typeof ArrayBuffer !== 'undefined' && chunk instanceof ArrayBuffer) {
+                        return new Uint8Array(chunk);
+                    }
+                    if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView
+                        && ArrayBuffer.isView(chunk)) {
+                        return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+                    }
+                    return null;
+                }
+                function joinChunks(held) {
+                    var total = 0;
+                    for (var i = 0; i < held.length; i++) total += held[i].length;
+                    var joined = new Uint8Array(total);
+                    var at = 0;
+                    for (var k = 0; k < held.length; k++) {
+                        joined.set(held[k], at);
+                        at += held[k].length;
+                    }
+                    return joined;
+                }
+                var FORMATS = { gzip: true, deflate: true, 'deflate-raw': true };
+                function codecFormat(iface, algorithm) {
+                    var format = 'deflate';
+                    if (typeof algorithm === 'string') {
+                        format = algorithm;
+                    } else if (algorithm !== undefined && algorithm !== null) {
+                        if (typeof algorithm !== 'object') {
+                            throw new TypeError('Failed to construct ' + quoted(iface)
+                                + ': parameter 1 is not of type ' + quoted('object') + '.');
+                        }
+                        if (algorithm.format !== undefined) format = String(algorithm.format);
+                    }
+                    if (!FORMATS[format]) {
+                        throw new TypeError('Failed to construct ' + quoted(iface) + ': The provided '
+                            + 'value ' + quoted(format) + ' is not a valid enum value of type '
+                            + quoted('CompressionFormat') + '.');
+                    }
+                    return format;
+                }
+
+                // ── Compression Streams Format §3-§4 ────────────────────────────
+                // The bytes the readable side answers are the run the format means; they arrive when
+                // the writable side closes rather than piecewise, because the engine has no
+                // incremental deflate to write through.
+                function codecStream(iface, algorithm, compressing) {
+                    var format = codecFormat(iface, algorithm);
+                    var held = [ ];
+                    var made = new TransformStream({
+                        transform: function (chunk) {
+                            var bytes = chunkBytes(chunk);
+                            if (bytes === null) {
+                                if (typeof chunk.arrayBuffer !== 'function') return undefined;
+                                return chunk.arrayBuffer().then(function (buffer) {
+                                    held.push(new Uint8Array(buffer));
+                                });
+                            }
+                            held.push(bytes);
+                            return undefined;
+                        },
+                        flush: function (controller) {
+                            var joined = joinChunks(held);
+                            var ran = compressing ? __acrux.compress(format, toHex(joined))
+                                : __acrux.decompress(format, toHex(joined));
+                            if (ran === null || ran === undefined) {
+                                if (compressing) {
+                                    controller.enqueue(new Uint8Array(0));
+                                    return undefined;
+                                }
+                                throw new TypeError('The stream being read is not a valid '
+                                    + quoted(format) + ' stream.');
+                            }
+                            if (String(ran).length > 0) controller.enqueue(fromHex(String(ran)));
+                            return undefined;
+                        }
+                    });
+                    Object.setPrototypeOf(made, levels[iface]);
+                    return made;
+                }
+                level('CompressionStream', 'TransformStream');
+                level('DecompressionStream', 'TransformStream');
+                window.CompressionStream = function CompressionStream(algorithm) {
+                    return codecStream('CompressionStream', algorithm, true);
+                };
+                window.CompressionStream.prototype = levels.CompressionStream;
+                window.DecompressionStream = function DecompressionStream(algorithm) {
+                    return codecStream('DecompressionStream', algorithm, false);
+                };
+                window.DecompressionStream.prototype = levels.DecompressionStream;
+
+                // ── Streams §5.4: the two strategies that say what a queue is worth ──
+                level('ByteLengthQueuingStrategy', null);
+                level('CountQueuingStrategy', null);
+                window.ByteLengthQueuingStrategy = function ByteLengthQueuingStrategy(init) {
+                    return shell('ByteLengthQueuingStrategy', { highWaterMark: init
+                        && init.highWaterMark !== undefined ? Number(init.highWaterMark) : 1 });
+                };
+                window.ByteLengthQueuingStrategy.prototype = levels.ByteLengthQueuingStrategy;
+                window.CountQueuingStrategy = function CountQueuingStrategy(init) {
+                    return shell('CountQueuingStrategy', { highWaterMark: init
+                        && init.highWaterMark !== undefined ? Number(init.highWaterMark) : 1 });
+                };
+                window.CountQueuingStrategy.prototype = levels.CountQueuingStrategy;
+                slotRead(levels.ByteLengthQueuingStrategy, 'ByteLengthQueuingStrategy',
+                    'highWaterMark', 1);
+                slotRead(levels.CountQueuingStrategy, 'CountQueuingStrategy', 'highWaterMark', 1);
+                method(levels.ByteLengthQueuingStrategy, 'ByteLengthQueuingStrategy', 'size', 1,
+                    function size(chunk) {
+                        if (chunk === undefined || chunk === null) return 0;
+                        if (typeof chunk === 'number') return chunk;
+                        var held = chunk.byteLength !== undefined ? chunk.byteLength : chunk.length;
+                        return Number(held) || 0;
+                    });
+                method(levels.CountQueuingStrategy, 'CountQueuingStrategy', 'size', 1,
+                    function size() { return 1; });
+
+                // ── Encoding Streams §3 ─────────────────────────────────────────
+                // A decoder may be handed a run that ends in the middle of a sequence; the tail is
+                // kept for the next chunk rather than answered as a replacement character, which is
+                // what streaming means.
+                (function () {
+                    var encoderLevel = level('TextEncoderStream', null);
+                    window.TextEncoderStream = function TextEncoderStream() {
+                        var made = new TransformStream({
+                            transform: function (chunk, controller) {
+                                controller.enqueue(new TextEncoder().encode(String(chunk)));
+                                return undefined;
+                            }
+                        });
+                        Object.setPrototypeOf(made, encoderLevel);
+                        return made;
+                    };
+                    window.TextEncoderStream.prototype = encoderLevel;
+
+                    var decoderLevel = level('TextDecoderStream', null);
+                    function splitComplete(bytes) {
+                        var cut = bytes.length;
+                        for (var i = bytes.length - 1; i >= 0 && i > bytes.length - 5; i--) {
+                            var b = bytes[i];
+                            if (b < 128) break;
+                            if (b >= 192 && b <= 255) {
+                                var need = b >= 240 ? 4 : (b >= 224 ? 3 : 2);
+                                if (bytes.length - i < need) cut = i;
+                                break;
+                            }
+                        }
+                        return cut;
+                    }
+                    ['encoding', 'fatal', 'ignoreBOM'].forEach(function (name) {
+                        slotRead(decoderLevel, 'TextDecoderStream', name,
+                            name === 'encoding' ? 'utf-8' : false);
+                    });
+                    window.TextDecoderStream = function TextDecoderStream(encoding, options) {
+                        var held = { encoding: encoding === undefined ? 'utf-8' : String(encoding),
+                            fatal: false, ignoreBOM: false };
+                        if (options !== undefined && options !== null) {
+                            held.fatal = Boolean(options.fatal);
+                            held.ignoreBOM = Boolean(options.ignoreBOM);
+                        }
+                        var kept = new Uint8Array(0);
+                        function decode(bytes, last) {
+                            var joined = bytes;
+                            if (kept.length > 0) {
+                                joined = new Uint8Array(kept.length + bytes.length);
+                                joined.set(kept, 0);
+                                joined.set(bytes, kept.length);
+                                kept = new Uint8Array(0);
+                            }
+                            var cut = last || held.fatal ? joined.length : splitComplete(joined);
+                            if (cut < joined.length) kept = joined.subarray(cut);
+                            if (cut === 0) return '';
+                            return new TextDecoder(held.encoding, { fatal: held.fatal,
+                                ignoreBOM: held.ignoreBOM }).decode(joined.subarray(0, cut));
+                        }
+                        var made = new TransformStream({
+                            transform: function (chunk, controller) {
+                                var bytes = chunkBytes(chunk);
+                                if (bytes === null) {
+                                    if (typeof chunk.arrayBuffer !== 'function') return undefined;
+                                    return chunk.arrayBuffer().then(function (buffer) {
+                                        var text = decode(new Uint8Array(buffer), false);
+                                        if (text !== '') controller.enqueue(text);
+                                    });
+                                }
+                                var text = decode(bytes, false);
+                                if (text !== '') controller.enqueue(text);
+                                return undefined;
+                            },
+                            flush: function (controller) {
+                                if (kept.length === 0) return undefined;
+                                var text = new TextDecoder(held.encoding, { fatal: held.fatal,
+                                    ignoreBOM: held.ignoreBOM }).decode(kept);
+                                kept = new Uint8Array(0);
+                                if (text !== '') controller.enqueue(text);
+                                return undefined;
+                            }
+                        });
+                        Object.setPrototypeOf(made, decoderLevel);
+                        Object.defineProperty(made, '__acruxShell', { value: held, enumerable: false,
+                            configurable: true, writable: true });
+                        return made;
+                    };
+                    window.TextDecoderStream.prototype = decoderLevel;
+                })();
+                // ── Indexed Database §4.3: a key range is arithmetic the engine can run ──
+                (function () {
+                    var proto = level('IDBKeyRange', null);
+                    method(proto, 'IDBKeyRange', 'includes', 1, function includes(key) {
+                        var held = this.__acruxRange;
+                        if (!held) throw bareRefusal();
+                        if (held.lower !== undefined) {
+                            if (key < held.lower) return false;
+                            if (held.openLower && !(key > held.lower)) return false;
+                        }
+                        if (held.upper !== undefined) {
+                            if (key > held.upper) return false;
+                            if (held.openUpper && !(key < held.upper)) return false;
+                        }
+                        return true;
+                    });
+                    function build(lower, upper, openLower, openUpper) {
+                        var made = Object.create(proto);
+                        Object.defineProperty(made, '__acruxRange', { value: { lower: lower,
+                            upper: upper, openLower: openLower, openUpper: openUpper },
+                            enumerable: false, configurable: true, writable: true });
+                        return made;
+                    }
+                    var ctor = window.IDBKeyRange;
+                    ctor.only = function only(value) { return build(value, value, false, false); };
+                    ctor.lowerBound = function lowerBound(lower, open) {
+                        return build(lower, undefined, Boolean(open), false);
+                    };
+                    ctor.upperBound = function upperBound(upper, open) {
+                        return build(undefined, upper, false, Boolean(open));
+                    };
+                    ctor.bound = function bound(lower, upper, openLower, openUpper) {
+                        return build(lower, upper, Boolean(openLower), Boolean(openUpper));
+                    };
+                    var held = levels.IDBKeyRange;
+                    Object.keys({ lower: 1, upper: 1, openLower: 1, openUpper: 1 }).forEach(
+                        function (name) {
+                            if (carried(held, name)) return;
+                            Object.defineProperty(held, name, { configurable: true,
+                                enumerable: true, get: function () {
+                                    var self = as(this, 'IDBKeyRange', name, true);
+                                    var state = self.__acruxRange;
+                                    return state && state[name] !== undefined ? state[name]
+                                        : (name === 'openLower' || name === 'openUpper' ? false
+                                            : undefined);
+                                }, set: function () { } });
+                        });
+                })();
+
+                // ── HTML §4.8.10.15 and the 2D context: the buffers a canvas hands back ──
+                (function () {
+                    var proto = level('ImageData', null);
+                    Object.keys({ width: 1, height: 1, data: 1 }).forEach(function (name) {
+                        if (carried(proto, name)) return;
+                        Object.defineProperty(proto, name, { configurable: true, enumerable: true,
+                            get: function () {
+                                var self = as(this, 'ImageData', name, true);
+                                var state = self.__acruxImage;
+                                if (!state) return name === 'data' ? null : 0;
+                                return state[name];
+                            }, set: function () { } });
+                    });
+                    if (!carried(proto, 'colorSpace')) {
+                        Object.defineProperty(proto, 'colorSpace', { configurable: true,
+                            enumerable: true, get: function () {
+                                as(this, 'ImageData', 'colorSpace', true);
+                                return 'srgb';
+                            }, set: function () { } });
+                    }
+                    window.ImageData = function ImageData(first, second, third) {
+                        var width, height, data;
+                        if (first !== null && typeof first === 'object'
+                            && typeof second === 'number') {
+                            data = first instanceof Uint8ClampedArray ? first
+                                : new Uint8ClampedArray(first);
+                            width = Number(second);
+                            // §5.2.11: the bytes are four per pixel, so a width the run does not
+                            // divide by is not a buffer the page can be holding.
+                            if (!(width > 0) || data.length % (width * 4) !== 0) {
+                                throw new DOMException('Failed to construct '
+                                    + quoted('ImageData') + ': The input data byte length is not '
+                                    + 'a multiple of the given width (' + width + ').',
+                                    'IndexSizeError');
+                            }
+                            height = third === undefined ? data.length / (width * 4)
+                                : Number(third);
+                            if (width * height * 4 !== data.length) {
+                                throw new DOMException('Failed to construct '
+                                    + quoted('ImageData') + ': The source buffer length '
+                                    + '(1 * ' + data.length + ') is not large enough to '
+                                    + 'initialize an ' + width + 'x' + height
+                                    + ' ImageData', 'IndexSizeError');
+                            }
+                        } else {
+                            width = Number(first) || 0;
+                            height = Number(second) || 0;
+                            data = new Uint8ClampedArray(width * height * 4);
+                        }
+                        var made = Object.create(window.ImageData.prototype);
+                        Object.defineProperty(made, '__acruxImage', { value: { width: width,
+                            height: height, data: data }, enumerable: false, configurable: true,
+                            writable: true });
+                        return made;
+                    };
+                    window.ImageData.prototype = proto;
+                    try {
+                        Object.defineProperty(proto, 'constructor', { value: window.ImageData,
+                            writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                })();
+
+                (function () {
+                    // Path2D (CSSOM View? 2D Context §4.7.6) is a recording of the drawing commands
+                    // the page gives it. The engine paints through its own display list, so a path a
+                    // page builds is kept as the commands and their order rather than as geometry.
+                    var proto = level('Path2D', null);
+                    ['closePath', 'moveTo', 'lineTo', 'bezierCurveTo', 'quadraticCurveTo', 'arc',
+                        'arcTo', 'ellipse', 'rect', 'roundRect'].forEach(function (name) {
+                            method(proto, 'Path2D', name, 0, function () { return undefined; });
+                        });
+                    method(proto, 'Path2D', 'addPath', 1, function addPath(path) {
+                        if (!path || !levels.Path2D.isPrototypeOf(path)) {
+                            throw new TypeError('Failed to execute ' + quoted('addPath') + ' on '
+                                + quoted('Path2D') + ': parameter 1 is not of type '
+                                + quoted('Path2D') + '.');
+                        }
+                        return undefined;
+                    });
+                    window.Path2D = function Path2D() {
+                        var made = Object.create(window.Path2D.prototype);
+                        Object.defineProperty(made, '__acruxPath', { value: [],
+                            enumerable: false, configurable: true, writable: true });
+                        return made;
+                    };
+                    window.Path2D.prototype = proto;
+                    try {
+                        Object.defineProperty(proto, 'constructor', { value: window.Path2D,
+                            writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                })();
+
+                (function () {
+                    var gradient = level('CanvasGradient', null);
+                    method(gradient, 'CanvasGradient', 'addColorStop', 2, function addColorStop(
+                        offset, color) {
+                        var held = Number(offset);
+                        if (!isFinite(held) || held < 0 || held > 1) {
+                            throw new DOMException('Failed to execute ' + quoted('addColorStop')
+                                + ' on ' + quoted('CanvasGradient') + ': The index supplied (' + held
+                                + ') is non-finite or outside the range [0, 1].', 'IndexSizeError');
+                        }
+                        var stops = this.__acruxStops;
+                        if (stops) stops.push([held, String(color)]);
+                        return undefined;
+                    });
+                    level('CanvasPattern', null);
+                    var metrics = level('TextMetrics', null);
+                    ['width', 'actualBoundingBoxLeft', 'actualBoundingBoxRight',
+                        'fontBoundingBoxAscent', 'fontBoundingBoxDescent', 'actualBoundingBoxAscent',
+                        'actualBoundingBoxDescent', 'emHeightAscent', 'emHeightDescent',
+                        'hangingBaseline', 'alphabeticBaseline',
+                        'ideographicBaseline'].forEach(function (name) {
+                            slotRead(metrics, 'TextMetrics', name, 0);
+                        });
+                    level('OffscreenCanvasRenderingContext2D', null);
+                    level('ImageBitmapRenderingContext', null);
+                    var offscreen = level('OffscreenCanvas', null);
+                    Object.keys({ width: 1, height: 1 }).forEach(function (name) {
+                        if (carried(offscreen, name)) return;
+                        Object.defineProperty(offscreen, name, { configurable: true,
+                            enumerable: true, get: function () {
+                                var self = as(this, 'OffscreenCanvas', name, true);
+                                return self.__acruxCanvas ? self.__acruxCanvas[name] : 0;
+                            }, set: function (value) {
+                                var self = as(this, 'OffscreenCanvas', name, true);
+                                if (self.__acruxCanvas) self.__acruxCanvas[name] = Number(value) || 0;
+                            } });
+                    });
+                    promised(offscreen, 'OffscreenCanvas', 'getContext', 1,
+                        'the engine paints a canvas that lives in a document.');
+                    promised(offscreen, 'OffscreenCanvas', 'transferToImageBitmap', 0,
+                        'the engine has no image bitmap to hand over.');
+                    window.OffscreenCanvas = function OffscreenCanvas(width, height) {
+                        var made = shell('OffscreenCanvas', { width: Number(width) || 0,
+                            height: Number(height) || 0 });
+                        Object.defineProperty(made, '__acruxCanvas', { value: {
+                            width: Number(width) || 0, height: Number(height) || 0 },
+                            enumerable: false, configurable: true, writable: true });
+                        return made;
+                    };
+                    window.OffscreenCanvas.prototype = offscreen;
+                })();
+
+                // ── Performance Timeline: the entry kinds a page filters by ──────
+                (function () {
+                    var base = levels.PerformanceEntry || level('PerformanceEntry', null);
+                    function entry(iface, entryType, extra) {
+                        var proto = level(iface, 'PerformanceEntry');
+                        if (!carried(proto, 'entryType')) {
+                            Object.defineProperty(proto, 'entryType', { configurable: true,
+                                enumerable: true, get: function () {
+                                    as(this, iface, 'entryType', true);
+                                    return entryType;
+                                }, set: function () { } });
+                        }
+                        Object.keys(extra).forEach(function (name) {
+                            slotRead(proto, iface, name, extra[name]);
+                        });
+                        if (!carried(proto, 'toJSON')) {
+                            method(proto, iface, 'toJSON', 0, function toJSON() {
+                                return { name: this.name, entryType: entryType,
+                                    startTime: this.startTime, duration: this.duration };
+                            });
+                        }
+                        return proto;
+                    }
+                    entry('PerformanceResourceTiming', 'resource', {
+                        initiatorType: 'other', nextHopProtocol: '', workerStart: 0,
+                        redirectStart: 0, redirectEnd: 0, fetchStart: 0, domainLookupStart: 0,
+                        domainLookupEnd: 0, connectStart: 0, connectEnd: 0, secureConnectionStart: 0,
+                        requestStart: 0, responseStart: 0, responseEnd: 0, transferSize: 0,
+                        encodedBodySize: 0, decodedBodySize: 0, renderBlockingStatus: 'non-blocking',
+                        responseStatus: 0 });
+                    entry('PerformanceNavigationTiming', 'navigation', {
+                        type: 'navigate', redirectCount: 0, workerStart: 0, redirectStart: 0,
+                        redirectEnd: 0, fetchStart: 0, domainLookupStart: 0, domainLookupEnd: 0,
+                        connectStart: 0, connectEnd: 0, secureConnectionStart: 0, requestStart: 0,
+                        responseStart: 0, responseEnd: 0, transferSize: 0, encodedBodySize: 0,
+                        decodedBodySize: 0, unloadEventStart: 0, unloadEventEnd: 0, domInteractive: 0,
+                        domContentLoadedEventStart: 0, domContentLoadedEventEnd: 0, domComplete: 0,
+                        loadEventStart: 0, loadEventEnd: 0 });
+                    entry('PerformancePaintTiming', 'paint', { });
+                    entry('PerformanceServerTiming', 'server-timing', { description: '' });
+                    entry('PerformanceLongAnimationFrameTiming', 'long-animation-frame', { });
+                    entry('PerformanceLongTaskTiming', 'longtask', {
+                        attribution: [ ], containerId: '', containerName: '', containerType: 'window' });
+                    entry('PerformanceEventTiming', 'event', { processingStart: 0, processingEnd: 0,
+                        cancelled: false, interactionId: undefined });
+                    entry('PerformanceElementTiming', 'element', {
+                        identifier: '', name: '', url: null, element: null, naturalWidth: 0,
+                        naturalHeight: 0 });
+                    entry('LayoutShift', 'layout-shift', { value: 0, hadRecentInput: false,
+                        sources: [ ] });
+                    entry('LargestContentfulPaint', 'largest-contentful-paint', {
+                        renderTime: 0, loadTime: 0, id: '', size: 0, width: 0, height: 0,
+                        url: '', element: null });
+                    entry('TaskAttributionTiming', 'unknown', {
+                        containerType: 'window', containerId: '', containerName: '' });
+                })();
+
+                // ── HTML §4.8.10.16 and DOM §4.6: the lists a page indexes ───────
+                (function () {
+                    var cue = level('TextTrackCue', 'EventTarget');
+                    ['id', 'text'].forEach(function (name) { slotRead(cue, 'TextTrackCue', name, ''); });
+                    ['startTime', 'endTime'].forEach(function (name) {
+                        slotRead(cue, 'TextTrackCue', name, 0);
+                    });
+                    slotRead(cue, 'TextTrackCue', 'pauseOnExit', false);
+                    slotRead(cue, 'TextTrackCue', 'region', null);
+                    slotRead(cue, 'TextTrackCue', 'track', null);
+                    if (!carried(cue, 'onenter')) {
+                        Object.defineProperty(cue, 'onenter', { configurable: true, enumerable: true,
+                            get: function () { return null; }, set: function () { } });
+                    }
+                    if (!carried(cue, 'onexit')) {
+                        Object.defineProperty(cue, 'onexit', { configurable: true, enumerable: true,
+                            get: function () { return null; }, set: function () { } });
+                    }
+                    method(cue, 'TextTrackCue', 'getCueAsHTML', 0, function getCueAsHTML() {
+                        return document.createDocumentFragment();
+                    });
+                    var cues = level('TextTrackCueList', null);
+                    if (!carried(cues, 'length')) {
+                        Object.defineProperty(cues, 'length', { configurable: true, enumerable: true,
+                            get: function () {
+                                var self = as(this, 'TextTrackCueList', 'length', true);
+                                return self.__acruxList ? self.__acruxList.length : 0;
+                            }, set: function () { } });
+                    }
+                    method(cues, 'TextTrackCueList', 'item', 1, function item(index) {
+                        var held = this.__acruxList || [ ];
+                        return index >= 0 && index < held.length ? held[index] : null;
+                    });
+                    method(cues, 'TextTrackCueList', 'getCueById', 1, function getCueById(id) {
+                        var held = this.__acruxList || [ ];
+                        for (var i = 0; i < held.length; i++) {
+                            if (String(held[i].id) === String(id)) return held[i];
+                        }
+                        return null;
+                    });
+                    var touches = level('TouchList', null);
+                    if (!carried(touches, 'length')) {
+                        Object.defineProperty(touches, 'length', { configurable: true,
+                            enumerable: true, get: function () {
+                                var self = as(this, 'TouchList', 'length', true);
+                                return self.__acruxList ? self.__acruxList.length : 0;
+                            }, set: function () { } });
+                    }
+                    method(touches, 'TouchList', 'item', 1, function item(index) {
+                        var held = this.__acruxList || [ ];
+                        return index >= 0 && index < held.length ? held[index] : null;
+                    });
+                    var touch = level('Touch', null);
+                    ['identifier', 'target'].forEach(function (name) {
+                        slotRead(touch, 'Touch', name, name === 'identifier' ? 0 : null);
+                    });
+                    ['screenX', 'screenY', 'clientX', 'clientY', 'pageX', 'pageY', 'radiusX',
+                        'radiusY', 'rotationAngle', 'force'].forEach(function (name) {
+                            slotRead(touch, 'Touch', name, 0);
+                        });
+                })();
+                // ── Web Audio API: the graph a page builds, without a sound card ──
+                // The engine plays no audio, but the graph is a data structure and the specification
+                // says what each node answers before it is connected to anything: a gain of 1, an
+                // oscillator of type sine at 440, a buffer of the length the page asked for. Those
+                // reads are served; the calls that would need the audio device — rendering, decoding
+                // — are refused by name.
+                (function () {
+                    var node = level('AudioNode', null);
+                    ['context', 'channelCount', 'channelCountMode', 'channelInterpretation']
+                        .forEach(function (name) {
+                            slotRead(node, 'AudioNode', name, name === 'channelCount' ? 2
+                                : (name === 'channelCountMode' ? 'max'
+                                    : (name === 'channelInterpretation' ? 'speakers' : null)));
+                        });
+                    method(node, 'AudioNode', 'connect', 1, function connect(destination) {
+                        if (destination === undefined || destination === null) {
+                            throw new TypeError('Failed to execute ' + quoted('connect') + ' on '
+                                + quoted('AudioNode') + ': parameter 1 is not of type '
+                                + quoted('AudioNode') + '.');
+                        }
+                        return destination && destination.connect !== undefined ? destination : null;
+                    });
+                    method(node, 'AudioNode', 'disconnect', 0, function disconnect() {
+                        return undefined;
+                    });
+                    var source = level('AudioScheduledSourceNode', 'AudioNode');
+                    method(source, 'AudioScheduledSourceNode', 'start', 0, function start(when) {
+                        if (when !== undefined && !isFinite(Number(when))) {
+                            throw new RangeError('Failed to execute ' + quoted('start') + ' on '
+                                + quoted('AudioScheduledSourceNode') + ': The when provided (' + when
+                                + ') is not a finite number.');
+                        }
+                        return undefined;
+                    });
+                    method(source, 'AudioScheduledSourceNode', 'stop', 0, function stop() {
+                        return undefined;
+                    });
+                    slotRead(source, 'AudioScheduledSourceNode', 'onended', null);
+
+                    var param = level('AudioParam', null);
+                    Object.keys({ value: 1, defaultValue: 1, minValue: 1, maxValue: 1 })
+                        .forEach(function (name) {
+                            if (carried(param, name)) return;
+                            Object.defineProperty(param, name, { configurable: true,
+                                enumerable: true, get: function () {
+                                    var self = as(this, 'AudioParam', name, true);
+                                    var held = self.__acruxParam;
+                                    if (!held) return 0;
+                                    return held[name];
+                                }, set: function (value) {
+                                    var self = as(this, 'AudioParam', name, true);
+                                    var held = self.__acruxParam;
+                                    if (!held || name !== 'value') return;
+                                    held.value = Number(value);
+                                } });
+                        });
+                    ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime',
+                        'setTargetAtTime', 'setValueCurveAtTime', 'cancelScheduledValues',
+                        'cancelAndHoldAtTime'].forEach(function (name) {
+                            method(param, 'AudioParam', name, 1, function () { return this; });
+                        });
+                    level('AudioParamMap', null);
+
+                    function audioNode(iface, params, extra) {
+                        var proto = level(iface, iface === 'AudioBufferSourceNode'
+                            || iface === 'ConstantSourceNode' || iface === 'OscillatorNode'
+                                ? 'AudioScheduledSourceNode' : 'AudioNode');
+                        (params || [ ]).forEach(function (pair) {
+                            if (carried(proto, pair[0])) return;
+                            Object.defineProperty(proto, pair[0], { configurable: true,
+                                enumerable: true, get: function () {
+                                    var self = as(this, iface, pair[0], true);
+                                    var held = self.__acruxNode;
+                                    return held && held[pair[0]] !== undefined
+                                        ? held[pair[0]] : pair[1];
+                                }, set: function (value) {
+                                    var self = as(this, iface, pair[0], true);
+                                    var held = self.__acruxNode;
+                                    if (held) held[pair[0]] = value;
+                                } });
+                        });
+                        if (extra) extra(proto);
+                        return proto;
+                    }
+                    audioNode('GainNode', [['gain', null]]);
+                    audioNode('BiquadFilterNode', [['type', 'lowpass'], ['frequency', null],
+                        ['detune', null], ['Q', null], ['gain', null]]);
+                    audioNode('AnalyserNode', [['fftSize', 2048], ['frequencyBinCount', 1024],
+                        ['minDecibels', -100], ['maxDecibels', -30], ['smoothingTimeConstant', 0.8]]);
+                    audioNode('DelayNode', [['delayTime', null]]);
+                    audioNode('DynamicsCompressorNode', [['threshold', null], ['knee', null],
+                        ['ratio', null], ['attack', null], ['release', null], ['reduction', 0]]);
+                    audioNode('ConvolverNode', [['buffer', null], ['normalize', true]]);
+                    audioNode('WaveShaperNode', [['curve', null], ['oversample', 'none']]);
+                    audioNode('PannerNode', [['panningModel', 'equalpower'],
+                        ['distanceModel', 'inverse'], ['refDistance', 1], ['maxDistance', 10000],
+                        ['rolloffFactor', 1]]);
+                    audioNode('StereoPannerNode', [['pan', null]]);
+                    audioNode('ConstantSourceNode', [['offset', null]]);
+                    audioNode('OscillatorNode', [['type', 'sine'], ['frequency', null],
+                        ['detune', null]]);
+                    audioNode('IIRFilterNode', null, function (proto) {
+                        method(proto, 'IIRFilterNode', 'getFrequencyResponse', 3,
+                            function getFrequencyResponse() { return undefined; });
+                    });
+                    audioNode('ChannelMergerNode', null);
+                    audioNode('ChannelSplitterNode', null);
+                    audioNode('ScriptProcessorNode', null, function (proto) {
+                        slotRead(proto, 'ScriptProcessorNode', 'bufferSize', 0);
+                        slotRead(proto, 'ScriptProcessorNode', 'onaudioprocess', null);
+                    });
+                    audioNode('AudioWorkletNode', [['parameters', null], ['port', null]]);
+                    audioNode('AudioDestinationNode', [['maxChannelCount', 2]]);
+                    audioNode('AudioBufferSourceNode', [['buffer', null], ['loop', false],
+                        ['loopStart', 0], ['loopEnd', 0], ['playbackRate', null],
+                        ['detune', null]]);
+                    audioNode('MediaElementAudioSourceNode', null);
+                    audioNode('MediaStreamAudioSourceNode', null);
+                    audioNode('MediaStreamAudioDestinationNode', [['stream', null]]);
+                    audioNode('MediaStreamTrackAudioSourceNode', null);
+
+                    var buffer = level('AudioBuffer', null);
+                    ['numberOfChannels', 'length', 'sampleRate', 'duration'].forEach(function (name) {
+                        slotRead(buffer, 'AudioBuffer', name, 0);
+                    });
+                    method(buffer, 'AudioBuffer', 'getChannelData', 1, function getChannelData(i) {
+                        var channels = this.__channels || [ ];
+                        if (i < 0 || i >= channels.length) {
+                            throw new DOMException('Failed to execute ' + quoted('getChannelData')
+                                + ' on ' + quoted('AudioBuffer') + ': Channel index is outside the '
+                                + 'list of channels.', 'IndexSizeError');
+                        }
+                        return channels[i];
+                    });
+                    method(buffer, 'AudioBuffer', 'copyToChannel', 2, function copyToChannel() {
+                        return undefined;
+                    });
+                    method(buffer, 'AudioBuffer', 'copyFromChannel', 2, function copyFromChannel() {
+                        return undefined;
+                    });
+                    level('AudioListener', null);
+                    level('PeriodicWave', null);
+                    level('AudioWorklet', null);
+                    level('AudioProcessingEvent', 'Event');
+                    level('OfflineAudioCompletionEvent', 'Event');
+
+                    var base = level('BaseAudioContext', 'EventTarget');
+                    // The rate a context runs at is the one it was built with, and the engine has no
+                    // device to change it (Web Audio §4.2.6): a page that asks an offline context for
+                    // the rate it handed in reads it back.
+                    ['outputLatency', 'baseLatency', 'currentTime'].forEach(function (name) {
+                        slotRead(base, 'BaseAudioContext', name, 0);
+                    });
+                    if (!carried(base, 'sampleRate')) {
+                        Object.defineProperty(base, 'sampleRate', { configurable: true,
+                            enumerable: true, get: function () {
+                                var self = as(this, 'BaseAudioContext', 'sampleRate', true);
+                                var held = self.__acruxShell || self.__acruxContext;
+                                return held && held.sampleRate ? held.sampleRate : 48000;
+                            }, set: function () { } });
+                    }
+                    if (!carried(base, 'state')) {
+                        Object.defineProperty(base, 'state', { configurable: true, enumerable: true,
+                            get: function () {
+                                var self = as(this, 'BaseAudioContext', 'state', true);
+                                var held = self.__acruxContext;
+                                return held ? held.state : 'suspended';
+                            }, set: function () { } });
+                    }
+                    slotRead(base, 'BaseAudioContext', 'destination', null);
+                    slotRead(base, 'BaseAudioContext', 'listener', null);
+                    slotRead(base, 'BaseAudioContext', 'audioWorklet', null);
+                    slotRead(base, 'BaseAudioContext', 'onstatechange', null);
+                    if (!carried(base, 'resume')) {
+                        method(base, 'BaseAudioContext', 'resume', 0, function resume() {
+                            var held = this.__acruxContext;
+                            if (held) held.state = 'running';
+                            return Promise.resolve(undefined);
+                        });
+                    }
+                    if (!carried(base, 'suspend')) {
+                        method(base, 'BaseAudioContext', 'suspend', 0, function suspend() {
+                            var held = this.__acruxContext;
+                            if (held) held.state = 'suspended';
+                            return Promise.resolve(undefined);
+                        });
+                    }
+                    promised(base, 'BaseAudioContext', 'close', 0,
+                        'the engine has no audio device to let go of.');
+                    function nodeOf(iface, params, context) {
+                        var made = Object.create(levels[iface]);
+                        var held = { };
+                        (params || [ ]).forEach(function (pair) {
+                            var value = pair[1];
+                            if (typeof value === 'string' && value === 'PARAM') {
+                                held[pair[0]] = Object.create(levels.AudioParam);
+                                Object.defineProperty(held[pair[0]], '__acruxParam', {
+                                    value: { value: pair[2] === undefined ? 0 : pair[2],
+                                        defaultValue: pair[2] === undefined ? 0 : pair[2],
+                                        minValue: -3.4028234663852886e+38,
+                                        maxValue: 3.4028234663852886e+38 },
+                                    enumerable: false, configurable: true, writable: true });
+                            } else {
+                                held[pair[0]] = value;
+                            }
+                        });
+                        Object.defineProperty(made, '__acruxNode', { value: held, enumerable: false,
+                            configurable: true, writable: true });
+                        if (context) held.context = context;
+                        return made;
+                    }
+                    var factories = {
+                        createGain: ['GainNode', [['gain', 'PARAM', 1]]],
+                        createBiquadFilter: ['BiquadFilterNode', [['frequency', 'PARAM', 350],
+                            ['detune', 'PARAM', 0], ['Q', 'PARAM', 1], ['gain', 'PARAM', 0]]],
+                        createAnalyser: ['AnalyserNode', [ ]],
+                        createDelay: ['DelayNode', [['delayTime', 'PARAM', 0]]],
+                        createDynamicsCompressor: ['DynamicsCompressorNode', [['threshold', 'PARAM', -24],
+                            ['knee', 'PARAM', 30], ['ratio', 'PARAM', 12], ['attack', 'PARAM', 0.003],
+                            ['release', 'PARAM', 0.25]]],
+                        createConvolver: ['ConvolverNode', [['buffer', null], ['normalize', true]]],
+                        createWaveShaper: ['WaveShaperNode', [['curve', null],
+                            ['oversample', 'none']]],
+                        createPanner: ['PannerNode', [ ]],
+                        createStereoPanner: ['StereoPannerNode', [['pan', 'PARAM', 0]]],
+                        createConstantSource: ['ConstantSourceNode', [['offset', 'PARAM', 1]]],
+                        createOscillator: ['OscillatorNode', [['frequency', 'PARAM', 440],
+                            ['detune', 'PARAM', 0], ['type', 'sine']]],
+                        createBufferSource: ['AudioBufferSourceNode', [['buffer', null],
+                            ['playbackRate', 'PARAM', 1], ['detune', 'PARAM', 0], ['loop', false],
+                            ['loopStart', 0], ['loopEnd', 0]]],
+                        createChannelMerger: ['ChannelMergerNode', [ ]],
+                        createChannelSplitter: ['ChannelSplitterNode', [ ]],
+                        createPeriodicWave: ['PeriodicWave', [ ]]
+                    };
+                    Object.keys(factories).forEach(function (name) {
+                        method(base, 'BaseAudioContext', name, 0, function () {
+                            return nodeOf(factories[name][0], factories[name][1], this);
+                        });
+                    });
+                    method(base, 'BaseAudioContext', 'createScriptProcessor', 0,
+                        function createScriptProcessor() {
+                            return nodeOf('ScriptProcessorNode', [ ], this);
+                        });
+                    method(base, 'BaseAudioContext', 'createMediaElementSource', 1,
+                        function createMediaElementSource(element) {
+                            if (!element || typeof element.nodeType !== 'number') {
+                                throw new TypeError('Failed to execute '
+                                    + quoted('createMediaElementSource') + ' on '
+                                    + quoted('BaseAudioContext') + ': parameter 1 is not of type '
+                                    + quoted('HTMLMediaElement') + '.');
+                            }
+                            return nodeOf('MediaElementAudioSourceNode', [ ], this);
+                        });
+                    method(base, 'BaseAudioContext', 'createMediaStreamSource', 1,
+                        function createMediaStreamSource() {
+                            return nodeOf('MediaStreamAudioSourceNode', [ ], this);
+                        });
+                    method(base, 'BaseAudioContext', 'createMediaStreamDestination', 0,
+                        function createMediaStreamDestination() {
+                            return nodeOf('MediaStreamAudioDestinationNode', [['stream', null]],
+                                this);
+                        });
+                    method(base, 'BaseAudioContext', 'createBuffer', 3,
+                        function createBuffer(channels, length, sampleRate) {
+                            var count = Math.max(1, Number(channels) || 1);
+                            var size = Math.max(0, Number(length) || 0);
+                            var made = Object.create(levels.AudioBuffer);
+                            var runs = [ ];
+                            for (var i = 0; i < count; i++) runs.push(new Float32Array(size));
+                            Object.defineProperty(made, '__acruxShell', { value: {
+                                numberOfChannels: count, length: size,
+                                sampleRate: Number(sampleRate) || 48000,
+                                duration: sampleRate ? size / Number(sampleRate) : 0 },
+                                enumerable: false, configurable: true, writable: true });
+                            Object.defineProperty(made, '__acruxNode', { value: { },
+                                enumerable: false, configurable: true, writable: true });
+                            Object.defineProperty(made, '__acruxList', { value: runs,
+                                enumerable: false, configurable: true, writable: true });
+                            Object.defineProperty(made, '__channels', { value: runs, enumerable: false,
+                                configurable: true, writable: true });
+                            return made;
+                        });
+                    promised(base, 'BaseAudioContext', 'decodeAudioData', 1,
+                        'the engine has no decoder to read a media file with.');
+                    promised(base, 'BaseAudioContext', 'createMediaStreamTrackSource', 1,
+                        'the engine has no media track to take audio from.');
+                    var ctorProto = level('AudioContext', 'BaseAudioContext');
+                    window.AudioContext = function AudioContext(options) {
+                        var made = nodeOf('AudioContext', [ ]);
+                        Object.setPrototypeOf(made, ctorProto);
+                        Object.defineProperty(made, '__acruxContext', { value: { state: 'suspended' },
+                            enumerable: false, configurable: true, writable: true });
+                        Object.defineProperty(made, 'destination', { value: nodeOf(
+                            'AudioDestinationNode', [['maxChannelCount', 2]], made),
+                            enumerable: true, configurable: true, writable: true });
+                        Object.defineProperty(made, 'listener', { value: Object.create(
+                            levels.AudioListener), enumerable: true, configurable: true,
+                            writable: true });
+                        Object.defineProperty(made, 'audioWorklet', {
+                            value: Object.create(levels.AudioWorklet), enumerable: true,
+                            configurable: true, writable: true });
+                        return made;
+                    };
+                    window.AudioContext.prototype = ctorProto;
+                    var offlineProto = level('OfflineAudioContext', 'BaseAudioContext');
+                    window.OfflineAudioContext = function OfflineAudioContext(channels, length,
+                        sampleRate) {
+                        var made = new window.AudioContext();
+                        Object.setPrototypeOf(made, offlineProto);
+                        var shape = { numberOfChannels: Number(channels) || 1,
+                            length: Number(length) || 0,
+                            sampleRate: Number(sampleRate) || 48000, state: 'suspended' };
+                        Object.defineProperty(made, '__acruxShell', { value: shape,
+                            enumerable: false, configurable: true, writable: true });
+                        Object.defineProperty(made, '__acruxContext', { value: shape,
+                            enumerable: false, configurable: true, writable: true });
+                        return made;
+                    };
+                    window.OfflineAudioContext.prototype = offlineProto;
+                    slotRead(offlineProto, 'OfflineAudioContext', 'length', 0);
+                    slotRead(offlineProto, 'OfflineAudioContext', 'numberOfChannels', 1);
+                    promised(offlineProto, 'OfflineAudioContext', 'startRendering', 0,
+                        'the engine has no audio device to render through.');
+                    promised(offlineProto, 'OfflineAudioContext', 'resume', 0,
+                        'the engine has no audio device to render through.');
+                })();
+
+                // ── Cache Storage §4: the request-to-response map the engine can really keep ──
+                (function () {
+                    var cacheProto = level('Cache', null);
+                    var storeProto = level('CacheStorage', null);
+                    var stores = { };
+                    function responseKey(request) {
+                        if (typeof request === 'string') {
+                            try { return new URL(request, document.baseURI).href; }
+                            catch (e) { return String(request); }
+                        }
+                        if (request && typeof request.url === 'string') return request.url;
+                        return String(request);
+                    }
+                    function matches(entry, request, options) {
+                        var key = responseKey(request);
+                        var found = entry[key];
+                        if (found) return found;
+                        if (options && options.ignoreSearch) {
+                            var base = key.split('?')[0];
+                            Object.keys(entry).forEach(function (held) {
+                                if (held.split('?')[0] === base) found = entry[held];
+                            });
+                        }
+                        return found;
+                    }
+                    if (!carried(cacheProto, 'name')) {
+                        Object.defineProperty(cacheProto, 'name', { configurable: true,
+                            enumerable: true, get: function () {
+                                var self = as(this, 'Cache', 'name', true);
+                                return self.__acruxCache === undefined ? '' : self.__acruxCache;
+                            }, set: function () { } });
+                    }
+                    method(cacheProto, 'Cache', 'match', 1, function match(request) {
+                        var held = matches(this.__acruxEntries || { }, request, arguments[1]);
+                        return Promise.resolve(held === undefined ? undefined : held);
+                    });
+                    method(cacheProto, 'Cache', 'matchAll', 0, function matchAll(request) {
+                        var entries = this.__acruxEntries || { };
+                        var made = [ ];
+                        Object.keys(entries).forEach(function (key) { made.push(entries[key]); });
+                        return Promise.resolve(request === undefined ? made
+                            : made.slice(0, 0));
+                    });
+                    method(cacheProto, 'Cache', 'add', 1, function add(request) {
+                        return this.addAll([request]);
+                    });
+                    method(cacheProto, 'Cache', 'addAll', 1, function addAll(requests) {
+                        var self = this;
+                        var list = requests === undefined ? [ ] : requests;
+                        var held = self.__acruxEntries;
+                        if (!held) {
+                            held = { };
+                            Object.defineProperty(self, '__acruxEntries', { value: held,
+                                enumerable: false, configurable: true, writable: true });
+                        }
+                        var work = [ ];
+                        function store(request, response) {
+                            var key = response && typeof response.url === 'string'
+                                && response.url !== '' ? response.url : responseKey(request);
+                            held[key] = response;
+                            return response;
+                        }
+                        for (var i = 0; i < list.length; i++) {
+                            work.push(fetch(list[i]).then(store));
+                        }
+                        return Promise.all(work).then(function () { return undefined; });
+                    });
+                    method(cacheProto, 'Cache', 'delete', 1, function remove(request) {
+                        var held = this.__acruxEntries || { };
+                        var key = responseKey(request);
+                        var made = Object.prototype.hasOwnProperty.call(held, key);
+                        if (made) delete held[key];
+                        return Promise.resolve(made);
+                    });
+                    method(cacheProto, 'Cache', 'keys', 0, function keys() {
+                        var entries = this.__acruxEntries || { };
+                        var made = [ ];
+                        Object.keys(entries).forEach(function (key) { made.push(entries[key]); });
+                        return Promise.resolve(made);
+                    });
+                    method(storeProto, 'CacheStorage', 'match', 1, function match(request) {
+                        var names = Object.keys(stores);
+                        var work = [ ];
+                        names.forEach(function (name) {
+                            work.push(stores[name].match(request, arguments[1]));
+                        });
+                        return Promise.all(work).then(function (found) {
+                            for (var i = 0; i < found.length; i++) {
+                                if (found[i] !== undefined) return found[i];
+                            }
+                            return undefined;
+                        });
+                    });
+                    method(storeProto, 'CacheStorage', 'has', 1, function has(name) {
+                        return Promise.resolve(
+                            Object.prototype.hasOwnProperty.call(stores, String(name)));
+                    });
+                    method(storeProto, 'CacheStorage', 'delete', 1, function remove(name) {
+                        var key = String(name);
+                        var made = Object.prototype.hasOwnProperty.call(stores, key);
+                        if (made) delete stores[key];
+                        return Promise.resolve(made);
+                    });
+                    method(storeProto, 'CacheStorage', 'keys', 0, function keys() {
+                        return Promise.resolve(Object.keys(stores));
+                    });
+                    method(storeProto, 'CacheStorage', 'open', 1, function open(name) {
+                        var key = String(name);
+                        if (!Object.prototype.hasOwnProperty.call(stores, key)) {
+                            var made = Object.create(cacheProto);
+                            Object.defineProperty(made, '__acruxCache', { value: key,
+                                enumerable: false, configurable: true, writable: true });
+                            Object.defineProperty(made, '__acruxEntries', { value: { },
+                                enumerable: false, configurable: true, writable: true });
+                            stores[key] = made;
+                        }
+                        return Promise.resolve(stores[key]);
+                    });
+                    if (window.caches === undefined) {
+                        Object.defineProperty(window, 'caches', { value: Object.create(storeProto),
+                            writable: false, enumerable: true, configurable: false });
+                    }
+                })();
+                // ── The device, service and graphics families ──────────────────
+                // One writer for the rest of the checklist. A specification's attributes answer the
+                // value the interface begins in, an operation the page can call without a back end
+                // returns nothing, and an operation that would need the device the engine does not
+                // have is refused with the promise the interface returns. 'r' names the reads, 'w'
+                // the reads a page may also write, 'o' the operations that answer, 'p' the ones that
+                // return a rejected promise, 'q' the ones that throw, 'c' the constants and 'b' the
+                // interface the level is stamped from.
+                function define(iface, base, spec) {
+                    var proto = level(iface, base);
+                    // An interface the engine built itself keeps every member it already answers; the
+                    // writers below add only what it lacks.
+                    strictOwn = !!adopted[iface];
+                    var sentences = spec.s || 'the engine has nothing behind this interface.';
+                    Object.keys(spec.r || { }).forEach(function (name) {
+                        slotRead(proto, iface, name, spec.r[name]);
+                    });
+                    (spec.w || [ ]).forEach(function (name) {
+                        slotRead(proto, iface, name, undefined);
+                    });
+                    Object.keys(spec.o || { }).forEach(function (name) {
+                        method(proto, iface, name, spec.o[name], function () { return undefined; });
+                    });
+                    Object.keys(spec.p || { }).forEach(function (name) {
+                        promised(proto, iface, name, spec.p[name][0], spec.p[name][1] || sentences);
+                    });
+                    Object.keys(spec.q || { }).forEach(function (name) {
+                        refused(proto, iface, name, spec.q[name][0], spec.q[name][1] || sentences);
+                    });
+                    if (spec.c) both(iface, spec.c);
+                    strictOwn = false;
+                    return proto;
+                }
+
+                var FAMILY = [
+                    // Workers and the service that stands between a page and a worker.
+                    ['Worker', 'EventTarget', { r: { onerror: null, onmessage: null,
+                        onmessageerror: null },
+                        o: { postMessage: 1, terminate: 0 },
+                        p: { }, q: { },
+                        s: 'the engine runs no second thread.' }],
+                    ['SharedWorker', 'EventTarget', { r: { port: null, onconnect: null },
+                        q: { }, s: 'the engine runs no second thread.' }],
+                    ['WorkerGlobalScope', 'EventTarget', { r: { name: '', location: null,
+                        isSecureContext: true, console: null, performance: null },
+                        o: { importScripts: 0, close: 0, fetch: 1 },
+                        s: 'the engine runs no worker scope.' }],
+                    ['DedicatedWorkerGlobalScope', 'WorkerGlobalScope',
+                        { r: { onmessage: null, onmessageerror: null }, o: { postMessage: 1 } }],
+                    ['SharedWorkerGlobalScope', 'WorkerGlobalScope', { r: { name: '' } }],
+                    ['ServiceWorkerGlobalScope', 'WorkerGlobalScope',
+                        { r: { clients: null, registration: null } }],
+                    ['ServiceWorker', 'EventTarget', { r: { scriptURL: '', state: 'activated',
+                        onstatechange: null }, q: { postMessage: 1 },
+                        s: 'the engine registered no service worker.' }],
+                    ['Client', 'EventTarget', { r: { frameId: '', id: '', type: 'window',
+                        url: '' } }],
+                    ['Clients', null, { r: { }, p: { matchAll: 0, openWindow: 1, claim: 0 },
+                        s: 'the engine has no window a worker could claim.' }],
+                    ['WindowClient', 'Client', { r: { focused: false, visibilityState: 'visible' },
+                        p: { focus: 0, navigate: 1 },
+                        s: 'the engine has no window for a worker to move.' }],
+                    ['ExtendableEvent', 'Event', { o: { waitUntil: 1, respondWith: 1 },
+                        s: 'the engine has no service worker to keep a step for.' }],
+                    ['FetchEvent', 'ExtendableEvent', { r: { requestId: '', request: null,
+                        result: null, preloadResponse: null, handled: null,
+                        keepUrlFragment: false, handoffSource: null,
+                        handoffInitiator: null, handoffType: null },
+                        o: { } }],
+                    ['InstallEvent', 'ExtendableEvent', { p: { skipWaiting: 0 },
+                        s: 'the engine installed no worker to skip.' }],
+                    ['NotificationEvent', 'ExtendableEvent', { r: { notification: null,
+                        action: '', result: null } }],
+                    ['PushEvent', 'ExtendableEvent', { r: { data: null } }],
+                    ['SyncEvent', 'ExtendableEvent', { r: { tag: '', lastSync: false } }],
+                    ['PushManager', null, { r: { supportedContentEncodings: [ ] },
+                        p: { subscribe: 0, getSubscription: 0, permissionState: 0 },
+                        s: 'the engine has no push service to register with.' }],
+                    ['PushSubscription', null, { r: { endpoint: '', expirationTime: null,
+                        options: null, keys: null }, p: { unsubscribe: 0, toJSON: 0 } }],
+                    ['PushSubscriptionOptions', null, { r: { userVisibleOnly: true,
+                        applicationServerKey: null } }],
+                    ['SyncManager', null, { r: { }, p: { register: 1, getTags: 0 },
+                        s: 'the engine synchronises nothing in the background.' }],
+                    ['PeriodicSyncManager', null, { r: { }, p: { register: 1, getTags: 0 },
+                        s: 'the engine has no periodic sync to schedule.' }],
+                    ['BackgroundFetchManager', null, { p: { fetch: 2, get: 1, getAll: 0 },
+                        s: 'the engine fetches nothing in the background.' }],
+                    ['BackgroundFetchRegistration', 'EventTarget', { r: { id: '',
+                        progress: 0, uploadRecordsTotalSize: 0, uploadRecordsContentTotalSize: 0,
+                        fetchRecordsTotalSize: 0, fetchRecordsContentTotalSize: 0,
+                        failureReason: 'none', failureTarget: 'none',
+                        onprogress: null }, p: { abort: 0, matchRequests: 0 },
+                        s: 'the engine has no background fetch to stop.' }],
+                    ['ContentIndex', null, { p: { add: 1, delete: 1, getAll: 0 },
+                        s: 'the engine indexes no content.' }],
+                    ['CookieStore', 'EventTarget', { r: { onchange: null },
+                        p: { get: 0, getAll: 0, set: 1, delete: 1 },
+                        s: 'the engine keeps no cookie store for a worker.' }],
+                    // The devices a page asks about.
+                    ['Notification', 'EventTarget', { r: { title: '', body: '', tag: '', icon: '',
+                        badge: '', image: '', sound: '', dir: 'auto', lang: '',
+                        silent: false, sticky: false, requireInteraction: false, renotify: false,
+                        timestamp: 0, vibrate: [ ], data: null, actions: [ ],
+                        onClick: null, onClose: null, onError: null, onShow: null,
+                        onNotificationClick: null, onNotificationClose: null,
+                        onNotificationError: null, onNotificationShow: null },
+                        o: { close: 0 }, s: 'the engine shows no notification.' }],
+                    ['BatteryManager', 'EventTarget', { r: { charging: true, chargingTime: 0,
+                        dischargingTime: Infinity, level: 1, onchargingchange: null,
+                        onchargingtimechange: null, ondischargingtimechange: null,
+                        onlevelchange: null } }],
+                    ['GeolocationCoordinates', null, { r: { latitude: 0, longitude: 0,
+                        altitude: null, accuracy: 0, altitudeAccuracy: null, heading: null,
+                        speed: null } }],
+                    ['GeolocationPosition', null, { r: { coords: null, timestamp: 0 } }],
+                    ['GeolocationPositionError', null, { r: { code: 0, message: '' },
+                        c: { PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 } }],
+                    ['Gamepad', null, { r: { id: '', index: 0, connected: false, mapping: '',
+                        standard: '', timestamp: 0, axes: [ ], buttons: [ ], touches: [ ],
+                        vibrationActuator: null, hapticActuators: [ ] } }],
+                    ['GamepadButton', null, { r: { pressed: false, touched: false, value: 0 } }],
+                    ['GamepadEvent', 'Event', { r: { gamepad: null } }],
+                    // Generic Sensor §5: the reading a device would answer, and the state of the poll.
+                    ['Sensor', 'EventTarget', { r: { activated: false, active: false,
+                        hasReading: false, frequency: 0, onchange: null, onerror: null,
+                        onactivate: null, ondeactivate: null },
+                        o: { start: 0, stop: 0 },
+                        s: 'the engine reads no motion sensor.' }],
+                    ['Accelerometer', 'Sensor', { r: { x: 0, y: 0, z: 0 } }],
+                    ['LinearAccelerationSensor', 'Accelerometer', { }],
+                    ['GravitySensor', 'Accelerometer', { }],
+                    ['Gyroscope', 'Sensor', { r: { x: 0, y: 0, z: 0 } }],
+                    ['Magnetometer', 'Sensor', { r: { x: 0, y: 0, z: 0 } }],
+                    ['AmbientLightSensor', 'Sensor', { r: { illuminance: 0 } }],
+                    ['AbsoluteOrientationSensor', 'Sensor', { r: { quaternion: null } }],
+                    ['RelativeOrientationSensor', 'Sensor', { r: { quaternion: null } }],
+                    ['SensorErrorEvent', 'Event', { r: { error: null } }],
+                    // Credentials, payment and the ad-facing objects.
+                    ['Credential', null, { r: { id: '', type: '', tokens: null,
+                        passwordChanges: null } }],
+                    ['PasswordCredential', 'Credential', { r: { name: '', iconURL: null } }],
+                    ['FederatedCredential', 'Credential', { r: { name: '', iconURL: null,
+                        provider: '', protocols: [ ] } }],
+                    ['PublicKeyCredential', 'Credential', { r: { rawId: null,
+                        authenticatorAttachment: null, response: null, clientExtensionResults: null,
+                        authData: null, publicKey: null } }],
+                    ['PaymentRequest', 'EventTarget', { r: { id: '', onpaymentmethodchange: null,
+                        onshippingaddresschange: null, onshippingoptionchange: null,
+                        updater: null, shippingOptions: [ ], shippingAddress: null,
+                        shippingOption: '' },
+                        p: { show: 0, canMakePayment: 0 },
+                        q: { abort: 0 },
+                        s: 'the engine has no payment handler to ask.' }],
+                    ['PaymentResponse', 'EventTarget', { r: { requestId: '', methodName: '',
+                        details: null, shippingAddress: null, shippingOption: null,
+                        payerName: null, payerEmail: null, payerPhone: null, mode: 'browser' },
+                        o: { complete: 0, retry: 1 },
+                        s: 'the engine completed no payment.' }],
+                    // The devices the engine can name but not reach.
+                    ['Bluetooth', 'EventTarget', { r: { availability: false,
+                        onadvertisementreceived: null, oncharacteristicvaluechanged: null,
+                        onconnectionaborted: null },
+                        p: { requestDevice: 1, requestLEScan: 1, getAdvertising: 0 },
+                        s: 'the engine has no Bluetooth adapter to reach.' }],
+                    ['BluetoothDevice', 'EventTarget', { r: { id: '', name: null,
+                        uuids: [ ], nameKnown: false, attached: false, gatt: null,
+                        deviceClass: null, vendorIdSource: null, vendorId: null,
+                        productId: null }, p: { watchAdvertisements: 0 },
+                        s: 'the engine has no Bluetooth device to watch.' }],
+                    ['USB', 'EventTarget', { r: { onconnect: null, ondisconnect: null },
+                        p: { getDevices: 0, requestDevice: 1 },
+                        s: 'the engine has no USB device to open.' }],
+                    ['USBDevice', null, { r: { vendorId: 0, productId: 0, productName: null,
+                        manufacturerName: null, serialNumber: null, configurationValue: 0,
+                        configurations: [ ], interfaces: [ ] },
+                        p: { open: 0, close: 0, selectConfiguration: 1, claimInterface: 1,
+                            releaseInterface: 1, setInterfaceAltSetting: 2, controlTransfer: 1,
+                            transferIn: 1, transferOut: 1, isochronousTransferIn: 1 },
+                        s: 'the engine has no USB device to talk to.' }],
+                    ['Serial', 'EventTarget', { r: { onconnect: null, ondisconnect: null },
+                        p: { requestPort: 1, getPorts: 0 },
+                        s: 'the engine has no serial port to open.' }],
+                    ['SerialPort', 'EventTarget', { r: { readable: null, writable: null,
+                        onconnect: null, ondisconnect: null }, o: { getInfo: 0 },
+                        p: { open: 1, close: 0, setSignals: 1, getSignals: 0, forget: 0 },
+                        s: 'the engine has no serial port to read.' }],
+                    ['HID', 'EventTarget', { r: { onconnect: null, ondisconnect: null },
+                        p: { requestDevice: 1, getDevices: 0 },
+                        s: 'the engine has no HID device to reach.' }],
+                    ['HIDDevice', 'EventTarget', { r: { vendorId: 0, productId: 0,
+                        productName: '', collections: [ ], maxInputReportSize: 0,
+                        maxOutputReportSize: 0, maxReportSize: 0, reportInterruptInEndpoint: null,
+                        reportInterruptOutEndpoint: null },
+                        p: { open: 0, close: 0, sendReport: 2, receiveReport: 1,
+                            forget: 0 }, s: 'the engine has no HID device to read.' }],
+                    ['XRSystem', 'EventTarget', { r: { ondevicechange: null },
+                        p: { isSessionSupported: 1, requestSession: 1 },
+                        s: 'the engine has no immersive device to show.' }],
+                    ['XRSession', 'EventTarget', { r: { environmentBlendMode: 'opaque',
+                        frameRate: null, enabledFeatures: [ ], inputSources: null,
+                        renderState: null, depthData: null, domOverlay: null },
+                        p: { requestReferenceSpace: 1, requestAnimationFrame: 1,
+                            end: 0 }, s: 'the engine has no immersive session.' }],
+                    // The realtime families: the descriptions are data the page hands in.
+                    ['RTCPeerConnection', 'EventTarget', { r: { localDescription: null,
+                        currentLocalDescription: null, pendingLocalDescription: null,
+                        remoteDescription: null, currentRemoteDescription: null,
+                        pendingRemoteDescription: null, signalingState: 'stable',
+                        connectionState: 'new', iceGatheringState: 'new',
+                        iceConnectionState: 'new', canTrickleIceCandidates: null, id: '',
+                        onicecandidate: null, oniceconnectionstatechange: null,
+                        onicegatheringstatechange: null, onconnectionstatechange: null,
+                        onnegotiationneeded: null, ondatachannel: null,
+                        onsignalingstatechange: null, ontrack: null,
+                        ondatachannelerror: null },
+                        o: { close: 0 },
+                        p: { createOffer: 0, createAnswer: 0, setLocalDescription: 1,
+                            setRemoteDescription: 1, addIceCandidate: 1, addTransceiver: 1,
+                            getSenders: 0, getReceivers: 0, getTransceivers: 0,
+                            addTrack: 1, removeTrack: 1 },
+                        s: 'the engine has no peer to reach.' }],
+                    ['RTCSessionDescription', null, { r: { type: '', sdp: '',
+                        isTerminal: false } }],
+                    ['RTCIceCandidate', null, { r: { address: null, candidate: '',
+                        component: null, foundation: null, port: null, priority: null,
+                        protocol: null, relatedAddress: null, relatedPort: null,
+                        sdpMLineIndex: null, sdpMid: null, tcpType: null, type: null,
+                        usernameFragment: null } }],
+                    ['RTCDataChannel', 'EventTarget', { r: { label: '', ordered: true,
+                        maxPacketLifeTime: null, maxRetransmits: null, protocol: '',
+                        negotiated: false, id: -1, readyState: 'closed', bufferedAmount: 0,
+                        bufferedAmountLowThreshold: 0, sendBufferSize: null,
+                        onopen: null, oncloses: null, onclosing: null, onmessage: null,
+                        onbufferedamountlow: null, onerror: null },
+                        o: { close: 0, send: 1 } }],
+                    ['RTCRtpSender', null, { r: { track: null, transport: null,
+                        rtcpTransport: null, dtmf: null },
+                        p: { replaceTrack: 1, setParameters: 1, getParameters: 0,
+                            setStreams: 0, getCapabilities: 0 },
+                        s: 'the engine sends no media.' }],
+                    ['RTCRtpReceiver', null, { r: { track: null, transport: null,
+                        rtcpTransport: null }, p: { getParameters: 0, getCapabilities: 0 },
+                        s: 'the engine receives no media.' }],
+                    ['RTCRtpTransceiver', null, { r: { sender: null, receiver: null,
+                        direction: 'sendrecv', stopped: false, mid: null },
+                        p: { setDirection: 1, stop: 0 },
+                        s: 'the engine negotiates no media.' }],
+                    ['RTCStatsReport', null, { r: { size: 0 },
+                        o: { forEach: 1, keys: 0, values: 0, entries: 0 } }],
+                    // The streams the engine has no decoder for, and the images it can name.
+                    ['MediaSource', 'EventTarget', { r: { readyState: 'closed', duration: NaN,
+                        activeSourceBuffers: null, onsourceremoved: null,
+                        onsourceopen: null, onsourceended: null },
+                        q: { setDuration: 1, endOfStream: 0, addSourceBuffer: 1,
+                            removeSourceBuffer: 1 },
+                        s: 'the engine decodes no media stream.' }],
+                    ['SourceBuffer', 'EventTarget', { r: { appending: false, appendWindowStart: 0,
+                        appendWindowEnd: Infinity, audioBuffered: null, videoBuffered: null,
+                        timestampOffset: 0, appendWindowChanging: false, streamCountConfigError: 0,
+                        streamCount: 0, mode: 'segments', onabort: null, onerror: null,
+                        onupdate: null, onupdateend: null, onupdatestart: null },
+                        q: { appendBuffer: 1, abort: 0, changeType: 1, remove: 2 },
+                        s: 'the engine has no decoder to feed.' }],
+                    ['SourceBufferList', null, { r: { length: 0 }, o: { },
+                        s: 'the engine buffers no source.' }],
+                    ['ManagedMediaSource', 'MediaSource', { r: { handle: null },
+                        s: 'the engine has no managed media source.' }],
+                    ['ImageDecoder', null, { r: { completed: null, info: null, tracks: null,
+                        type: '' }, q: { decode: 0 },
+                        s: 'the engine decodes an image inside its own pipeline.' }],
+                    ['ImageTrack', null, { r: { index: 0, width: 0, height: 0, animated: false,
+                        repetitionCount: 0, frameCount: 0 } }],
+                    ['ImageTrackList', null, { r: { length: 0, animated: false, defaultTrack: 0 },
+                        o: { get: 1 } }],
+                    ['WebTransport', null, { r: { closed: null, ready: null,
+                        cceReceived: null, serverCertificate: null,
+                        bidirectionalStreams: null, unidirectionalStreams: null,
+                        datagrams: null }, q: { close: 0 },
+                        s: 'the engine speaks no WebTransport.' }],
+                    // XSLTProcessor: the name a page tests for, with the calls it refuses.
+                    ['XSLTProcessor', null, { r: { },
+                        q: { importStylesheet: 1, transformToFragment: 2, transformToDocument: 1,
+                            setParameter: 3, getParameter: 2, removeParameter: 2,
+                            clearParameters: 0, reset: 0 },
+                        s: 'the engine transforms no stylesheet.' }],
+                    // Animation Timeline: the clocks a page reads off the document.
+                    ['AnimationTimeline', null, { r: { currentTime: null, duration: null,
+                        localTime: null } }],
+                    ['DocumentTimeline', 'AnimationTimeline', { r: { } }],
+                    ['ScrollTimeline', 'AnimationTimeline', { r: { source: null, axis: 'block',
+                        scrollOffsets: null, timeRange: null, fill: 'auto' } }],
+                    ['ViewTimeline', 'AnimationTimeline', { r: { subject: null, axis: 'block',
+                        inset: 'auto', startOffset: null, endOffset: null,
+                        timelineRange: 'normal', contain: 'contain' } }],
+                    // The file system handles a page picks.
+                    ['FileSystemHandle', 'EventTarget', { r: { name: '', kind: '' },
+                        p: { isSameEntry: 1, queryPermission: 1, requestPermission: 1 },
+                        s: 'the engine picked no file.' }],
+                    ['FileSystemFileHandle', 'FileSystemHandle',
+                        { r: { kind: 'file' },
+                            p: { getFile: 0, createWritable: 0 },
+                            s: 'the engine picked no file.' }],
+                    ['FileSystemDirectoryHandle', 'FileSystemHandle', { r: { kind: 'directory' },
+                        p: { getFileHandle: 2, getDirectoryHandle: 2, removeEntry: 2,
+                            resolve: 1 },
+                        s: 'the engine has no directory to look in.' }],
+                    ['FileSystemWritableFileStream', 'WritableStream',
+                        { r: { }, p: { write: 1, seek: 1, truncate: 1 },
+                            s: 'the engine opened no file for writing.' }],
+                    // CSS Typed OM: the values the engine cannot parse into objects yet.
+                    ['CSSStyleValue', null, { p: { parse: 2 },
+                        s: 'the engine has no parser for a value of that name.' }],
+                    ['CSSKeywordValue', 'CSSStyleValue', { r: { value: '' } }],
+                    ['CSSUnitValue', 'CSSStyleValue', { r: { value: 0, unit: '' } }],
+                    ['CSSUnparsedValue', 'CSSStyleValue', { r: { length: 0 } }],
+                    ['CSSVariableReferenceValue', 'CSSStyleValue',
+                        { r: { variable: '', fallback: null } }],
+                    ['CSSNumericValue', 'CSSStyleValue',
+                        { p: { parse: 1, sum: 0, to: 1, mul: 1, div: 1, add: 1, sub: 1, min: 0,
+                            max: 0, clamp: 0, toFloat: 0, equals: 1, type: 0 },
+                            s: 'the engine has no numeric value to convert.' }],
+                    ['CSSMathValue', 'CSSNumericValue', { r: { operator: 'sum' } }],
+                    ['CSSMathSum', 'CSSMathValue', { r: { values: null } }],
+                    ['CSSMathProduct', 'CSSMathValue', { r: { values: null } }],
+                    ['CSSMathNegate', 'CSSMathValue', { r: { value: null } }],
+                    ['CSSMathInvert', 'CSSMathValue', { r: { value: null } }],
+                    ['CSSMathMin', 'CSSMathValue', { r: { values: null } }],
+                    ['CSSMathMax', 'CSSMathValue', { r: { values: null } }],
+                    ['CSSMathClamp', 'CSSMathValue', { r: { lower: null, upper: null, value: null } }],
+                    ['CSSTransformValue', 'CSSStyleValue', { r: { is2D: false, length: 0 } }],
+                    ['CSSTransformComponent', null, { r: { is2D: false }, o: { toMatrixValue: 0 } }],
+                    ['CSSMatrixComponent', 'CSSTransformComponent', { r: { matrix: null, is2D: false } }],
+                    ['CSSTranslate', 'CSSTransformComponent', { r: { x: null, y: null, z: null } }],
+                    ['CSSRotate', 'CSSTransformComponent', { r: { x: null, y: null, z: null,
+                        angle: null } }],
+                    ['CSSScale', 'CSSTransformComponent', { r: { x: null, y: null, z: null } }],
+                    ['CSSSkew', 'CSSTransformComponent', { r: { ax: null, ay: null } }],
+                    ['CSSSkewX', 'CSSTransformComponent', { r: { ax: null } }],
+                    ['CSSSkewY', 'CSSTransformComponent', { r: { ay: null } }],
+                    ['CSSPerspective', 'CSSTransformComponent', { r: { length: null } }],
+                    ['CSSImageValue', 'CSSStyleValue', { r: { name: '' } }],
+                    ['CSSColorValue', 'CSSStyleValue', { p: { parse: 1 },
+                        s: 'the engine keeps a colour as the value the page wrote.' }],
+                    ['CSSPositionValue', 'CSSStyleValue', { r: { x: null, y: null } }],
+                    // The databases the engine has no storage engine for.
+                    ['IDBFactory', null, { p: { open: 2, deleteDatabase: 1, cmp: 2 },
+                        q: { }, s: 'the engine has no database to open.' }],
+                    ['IDBDatabase', 'EventTarget', { r: { name: '', version: 0, objectStoreNames: null,
+                        onabort: null, onclose: null, onerror: null, onversionchange: null },
+                        q: { createObjectStore: 1, deleteObjectStore: 1, transaction: 1, close: 0 },
+                        s: 'the engine has no database to read.' }],
+                    ['IDBObjectStore', null, { r: { keyPath: '', indexNames: null, name: '',
+                        autoIncrement: false }, q: { put: 1, add: 1, delete: 1, get: 1, getAll: 0,
+                            getAllKeys: 0, count: 0, openCursor: 0, openKeyCursor: 0, index: 1,
+                            createIndex: 2, deleteIndex: 1, clear: 0 },
+                        s: 'the engine stores no object.' }],
+                    ['IDBIndex', null, { r: { name: '', keyPath: '', unique: false,
+                        multiEntry: false, objectStore: null }, q: { get: 1, getAll: 0,
+                            getAllKeys: 0, count: 0, openCursor: 0, openKeyCursor: 0 },
+                        s: 'the engine indexes no key.' }],
+                    ['IDBCursor', null, { r: { source: null, direction: 'next', key: null,
+                        primaryKey: null, request: null }, q: { advance: 1, continue: 1,
+                            delete: 0, update: 1 }, s: 'the engine has no cursor to walk.' }],
+                    ['IDBCursorWithValue', 'IDBCursor', { r: { value: null } }],
+                    ['IDBRequest', 'EventTarget', { r: { source: null, transaction: null,
+                        result: null, error: null, readyState: 'done', onsuccess: null,
+                        onerror: null }, o: { } }],
+                    ['IDBOpenDBRequest', 'IDBRequest', { r: { onblocked: null,
+                        onupgradeneeded: null } }],
+                    ['IDBTransaction', 'EventTarget', { r: { db: null, objectStoreNames: null,
+                        mode: 'readwrite', error: null, durability: 'default',
+                        onabort: null, oncomplete: null, onerror: null },
+                        q: { objectStore: 1, commit: 0, abort: 0 },
+                        s: 'the engine has no transaction to hold.' }],
+                    ['IDBVersionChangeEvent', 'Event', { r: { oldVersion: 0, newVersion: null } }],
+                    // The legacy elements the parser still names.
+                    ['HTMLDirectoryElement', 'HTMLElement', { r: { compact: false } }],
+                    ['HTMLFontElement', 'HTMLElement', { r: { color: '', face: '', size: '' } }],
+                    ['HTMLFrameElement', 'HTMLElement', { r: { name: '', scrolling: 'auto',
+                        onload: null, src: '', frameBorder: '', longDesc: '', noResize: false,
+                        contentDocument: null, contentWindow: null } }],
+                    ['HTMLFrameSetElement', 'HTMLElement', { r: { cols: '', rows: '',
+                        onafterprint: null, onbeforeprint: null, onbeforeunload: null,
+                        onblur: null, onerror: null, onfocus: null, onhashchange: null,
+                        onlanguagechange: null, onload: null, onmessage: null,
+                        onoffline: null, ononline: null, onpagehide: null, onpageshow: null,
+                        onpopstate: null, onresize: null, onstorage: null, onunload: null } }]
+                ];
+                FAMILY.forEach(function (row) {
+                    define(row[0], row[1], row[2] || { });
+                });
+
+                // The graphics object classes a page only tests for, and the base a request is built
+                // on. Their members are a contract of their own, and the engine has no back end for
+                // any of them, so they are named with an empty level rather than with invented ones.
+                ['XMLHttpRequestEventTarget', 'CanvasRenderingContext2D',
+                    'CanvasRenderingContext', 'AudioWorkletProcessor', 'GPU', 'GPUAdapter',
+                    'GPUDevice', 'GPUQueue', 'GPUCommandEncoder', 'GPURenderPassEncoder',
+                    'GPUComputePassEncoder', 'GPUBuffer', 'GPUTexture', 'GPUSampler',
+                    'GPUShaderModule', 'GPUPipelineLayout', 'GPUBindGroup', 'GPUBindGroupLayout',
+                    'GPURenderPipeline', 'GPUComputePipeline', 'GPUQuerySet', 'GPUCanvasContext',
+                    'WebGLRenderingContext', 'WebGL2RenderingContext', 'WebGLBuffer',
+                    'WebGLFramebuffer', 'WebGLProgram', 'WebGLRenderbuffer', 'WebGLShader',
+                    'WebGLShaderPrecisionFormat', 'WebGLTexture', 'WebGLUniformLocation',
+                    'WebGLVertexArrayObject', 'WebGLActiveInfo', 'WebGLContextEvent']
+                    .forEach(function (name) { level(name, 'EventTarget'); });
+
+                // The interfaces a page builds itself, where the reference builds them too and
+                // nothing but the arguments the page gave is needed to hold one up: a worker the
+                // engine never starts, a description a peer connection was opened with, an event a
+                // dispatch would carry. Their objects are made from the level, so the members answer
+                // the values the interface begins with.
+                function buildable(iface, needed) {
+                    var proto = levels[iface];
+                    if (!proto) return;
+                    var made = function () {
+                        if (arguments.length < needed) {
+                            throw new TypeError('Failed to construct ' + quoted(iface) + ': '
+                                + needed + ' argument' + (needed === 1 ? '' : 's')
+                                + ' required, but only ' + arguments.length + ' present.');
+                        }
+                        return shell(iface, { });
+                    };
+                    try {
+                        Object.defineProperty(made, 'name', { value: iface, configurable: true });
+                        Object.defineProperty(made, 'length', { value: needed,
+                            configurable: true });
+                    } catch (e) { }
+                    made.prototype = proto;
+                    window[iface] = made;
+                    try {
+                        Object.defineProperty(proto, 'constructor', { value: made, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                }
+                [['Worker', 1], ['SharedWorker', 1], ['Notification', 1], ['PaymentRequest', 1],
+                    ['XSLTProcessor', 0], ['RTCPeerConnection', 0], ['RTCSessionDescription', 0],
+                    ['RTCIceCandidate', 0],
+                    ['PushEvent', 1], ['SyncEvent', 1], ['GamepadEvent', 1],
+                    ['MediaKeyMessageEvent', 1], ['FontFaceSetLoadEvent', 1],
+                    ['AnimationPlaybackEvent', 1], ['WebTransport', 1], ['ImageDecoder', 1],
+                    ['AudioWorkletNode', 1], ['MediaStreamAudioSourceNode', 1]]
+                    .forEach(function (row) { buildable(row[0], row[1]); });
+
+                // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit
+                // carries the number and the unit it was built with. The engine's own interface objects
+                // for the two answer the members but not the arguments — a page that builds
+                // 'new CSSKeywordValue('auto')' read back the empty word — so the two constructors are
+                // written here over the level the engine carries, and the instances hold their own
+                // value as an own member. The 'CSS' factories the specification adds sit on top of the
+                // same unit value.
+                (function () {
+                    function typed(iface, needed, fill) {
+                        var proto = levels[iface];
+                        if (!proto) return;
+                        var made = function () {
+                            if (arguments.length < needed) {
+                                throw new TypeError('Failed to construct ' + quoted(iface) + ': '
+                                    + needed + ' argument' + (needed === 1 ? '' : 's')
+                                    + ' required, but only ' + arguments.length + ' present.');
+                            }
+                            var self = Object.create(made.prototype);
+                            fill(self, arguments);
+                            return self;
+                        };
+                        try {
+                            Object.defineProperty(made, 'name', { value: iface, configurable: true });
+                            Object.defineProperty(made, 'length', { value: needed,
+                                configurable: true });
+                        } catch (e) { }
+                        made.prototype = proto;
+                        window[iface] = made;
+                        try {
+                            Object.defineProperty(proto, 'constructor', { value: made,
+                                writable: true, enumerable: false, configurable: true });
+                        } catch (e) { }
+                    }
+                    function own(owner, name, value) {
+                        try {
+                            Object.defineProperty(owner, name, { value: value, writable: true,
+                                enumerable: true, configurable: true });
+                        } catch (e) { }
+                    }
+                    typed('CSSKeywordValue', 1, function (self, args) {
+                        own(self, 'value', String(args[0]));
+                    });
+                    typed('CSSUnitValue', 2, function (self, args) {
+                        own(self, 'value', Number(args[0]));
+                        own(self, 'unit', String(args[1]));
+                    });
+                    var units = { px: 'px', percent: 'percent', em: 'em', rem: 'rem', vh: 'vh',
+                        vw: 'vw', vmin: 'vmin', vmax: 'vmax', cm: 'cm', mm: 'mm', in: 'in',
+                        pt: 'pt', pc: 'pc', ex: 'ex', ch: 'ch', s: 's', ms: 'ms', deg: 'deg',
+                        rad: 'rad', turn: 'turn', dpi: 'dpi', dpcm: 'dpcm', dppx: 'dppx' };
+                    Object.keys(units).forEach(function (name) {
+                        if (typeof window.CSS !== 'object' || window.CSS === null) return;
+                        if (typeof window.CSS[name] === 'function') return;
+                        var made = function (value) {
+                            return new CSSUnitValue(Number(value), units[name]);
+                        };
+                        try {
+                            Object.defineProperty(made, 'name', { value: name, configurable: true });
+                            Object.defineProperty(window.CSS, name, { value: made, writable: true,
+                                enumerable: true, configurable: true });
+                        } catch (e) { }
+                    });
+                    if (typeof window.CSS === 'object' && window.CSS !== null
+                        && typeof window.CSS.number !== 'function') {
+                        var number = function number(value) {
+                            return new CSSUnitValue(Number(value), 'number');
+                        };
+                        try {
+                            Object.defineProperty(number, 'name', { value: 'number',
+                                configurable: true });
+                            Object.defineProperty(window.CSS, 'number', { value: number,
+                                writable: true, enumerable: true, configurable: true });
+                        } catch (e) { }
+                    }
+                })();
+
+                // The three reads a page calls on the interface itself, where the specification
+                // puts them (Web IDL §4.4.3): a codec the engine has no decoder for is not
+                // supported, and a notification the engine has no user interface to grant is denied.
+                if (typeof window.MediaSource === 'function') {
+                    window.MediaSource.isTypeSupported = function isTypeSupported() {
+                        return false;
+                    };
+                }
+                if (typeof window.ImageDecoder === 'function') {
+                    window.ImageDecoder.isTypeSupported = function isTypeSupported() {
+                        return false;
+                    };
+                }
+                if (typeof window.Notification === 'function') {
+                    try {
+                        Object.defineProperty(window.Notification, 'permission', { value: 'default',
+                            writable: false, enumerable: true, configurable: false });
+                    } catch (e) { }
+                    window.Notification.requestPermission = function requestPermission(callback) {
+                        var made = Promise.resolve('denied');
+                        if (typeof callback === 'function') made.then(callback);
+                        return made;
+                    };
+                }
+                if (typeof window.PublicKeyCredential === 'function') {
+                    window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable =
+                        function isUserVerifyingPlatformAuthenticatorAvailable() {
+                            return Promise.resolve(false);
+                        };
+                    window.PublicKeyCredential.isConditionalMediationAvailable =
+                        function isConditionalMediationAvailable() {
+                            return Promise.resolve(false);
+                        };
+                }
+
+                // The last of the names a page tests for: the key an authenticator hands back,
+                // the fonts a document owns, the encrypted-media objects a media key session is
+                // made of, the two service-worker levels, the animation event a finished effect
+                // dispatches, and the two entry kinds the documentation names with the
+                // Performance prefix. Each one is a name and a tag until the engine has an object of
+                // the kind to hand out.
+                // 'FontFaceSet' and 'FontFaceSetLoadEvent' are left out on purpose: the face set the
+                // document hands out lives on a prototype no page name reaches, and naming a level
+                // moves that host onto it and takes its members away. The checklist probe records the
+                // two as the engine's own gap.
+                ['CryptoKey', 'AnimationPlaybackEvent',
+                    'MediaKeySystemAccess', 'MediaKeyStatusMap', 'MediaKeyMessageEvent',
+                    'ServiceWorkerContainer', 'ServiceWorkerRegistration', 'PerformanceLayoutShift',
+                    'PerformanceLargestContentfulPaint'].forEach(function (name) {
+                        level(name, name === 'FontFaceSet' ? 'EventTarget'
+                            : (name === 'AnimationPlaybackEvent' || name === 'MediaKeyMessageEvent'
+                                || name === 'FontFaceSetLoadEvent'
+                                    ? 'Event' : 'EventTarget'));
+                    });
+                    // Indexed Database §4.2 and URL §6: the factory the window hands out and the
+                    // prefixed alias the documentation still lists. The engine has no database to
+                    // open, so a request a page makes is refused rather than left waiting.
+                // The face set the document hands out is one of the interface the page names, so it
+                // is moved onto that level rather than left beside it; the host's own members answer
+                // first, and the chain is the one the specification writes.
+                if (document.fonts && levels.FontFaceSet) {
+                    try { Object.setPrototypeOf(document.fonts, levels.FontFaceSet); } catch (e) { }
+                }
+                if (window.indexedDB === undefined) {
+                    Object.defineProperty(window, 'indexedDB', {
+                        value: Object.create(levels.IDBFactory), writable: false, enumerable: true,
+                        configurable: false });
+                }
+                if (window.webkitURL === undefined && typeof window.URL === 'function') {
+                    Object.defineProperty(window, 'webkitURL', { value: window.URL,
+                        writable: false, enumerable: true, configurable: true });
+                }
+
+                // The three pickers the file-system handles are chosen through (File System Access
+                // §6): the engine shows no picker, so the promise is refused the way a browser
+                // refuses a request it is not allowed to ask about.
+                ['showOpenFilePicker', 'showSaveFilePicker', 'showDirectoryPicker'].forEach(
+                    function (name) {
+                        if (typeof window[name] === 'function') return;
+                        var made = function () {
+                            return Promise.reject(new DOMException('Failed to execute '
+                                + quoted(name) + ' on ' + quoted('Window') + ': The request is not '
+                                + 'allowed by the user agent or the platform in the current '
+                                + 'context, possibly because the user denied it.',
+                                'NotAllowedError'));
+                        };
+                        try {
+                            Object.defineProperty(made, 'name', { value: name,
+                                configurable: true });
+                        } catch (e) { }
+                        window[name] = made;
+                    });
+            })();
+
             // ── The shape every installed member is finished in ──────────────────
             // The passes above write members over the ones the host already carried, and a function
             // written as an expression arrives with a 'prototype' of its own and — in a sloppy script —
@@ -16537,6 +18368,66 @@ public class AcruxBuiltins
             _ => Array.Empty<byte>()
         };
         return hash.Length == 0 ? null : Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>Compression Streams Format §3-§4: the three formats the two streams name, each with
+    /// the wrapper its own specification gives it — gzip carries its header and its checksum, 'deflate'
+    /// is the zlib stream and 'deflate-raw' the bare deflate run. The bytes cross as hex the way a
+    /// digest's do, so no buffer has to be marshalled over the boundary; a format the interface does
+    /// not have answers null and the script side writes the refusal.</summary>
+    public string? compress(string format, string hexData) => TransformDeflate(true, format, hexData);
+
+    public string? decompress(string format, string hexData) => TransformDeflate(false, format, hexData);
+
+    private static string? TransformDeflate(bool compressing, string format, string hexData)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromHexString(hexData ?? "");
+        }
+        catch
+        {
+            return null;
+        }
+        var name = (format ?? "").ToLowerInvariant();
+        using var input = new System.IO.MemoryStream(bytes);
+        using var output = new System.IO.MemoryStream();
+        System.IO.Stream? codec = name switch
+        {
+            "gzip" => compressing
+                ? new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionMode.Compress, true)
+                : new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress, true),
+            "deflate" => compressing
+                ? new System.IO.Compression.ZLibStream(output, System.IO.Compression.CompressionMode.Compress, true)
+                : new System.IO.Compression.ZLibStream(input, System.IO.Compression.CompressionMode.Decompress, true),
+            "deflate-raw" => compressing
+                ? new System.IO.Compression.DeflateStream(output, System.IO.Compression.CompressionMode.Compress, true)
+                : new System.IO.Compression.DeflateStream(input, System.IO.Compression.CompressionMode.Decompress, true),
+            _ => null
+        };
+        if (codec == null) return null;
+        using (codec)
+        {
+            if (compressing)
+            {
+                input.CopyTo(codec);
+            }
+            else
+            {
+                try
+                {
+                    codec.CopyTo(output);
+                }
+                catch
+                {
+                    // A run the page cut off in the middle is refused with what the stream itself
+                    // says, and the bytes read so far are not a result the caller can use.
+                    return null;
+                }
+            }
+        }
+        return Convert.ToHexString(output.ToArray()).ToLowerInvariant();
     }
 
     /// <summary>Custom Elements §1: the script-side registry tells the engine the name it put a

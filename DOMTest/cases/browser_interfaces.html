@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html>
+<head><title>The interfaces docs/Browser.txt names (Compression Streams §3-§4, Encoding Streams §3, Streams §5.4, Web Audio §3-§4, Indexed Database §4.2-§4.3, Cache Storage §4, 2D Context §4.7, Generic Sensor §5, File System Access §6, Web IDL §4.4)</title></head>
+<body>
+<div id="box"><p id="kid">a</p></div>
+<script>
+// Round 20. DOMTest/probes/probe119.html read the checklist in docs/Browser.txt against the engine
+// and named 170 interfaces that were absent; this case checks the block that serves them. The rows
+// are split the way the engine is: a class the engine can really run is checked by what it answers,
+// and an interface with no back end is checked by the refusal it writes. Nothing below was read off
+// the reference browser — its debugger stayed wedged through this round (the record names the one
+// call that wedges it) — so each expectation comes from the specification the file cites, and the
+// three rows that rest on that alone are marked.
+function ck(name, fn, info) {
+    var ok = false;
+    try { ok = !!fn(); }
+    catch (e) { info = 'threw ' + (e && e.name ? e.name + ': ' : '') + (e && e.message); }
+    __T(name, ok === true, info === undefined ? '' : String(
+        typeof info === 'function' ? info() : info));
+}
+function done(name, fn) {
+    var made;
+    try { made = fn(); }
+    catch (e) {
+        __T(name, false, 'threw ' + (e && e.name) + ': ' + (e && e.message));
+        return Promise.resolve(null);
+    }
+    return Promise.resolve(made).then(function (value) {
+        __T(name, value === true, typeof value === 'string' ? value : '');
+        return null;
+    }, function (error) {
+        __T(name, false, 'rej ' + (error && error.name) + ': ' + (error && error.message));
+        return null;
+    });
+}
+function own(o) { try { return Object.getOwnPropertyNames(o).sort(); } catch (e) { return []; } }
+function refused(fn) {
+    try { var v = fn(); return 'no-throw:' + (v === undefined ? 'undefined' : String(v)); }
+    catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+}
+function refuses(fn, beginning) { return refused(fn).indexOf(beginning) === 0; }
+function tag(o) { try { return Object.prototype.toString.call(o); } catch (e) { return 'ERR'; } }
+
+(function () {
+    function gather(readable) {
+        var reader = readable.getReader();
+        var chunks = [ ];
+        function step(result) {
+            if (result.done) {
+                var total = 0;
+                for (var i = 0; i < chunks.length; i++) total += chunks[i].length;
+                var joined = new Uint8Array(total);
+                var at = 0;
+                for (var k = 0; k < chunks.length; k++) {
+                    joined.set(chunks[k], at);
+                    at += chunks[k].length;
+                }
+                return joined;
+            }
+            chunks.push(result.value);
+            return reader.read().then(step);
+        }
+        return reader.read().then(step);
+    }
+    function written(stream, bytes) {
+        var writer = stream.writable.getWriter();
+        writer.write(bytes);
+        return writer.close();
+    }
+
+    // ── A. the two compression streams, run through the engine's own deflate ─────
+    done('A1 a gzip stream writes the wrapper its format names', function () {
+        var made = new CompressionStream('gzip');
+        written(made, new Uint8Array([104, 105]));
+        return gather(made.readable).then(function (bytes) {
+            return bytes.length > 5 && bytes[0] === 31 && bytes[1] === 139
+                ? true : 'wrote ' + Array.prototype.slice.call(bytes, 0, 4).join(',');
+        });
+    });
+    done('A2 each format reads back the bytes it was given', function () {
+        // Long enough and repetitive enough that every one of the three formats really shrinks it.
+        var text = 'Acrux hands back the same bytes it was given. '.repeat(24);
+        var source = new TextEncoder().encode(text);
+        var work = ['gzip', 'deflate', 'deflate-raw'].map(function (format) {
+            var up = new CompressionStream({ format: format });
+            written(up, source);
+            return gather(up.readable).then(function (compressed) {
+                var down = new DecompressionStream(format);
+                written(down, compressed);
+                return gather(down.readable).then(function (back) {
+                    return format + (new TextDecoder().decode(back) === text ? ':ok' : ':wrong')
+                        + (compressed.length < source.length ? ':smaller' : ':bigger');
+                });
+            });
+        });
+        return Promise.all(work).then(function (rows) {
+            var joined = rows.join(' ');
+            return joined === 'gzip:ok:smaller deflate:ok:smaller deflate-raw:ok:smaller'
+                ? true : joined;
+        });
+    });
+    ck('A3 a format the enumeration does not hold is refused', function () {
+        return refuses(function () { return new CompressionStream('br'); },
+            'TypeError:Failed to construct \'CompressionStream\': The provided value \'br\'')
+            && refuses(function () { return new DecompressionStream('zip'); },
+                'TypeError:Failed to construct \'DecompressionStream\': The provided value')
+            && new CompressionStream('gzip').readable !== undefined
+            && new CompressionStream().readable !== undefined
+            && refuses(function () { return new CompressionStream(7); },
+                'TypeError:Failed to construct \'CompressionStream\': parameter 1 is not of type');
+    }, function () { return refused(function () { return new CompressionStream(7); }); });
+    done('A4 a run that is not the format it claims is refused on the readable side',
+        function () {
+            var down = new DecompressionStream('gzip');
+            written(down, new Uint8Array([1, 2, 3, 4, 5]));
+            return gather(down.readable).then(function () { return 'the bytes read as gzip'; },
+                function (error) {
+                    return String(error && error.message).indexOf('not a valid') >= 0
+                        ? true : 'refused with ' + String(error && error.message);
+                });
+        });
+
+    // ── B. the two encoding streams and the two queuing strategies ───────────────
+    done('B1 the encoder stream turns text into the bytes it means', function () {
+        var made = new TextEncoderStream();
+        var writer = made.writable.getWriter();
+        writer.write('hi');
+        writer.close();
+        return gather(made.readable).then(function (bytes) {
+            return bytes.length === 2 && bytes[0] === 104 && bytes[1] === 105
+                ? true : Array.prototype.slice.call(bytes).join(',');
+        });
+    });
+    done('B2 the decoder stream keeps a sequence the chunk cut short', function () {
+        // 'é' is two bytes; handing them in two chunks must not answer a replacement character.
+        var made = new TextDecoderStream();
+        var writer = made.writable.getWriter();
+        writer.write(new Uint8Array([195]));
+        writer.write(new Uint8Array([169, 97]));
+        writer.close();
+        var seen = [ ];
+        var reader = made.readable.getReader();
+        function step(result) {
+            if (result.done) {
+                return seen.join('|') === 'éa' ? true : 'saw ' + JSON.stringify(seen);
+            }
+            seen.push(result.value);
+            return reader.read().then(step);
+        }
+        return reader.read().then(step);
+    });
+    ck('B3 the decoder stream carries the options it was given', function () {
+        var plain = new TextDecoderStream();
+        var strict = new TextDecoderStream('utf-8', { fatal: true, ignoreBOM: true });
+        return plain.encoding === 'utf-8' && plain.fatal === false && plain.ignoreBOM === false
+            && strict.encoding === 'utf-8' && strict.fatal === true && strict.ignoreBOM === true;
+    }, function () {
+        var strict = new TextDecoderStream('utf-8', { fatal: true, ignoreBOM: true });
+        return [strict.encoding, String(strict.fatal), String(strict.ignoreBOM)].join('/');
+    });
+    ck('B4 the two strategies say what a queue is worth', function () {
+        var bytes = new ByteLengthQueuingStrategy({ highWaterMark: 4 });
+        var count = new CountQueuingStrategy({ highWaterMark: 2 });
+        return bytes.highWaterMark === 4 && count.highWaterMark === 2
+            && bytes.size(new Uint8Array(7)) === 7 && count.size(new Uint8Array(7)) === 1
+            && bytes.size(undefined) === 0
+            && new ByteLengthQueuingStrategy().highWaterMark === 1;
+    }, function () {
+        return [new ByteLengthQueuingStrategy().highWaterMark,
+            new ByteLengthQueuingStrategy().size(new Uint8Array(5))].join('/');
+    });
+
+    // ── C. a key range is arithmetic the engine really runs ──────────────────────
+    ck('C1 the four builders describe the bounds the page asked for', function () {
+        var only = IDBKeyRange.only(5);
+        var lower = IDBKeyRange.lowerBound(3, true);
+        var upper = IDBKeyRange.upperBound(9);
+        var bound = IDBKeyRange.bound(3, 9, false, true);
+        return only.lower === 5 && only.upper === 5 && only.openLower === false
+            && only.openUpper === false
+            && lower.lower === 3 && lower.upper === undefined && lower.openLower === true
+            && upper.upper === 9 && upper.lower === undefined && upper.openUpper === false
+            && bound.lower === 3 && bound.openLower === false && bound.openUpper === true
+            && tag(only) === '[object IDBKeyRange]';
+    }, function () {
+        var only = IDBKeyRange.only(5);
+        return [tag(only), only.lower, String(only.openLower)].join('/');
+    });
+    ck('C2 includes answers the open and closed bounds as the range means them', function () {
+        return IDBKeyRange.only(5).includes(5) === true
+            && IDBKeyRange.only(5).includes(4) === false
+            && IDBKeyRange.lowerBound(3, true).includes(3) === false
+            && IDBKeyRange.lowerBound(3, true).includes(4) === true
+            && IDBKeyRange.upperBound(9).includes(9) === true
+            && IDBKeyRange.bound(3, 9, false, true).includes(9) === false
+            && IDBKeyRange.bound(3, 9).includes(3) === true;
+    }, function () { return String(IDBKeyRange.lowerBound(3, true).includes(3)); });
+
+    // ── D. the buffers and the graph a canvas and an audio page build ────────────
+    ck('D1 an image buffer is the pixels the page asked for', function () {
+        var built = new ImageData(4, 2);
+        var from = new ImageData(new Uint8ClampedArray(32), 4, 2);
+        return built.width === 4 && built.height === 2 && built.data.length === 32
+            && built.data instanceof Uint8ClampedArray && built.colorSpace === 'srgb'
+            && from.width === 4 && from.height === 2 && from.data.length === 32
+            && tag(built) === '[object ImageData]'
+            && new ImageData(new Uint8ClampedArray(32), 4).height === 2
+            && refused(function () { return new ImageData(new Uint8ClampedArray(20), 4, 2); })
+                .indexOf('IndexSizeError:Failed to construct') === 0;
+    }, function () {
+        var built = new ImageData(4, 2);
+        return [built.width, built.height, built.data.length, built.colorSpace].join('/');
+    });
+    ck('D2 a gradient refuses an offset outside the range it holds', function () {
+        var proto = Object.create(CanvasGradient.prototype);
+        Object.defineProperty(proto, '__acruxStops', { value: [], enumerable: false,
+            configurable: true, writable: true });
+        proto.addColorStop(0.5, 'red');
+        return refused(function () { return proto.addColorStop(2, 'red'); })
+            .indexOf('IndexSizeError:Failed to execute \'addColorStop\'') === 0
+            && refused(function () { return proto.addColorStop(NaN, 'red'); })
+                .indexOf('IndexSizeError') === 0
+            && refused(function () {
+                return CanvasGradient.prototype.addColorStop.call({ }, 0, 'x');
+            }) === 'TypeError:Failed to execute \'addColorStop\' on \'CanvasGradient\': '
+                + 'Illegal invocation'
+            && refused(function () { return proto.addColorStop(0); })
+                === 'TypeError:Failed to execute \'addColorStop\' on \'CanvasGradient\': '
+                    + '2 arguments required, but only 1 present.';
+    }, function () {
+        return refused(function () {
+            return CanvasGradient.prototype.addColorStop.call({ }, 2, 'red');
+        });
+    });
+    ck('D3 a path refuses what is not a path, and answers the calls it records', function () {
+        var made = new Path2D();
+        made.moveTo(1, 2);
+        made.lineTo(3, 4);
+        made.rect(0, 0, 10, 10);
+        return tag(made) === '[object Path2D]'
+            && refused(function () { made.addPath('not a path'); })
+                === 'TypeError:Failed to execute \'addPath\' on \'Path2D\': parameter 1 is '
+                    + 'not of type \'Path2D\'.'
+            && String(made.arcTo(1, 2, 3, 4, 5)) === 'undefined';
+    }, function () { return refused(function () { return new Path2D().addPath('x'); }); });
+    ck('D4 the audio graph answers the values a node begins with', function () {
+        var ctx = new AudioContext();
+        var gain = ctx.createGain();
+        var osc = ctx.createOscillator();
+        var buffer = ctx.createBuffer(2, 100, 48000);
+        var source = ctx.createBufferSource();
+        return ctx.state === 'suspended' && ctx.sampleRate === 48000
+            && gain.gain.value === 1 && gain.gain.defaultValue === 1
+            && osc.type === 'sine' && osc.frequency.value === 440
+            && osc.frequency.setValueAtTime(1, 0) === osc.frequency
+            && buffer.numberOfChannels === 2 && buffer.length === 100
+            && buffer.getChannelData(0).length === 100 && buffer.duration === 100 / 48000
+            && refused(function () { return buffer.getChannelData(9); })
+                .indexOf('IndexSizeError:Failed to execute') === 0
+            && source.buffer === null && source.loop === false
+            && ctx.destination.maxChannelCount === 2 && tag(gain) === '[object GainNode]'
+            && gain.context === ctx
+            && refused(function () { return AudioNode.prototype.disconnect.call({ }); })
+                === 'TypeError:Failed to execute \'disconnect\' on \'AudioNode\': '
+                    + 'Illegal invocation';
+    }, function () {
+        var ctx = new AudioContext();
+        return [ctx.state, ctx.sampleRate, ctx.createGain().gain.value,
+            ctx.createOscillator().type, tag(ctx)].join('/');
+    });
+    done('D5 a context the page resumed says so, and the work a device would do is refused',
+        function () {
+            var ctx = new AudioContext();
+            return ctx.resume().then(function () {
+                return ctx.state === 'running'
+                    && tag(ctx.createMediaElementSource({ nodeType: 1 }))
+                        === '[object MediaElementAudioSourceNode]'
+                    && refused(function () { return ctx.createMediaElementSource({ }); })
+                        .indexOf('TypeError') === 0;
+            }).then(function (held) {
+                if (!held) return false;
+                // A promise the interface returns is refused rather than thrown out of the call
+                // (Web Audio §4.2.6: closing a context the engine never opened cannot be done).
+                return ctx.close().then(function () { return 'the context closed'; },
+                    function (error) {
+                        return String(error && error.name) === 'NotSupportedError'
+                            ? true : 'refused with ' + String(error && error.name);
+                    });
+            });
+        });
+    ck('D6 an offline context holds the shape it was built to render into', function () {
+        var made = new OfflineAudioContext(2, 4000, 44100);
+        return made.numberOfChannels === 2 && made.length === 4000 && made.sampleRate === 44100
+            && tag(made) === '[object OfflineAudioContext]'
+            && Object.getPrototypeOf(OfflineAudioContext.prototype)
+                === BaseAudioContext.prototype;
+    }, function () {
+        var made = new OfflineAudioContext(2, 4000, 44100);
+        return [made.numberOfChannels, made.length, made.sampleRate].join('/');
+    });
+
+    // ── E. the storage a page can really use ─────────────────────────────────────
+    done('E1 the cache a page opens is the one it finds again, and the one it deletes',
+        function () {
+            return caches.open('acrux').then(function (made) {
+                return tag(made) === '[object Cache]' && made.name === 'acrux'
+                    && caches.has('acrux');
+            }).then(function () {
+                return caches.delete('acrux');
+            }).then(function (gone) {
+                return gone === true ? true : 'delete answered ' + String(gone);
+            }).then(function () { return caches.has('acrux'); })
+                .then(function (again) {
+                    return again === false ? true : 'the store came back';
+                });
+        });
+    done('E2 an empty cache answers the reads the specification gives it', function () {
+        return caches.open('empty').then(function (made) {
+            return Promise.all([made.match(new Request(document.baseURI)), made.keys(),
+                caches.keys()]);
+        }).then(function (rows) {
+            return rows[0] === undefined && Array.isArray(rows[1]) && rows[1].length === 0
+                && rows[2].indexOf('empty') >= 0;
+        });
+    });
+
+    // ── F. the names a page tests for ────────────────────────────────────────────
+    var CHECKED = ['ByteLengthQueuingStrategy', 'CountQueuingStrategy', 'CompressionStream',
+        'DecompressionStream', 'TextEncoderStream', 'TextDecoderStream', 'IDBKeyRange',
+        'IDBFactory', 'IDBDatabase', 'IDBObjectStore', 'IDBIndex', 'IDBCursor',
+        'IDBCursorWithValue', 'IDBRequest', 'IDBOpenDBRequest', 'IDBTransaction',
+        'IDBVersionChangeEvent', 'Cache', 'CacheStorage', 'CookieStore', 'ImageData', 'Path2D',
+        'CanvasGradient', 'CanvasPattern', 'TextMetrics', 'OffscreenCanvas',
+        'OffscreenCanvasRenderingContext2D', 'ImageBitmapRenderingContext', 'CanvasRenderingContext',
+        'CanvasRenderingContext2D', 'AudioContext', 'OfflineAudioContext', 'BaseAudioContext',
+        'AudioNode', 'AudioScheduledSourceNode', 'AudioParam', 'AudioParamMap', 'AudioBuffer',
+        'AudioBufferSourceNode', 'AudioDestinationNode', 'AudioListener', 'AudioWorklet',
+        'AudioWorkletNode', 'AnalyserNode', 'BiquadFilterNode', 'ChannelMergerNode',
+        'ChannelSplitterNode', 'ConstantSourceNode', 'ConvolverNode', 'DelayNode',
+        'DynamicsCompressorNode', 'GainNode', 'IIRFilterNode', 'OscillatorNode', 'PannerNode',
+        'ScriptProcessorNode', 'StereoPannerNode', 'WaveShaperNode', 'PeriodicWave',
+        'MediaElementAudioSourceNode', 'MediaStreamAudioSourceNode',
+        'MediaStreamAudioDestinationNode', 'AudioProcessingEvent', 'OfflineAudioCompletionEvent',
+        'Worker', 'SharedWorker', 'ServiceWorker', 'WorkerGlobalScope',
+        'DedicatedWorkerGlobalScope', 'SharedWorkerGlobalScope', 'ServiceWorkerGlobalScope',
+        'Client', 'Clients', 'WindowClient', 'ExtendableEvent', 'FetchEvent', 'InstallEvent',
+        'NotificationEvent', 'PushEvent', 'SyncEvent', 'PushManager', 'PushSubscription',
+        'PushSubscriptionOptions', 'SyncManager', 'PeriodicSyncManager', 'BackgroundFetchManager',
+        'BackgroundFetchRegistration', 'ContentIndex', 'Notification', 'BatteryManager',
+        'GeolocationPosition', 'GeolocationPositionError', 'GeolocationCoordinates', 'Gamepad',
+        'GamepadButton', 'GamepadEvent', 'Sensor', 'Accelerometer', 'Gyroscope', 'Magnetometer',
+        'LinearAccelerationSensor', 'GravitySensor', 'AmbientLightSensor',
+        'AbsoluteOrientationSensor', 'RelativeOrientationSensor', 'SensorErrorEvent', 'Credential',
+        'PasswordCredential', 'FederatedCredential', 'PublicKeyCredential', 'PaymentRequest',
+        'PaymentResponse', 'Bluetooth', 'BluetoothDevice', 'USB', 'USBDevice', 'Serial',
+        'SerialPort', 'HID', 'HIDDevice', 'XRSystem', 'XRSession', 'RTCPeerConnection',
+        'RTCSessionDescription', 'RTCIceCandidate', 'RTCDataChannel', 'RTCRtpSender',
+        'RTCRtpReceiver', 'RTCRtpTransceiver', 'RTCStatsReport', 'MediaSource', 'SourceBuffer',
+        'SourceBufferList', 'ManagedMediaSource', 'ImageDecoder', 'ImageTrack', 'ImageTrackList',
+        'WebTransport', 'XSLTProcessor', 'AnimationTimeline', 'DocumentTimeline', 'ScrollTimeline',
+        'ViewTimeline', 'FileSystemHandle', 'FileSystemFileHandle', 'FileSystemDirectoryHandle',
+        'FileSystemWritableFileStream', 'CSSStyleValue', 'CSSKeywordValue', 'CSSUnitValue',
+        'CSSUnparsedValue', 'CSSVariableReferenceValue', 'CSSNumericValue', 'CSSMathValue',
+        'CSSMathSum', 'CSSMathProduct', 'CSSMathNegate', 'CSSMathInvert', 'CSSMathMin',
+        'CSSMathMax', 'CSSMathClamp', 'CSSTransformValue', 'CSSTransformComponent',
+        'CSSMatrixComponent', 'CSSTranslate', 'CSSRotate', 'CSSScale', 'CSSSkew', 'CSSSkewX',
+        'CSSSkewY', 'CSSPerspective', 'CSSImageValue', 'CSSColorValue', 'CSSPositionValue',
+        'HTMLDirectoryElement', 'HTMLFontElement', 'HTMLFrameElement', 'HTMLFrameSetElement',
+        'XMLHttpRequestEventTarget', 'TextTrackCue', 'TextTrackCueList', 'Touch', 'TouchList',
+        'PerformanceResourceTiming', 'PerformanceNavigationTiming', 'PerformancePaintTiming',
+        'PerformanceServerTiming', 'PerformanceLongTaskTiming', 'PerformanceEventTiming',
+        'PerformanceElementTiming', 'LayoutShift', 'LargestContentfulPaint',
+        'TaskAttributionTiming', 'GPU', 'GPUAdapter', 'GPUDevice', 'GPUQueue', 'GPUCommandEncoder',
+        'GPURenderPassEncoder', 'GPUComputePassEncoder', 'GPUBuffer', 'GPUTexture', 'GPUSampler',
+        'GPUShaderModule', 'GPUPipelineLayout', 'GPUBindGroup', 'GPUBindGroupLayout',
+        'GPURenderPipeline', 'GPUComputePipeline', 'GPUQuerySet', 'GPUCanvasContext',
+        'WebGLRenderingContext', 'WebGL2RenderingContext', 'WebGLBuffer', 'WebGLFramebuffer',
+        'WebGLProgram', 'WebGLRenderbuffer', 'WebGLShader', 'WebGLShaderPrecisionFormat',
+        'WebGLTexture', 'WebGLUniformLocation', 'WebGLVertexArrayObject', 'WebGLActiveInfo',
+        'WebGLContextEvent', 'CryptoKey', 'AnimationPlaybackEvent',
+        'MediaKeySystemAccess', 'MediaKeyStatusMap',
+        // 'FontFaceSet' and 'FontFaceSetLoadEvent' are left out: the face set the document hands out
+        // lives on a prototype no page name reaches, and naming the interface moves that host onto a
+        // fresh level and takes its members away. Z2 below says so plainly.
+        'MediaKeyMessageEvent', 'ServiceWorkerContainer', 'ServiceWorkerRegistration',
+        'PerformanceLayoutShift', 'PerformanceLargestContentfulPaint'];
+    ck('F1 every name the checklist found missing is an interface now', function () {
+        var missing = CHECKED.filter(function (name) { return typeof window[name] !== 'function'; });
+        return missing.length === 0;
+    }, function () {
+        return CHECKED.filter(function (n) {
+            return typeof window[n] !== 'function';
+        }).join(',');
+    });
+    ck('F2 the level names its constructor out of the listing and the object carries the tag',
+        function () {
+            var samples = ['GainNode', 'Notification', 'PaymentRequest', 'Worker', 'Cache',
+                'Gamepad', 'Accelerometer', 'CacheStorage'];
+            for (var i = 0; i < samples.length; i++) {
+                var iface = samples[i];
+                var level = window[iface].prototype;
+                if (Object.getOwnPropertyDescriptor(level, 'constructor').enumerable) return false;
+                if (tag(Object.create(level)) !== '[object ' + iface + ']') return false;
+            }
+            return refused(function () { return new GainNode(); })
+                === 'TypeError:Failed to construct \'GainNode\': Illegal constructor'
+                && refuses(function () { return Cache.prototype.match.call({ }); },
+                    'TypeError:Failed to execute \'match\' on \'Cache\': Illegal invocation');
+        }, function () { return refused(function () { return new GainNode(); }); });
+    ck('F3 a member read off the level is refused and read off an object is answered', function () {
+        return refused(function () { return Gamepad.prototype.id; })
+            === 'TypeError:Illegal invocation'
+            && refused(function () { return Sensor.prototype.frequency; })
+                === 'TypeError:Illegal invocation'
+            && refused(function () { return AudioParam.prototype.value; })
+                === 'TypeError:Illegal invocation'
+            && refused(function () { return Notification.prototype.title; })
+                === 'TypeError:Illegal invocation';
+    }, function () { return refused(function () { return Gamepad.prototype.id; }); });
+    ck('F4 the state a device would answer is the state of a device that is not there',
+        function () {
+            var gamepad = Object.create(Gamepad.prototype);
+            var sensor = Object.create(Accelerometer.prototype);
+            var battery = Object.create(BatteryManager.prototype);
+            var error = Object.create(GeolocationPositionError.prototype);
+            return gamepad.connected === false && gamepad.mapping === '' && gamepad.index === 0
+                && sensor.active === false && sensor.hasReading === false && sensor.x === 0
+                && battery.charging === true && battery.level === 1
+                && battery.chargingTime === 0 && battery.dischargingTime === Infinity
+                && GeolocationPositionError.PERMISSION_DENIED === 1
+                && GeolocationPositionError.POSITION_UNAVAILABLE === 2
+                && GeolocationPositionError.TIMEOUT === 3
+                // An object the page builds for itself is not one the engine handed over, and the
+                // host's own reader refuses it the same way the reference does.
+                && refused(function () { return error.code; }) === 'TypeError:Illegal invocation';
+        }, function () {
+            var battery = Object.create(BatteryManager.prototype);
+            return [battery.charging, battery.level,
+                GeolocationPositionError.PERMISSION_DENIED].join('/');
+        });
+    done('F5 the calls that need a device refuse with the promise the interface returns',
+        function () {
+            var bluetooth = Object.create(Bluetooth.prototype);
+            var hid = Object.create(HID.prototype);
+            var push = Object.create(PushManager.prototype);
+            return Promise.all([bluetooth.requestDevice({ }), hid.requestDevice({ }),
+                push.subscribe({ })]).then(function () { return 'one of them answered'; },
+                function (error) {
+                    return String(error && error.name) === 'NotSupportedError'
+                        ? true : 'refused with ' + String(error && error.name);
+                });
+        });
+    ck('F6 the interface object answers the statics the specification puts there', function () {
+        return Notification.permission === 'default'
+            && typeof Notification.requestPermission === 'function'
+            && MediaSource.isTypeSupported('video/mp4') === false
+            && ImageDecoder.isTypeSupported('image/png') === false
+            && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+                === 'function'
+            && own(Notification).indexOf('permission') >= 0
+            && own(Notification.prototype).indexOf('permission') < 0
+            && typeof window.webkitURL === 'function'
+            && new window.URL('https://acrux.example/a').href === 'https://acrux.example/a';
+    }, function () {
+        return [Notification.permission, own(Notification).join(','),
+            String(own(Notification.prototype).indexOf('permission'))].join(' | ');
+    });
+    ck('F6b a keyword and a unit keep the values they were built with', function () {
+        // CSSOM Typed OM §2.3, §4.2, §5.1: the two constructors the page calls keep their arguments,
+        // and the factory functions on CSS build a unit value of the kind they name.
+        var keyword = new CSSKeywordValue('auto');
+        var ten = new CSSUnitValue(10, 'px');
+        return keyword.value === 'auto' && ten.value === 10 && ten.unit === 'px'
+            && keyword instanceof CSSKeywordValue && ten instanceof CSSNumericValue
+            && tag(ten) === '[object CSSUnitValue]'
+            && CSS.px(4).unit === 'px' && CSS.number(2).value === 2
+            && CSS.percent(50).unit === 'percent'
+            && refused(function () { return new CSSKeywordValue(); }) === 'TypeError:Failed to '
+                + 'construct \'CSSKeywordValue\': 1 argument required, but only 0 present.'
+            && refused(function () { return new CSSUnitValue(1); }) === 'TypeError:Failed to '
+                + 'construct \'CSSUnitValue\': 2 arguments required, but only 1 present.';
+    }, function () {
+        var ten = new CSSUnitValue(10, 'px');
+        return [String(new CSSKeywordValue('auto').value), ten.value, ten.unit,
+            typeof CSS.px, tag(ten)].join(' | ');
+    });
+
+    ck('F7 the three pickers are refused the way a browser refuses what it may not ask',
+        function () {
+            var made = [window.showOpenFilePicker, window.showSaveFilePicker,
+                window.showDirectoryPicker];
+            return made.every(function (fn) { return typeof fn === 'function'; })
+                && refused(function () { return made[0](); }) === 'no-throw:[object Promise]'
+                && refused(function () { return made[2](); }) === 'no-throw:[object Promise]';
+        }, function () { return String(typeof window.showOpenFilePicker); });
+    ck('F8 the legacy elements and the request base are levels of their own', function () {
+        // The legacy element levels hang off the interface table the engine builds, and the chain is
+        // read by the name it carries: a page walks that descent, and an identity test would compare
+        // two tables rather than the line of descent.
+        return Object.getPrototypeOf(HTMLFrameElement.prototype).constructor.name === 'HTMLElement'
+            && Object.getPrototypeOf(HTMLFrameSetElement.prototype).constructor.name
+                === 'HTMLElement'
+            && Object.getPrototypeOf(HTMLDirectoryElement.prototype).constructor.name
+                === 'HTMLElement'
+            && typeof XMLHttpRequestEventTarget.prototype.addEventListener === 'function'
+            && Object.getPrototypeOf(HTMLInputElement.prototype).constructor !== undefined;
+    }, function () {
+        return [Object.getPrototypeOf(HTMLFrameElement.prototype) === HTMLElement.prototype,
+            typeof XMLHttpRequestEventTarget].join('/');
+    });
+
+    // The rows that say plainly what the engine still cannot do behind these names.
+    ck('Z1 the contexts a canvas hands back are objects of the interface named', function () {
+        // A canvas answers the second kind with null, so each kind is asked of its own canvas.
+        var canvas = document.createElement('canvas');
+        var two = canvas.getContext('2d');
+        var glCanvas = document.createElement('canvas');
+        var gl = glCanvas.getContext('webgl');
+        return tag(two) === '[object CanvasRenderingContext2D]'
+            && two instanceof CanvasRenderingContext2D && typeof two.fillRect === 'function'
+            && canvas.getContext('2d') === two && two.canvas === canvas
+            && tag(gl) === '[object WebGLRenderingContext]'
+            && gl instanceof WebGLRenderingContext && gl.canvas === glCanvas
+            // The engine has no GL command surface behind the object a page holds.
+            && gl.createBuffer === undefined
+            && typeof window.indexedDB === 'object'
+            && tag(window.indexedDB) === '[object IDBFactory]'
+            && String(window.SharedArrayBuffer) === 'undefined'
+            && tag(new Worker('no-such.js')) === '[object Worker]';
+    }, function () {
+        var canvas = document.createElement('canvas');
+        return [tag(canvas.getContext('2d')), tag(document.createElement('canvas')
+            .getContext('webgl')), tag(window.indexedDB),
+            String(window.SharedArrayBuffer)].join('/');
+    });
+    ck('Z2 the two face-set names the engine keeps private are recorded as gaps', function () {
+        return typeof window.FontFaceSet === 'undefined'
+            && typeof window.FontFaceSetLoadEvent === 'undefined'
+            && tag(document.fonts) === '[object FontFaceSet]'
+            && typeof document.fonts.add === 'function'
+            && typeof document.fonts.load === 'function';
+    }, function () {
+        return [String(typeof window.FontFaceSet), tag(document.fonts),
+            typeof document.fonts.add].join('/');
+    });
+    done('Z3 the database the engine cannot open is refused rather than left waiting',
+        function () {
+            return window.indexedDB.open('acrux', 1).then(function () {
+                return 'the database opened';
+            }, function (error) {
+                return String(error && error.name) === 'NotSupportedError'
+                    ? true : 'refused with ' + String(error && error.name);
+            });
+        });
+})();
+</script>
+<div>the interfaces the browser checklist names</div>
+</body>
+</html>
