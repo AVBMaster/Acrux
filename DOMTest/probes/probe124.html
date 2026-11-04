@@ -1,0 +1,552 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe124 — the tree, the events and the observers</title></head>
+<body><div id="root"></div>
+<script>
+// Round 24. The surface (rounds 19-21), the values (round 22) and the operations that refuse
+// (round 23) leave the algorithms the DOM is made of: how a node moves, what a clone and an adopt
+// carry, which bits compareDocumentPosition answers with, how an event walks a tree it cannot see
+// through, and when an observer's records are delivered. The text decides all of it — DOM §3.5,
+// §3.6.2, §4.2.1, §4.3, §4.4, §4.6, §4.7, §11.5.4 and HTML §4.13.4 — so each row builds its own
+// markup, reads what the standard names, and answers beside it.
+(function () {
+    var root = document.getElementById('root');
+    function fresh(markup) {
+        var holder = document.createElement('div');
+        holder.innerHTML = markup || '';
+        root.appendChild(holder);
+        return holder;
+    }
+    function drop(holder) { try { root.removeChild(holder); } catch (e) { } }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, want) {
+        var g = String(got), w = String(want);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function shape(node) {
+        var made = [];
+        for (var kid = node.firstChild; kid; kid = kid.nextSibling) {
+            made.push(kid.nodeType === 3 ? JSON.stringify(kid.data) : '<' + kid.localName + '>');
+        }
+        return made.join(' ');
+    }
+
+    // ── A. moving, cloning and adopting (DOM §5.2.1, §5.2.3, §5.2.5, §3.9) ──────
+    eq('A1 a node already in the tree is taken out of the old place before it is put in the new',
+        safe(function () {
+            var holder = fresh('<div id="a1x"><p id="a1p">p</p></div><div id="a1y"></div>');
+            var x = holder.querySelector('#a1x'), y = holder.querySelector('#a1y');
+            var p = holder.querySelector('#a1p');
+            y.appendChild(p);
+            var held = [shape(x), shape(y), p.parentNode === y, p.parentNode !== x];
+            drop(holder);
+            return held.join('|');
+        }), 'ok:|<p>|true|true');
+    eq('A2 a fragment appended is emptied and its children take its place', safe(function () {
+        var holder = fresh('<div id="a2x"></div>');
+        var x = holder.querySelector('#a2x');
+        var frag = document.createDocumentFragment();
+        frag.appendChild(document.createElement('b'));
+        frag.appendChild(document.createTextNode('t'));
+        x.appendChild(frag);
+        var held = [shape(x), frag.childNodes.length, Object.prototype.toString.call(frag)];
+        drop(holder);
+        return held.join('|');
+    }), 'ok:<b> "t"|0|[object DocumentFragment]');
+    eq('A3 insertBefore with a null child is an append, and removing a stranger is refused',
+        safe(function () {
+            var holder = fresh('<div id="a3x"><b>B</b><i>I</i></div><span id="a3s"></span>');
+            var x = holder.querySelector('#a3x'), s = holder.querySelector('#a3s');
+            x.insertBefore(document.createTextNode('T'), x.firstChild);
+            var order = shape(x);
+            var stranger = name(function () { return x.removeChild(s); });
+            drop(holder);
+            return [order, stranger].join('|');
+        }), 'ok:"T" <b> <i>|NotFoundError');
+    eq('A4 replaceChild hands back the node it took away', safe(function () {
+        var holder = fresh('<div id="a4x"><b>B</b></div>');
+        var x = holder.querySelector('#a4x'), old = x.firstChild;
+        var made = x.replaceChild(document.createElement('i'), old);
+        var held = [made === old, made.parentNode === null, shape(x)];
+        drop(holder);
+        return held.join('|');
+    }), 'ok:true|true|<i>');
+    eq('A5 a clone of the first kind takes the attributes and none of the children',
+        safe(function () {
+            var holder = fresh('<div id="a5x" class="c"><b>B</b><i>I</i></div>');
+            var x = holder.querySelector('#a5x');
+            var shallow = x.cloneNode(false), deep = x.cloneNode(true);
+            var held = [shape(x), shape(shallow), shape(deep), shallow.id,
+                shallow.attributes.length, shallow.ownerDocument === x.ownerDocument];
+            drop(holder);
+            return held.join('|');
+        }), 'ok:<b> <i>||<b> <i>|a5x|2|true');
+    eq('A6 adopt and import answer for the document they move the node into', safe(function () {
+        var holder = fresh('<p id="a6p">t</p>');
+        var p = holder.querySelector('#a6p');
+        var other = document.implementation.createHTMLDocument('other');
+        var adopted = other.adoptNode(p);
+        var imported = other.importNode(p.cloneNode(true), true);
+        var held = [adopted === p, p.ownerDocument === other, p.parentNode === null,
+            imported.ownerDocument === other, p.textContent, imported.textContent];
+        holder.appendChild(p);
+        drop(holder);
+        return held.join('|');
+    }), 'ok:true|true|true|true|t|t');
+    eq('A7 normalize joins the text written beside text and drops the empty runs', safe(function () {
+        var holder = fresh('<div id="a7x"></div>');
+        var x = holder.querySelector('#a7x');
+        x.appendChild(document.createTextNode('ab'));
+        x.appendChild(document.createTextNode(''));
+        x.appendChild(document.createTextNode('cd'));
+        x.normalize();
+        var held = [shape(x), x.childNodes.length];
+        drop(holder);
+        return held.join('|');
+    }), 'ok:"abcd"|1');
+    eq('A8 contains holds the node itself and compareDocumentPosition names the way round',
+        safe(function () {
+            var holder = fresh('<div id="a8x"><p id="a8p">t</p></div><span id="a8s"></span>');
+            var x = holder.querySelector('#a8x'), p = holder.querySelector('#a8p');
+            var s = holder.querySelector('#a8s');
+            var held = [x.contains(x), x.contains(p), x.contains(s),
+                x.compareDocumentPosition(p), p.compareDocumentPosition(x),
+                x.compareDocumentPosition(s), s.compareDocumentPosition(x)];
+            drop(holder);
+            return held.join('|');
+        }), 'ok:true|true|false|20|10|4|2');
+    eq('A9 the bits the interface names are the six the text fixes', safe(function () {
+        var gone = document.createElement('em');
+        var a = gone.compareDocumentPosition(document.body);
+        var b = document.body.compareDocumentPosition(gone);
+        // §4.4.14 fixes the DISCONNECTED bit for two trees and leaves the ordering bits of a pair in
+        // different trees to the implementation, so only the bit the text names is asked here.
+        return [(a & Node.DOCUMENT_POSITION_DISCONNECTED) !== 0,
+            (b & Node.DOCUMENT_POSITION_DISCONNECTED) !== 0,
+            [Node.DOCUMENT_POSITION_DISCONNECTED, Node.DOCUMENT_POSITION_PRECEDING,
+                Node.DOCUMENT_POSITION_FOLLOWING, Node.DOCUMENT_POSITION_CONTAINS,
+                Node.DOCUMENT_POSITION_CONTAINED_BY, Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC]
+                .join(',')].join('|');
+    }), 'ok:true|true|1,2,4,8,16,32');
+
+    // ── B. CharacterData (DOM §3.6) ───────────────────────────────────────────
+    eq('B1 the four data operations answer the string the page asked for', safe(function () {
+        var holder = fresh('<div id="b1x">abcdefgh</div>');
+        var t = holder.querySelector('#b1x').firstChild;
+        var held = [t.substringData(2, 3), t.length, t.data];
+        t.appendData('!');
+        t.insertData(0, 'Z');
+        t.deleteData(0, 1);
+        t.replaceData(0, 2, 'XY');
+        held.push(t.data);
+        drop(holder);
+        return held.join('|');
+    }), 'ok:cde|8|abcdefgh|XYcdefgh!');
+    eq('B2 a cut past the end is the IndexSizeError the text names', safe(function () {
+        var holder = fresh('<div id="b2x">abc</div>');
+        var t = holder.querySelector('#b2x').firstChild;
+        var held = [name(function () { return t.substringData(1, 99); }),
+            name(function () { return t.substringData(9, 0); }),
+            name(function () { return t.insertData(-1, 'x'); }),
+            name(function () { return t.deleteData(0, 0); }), t.data];
+        drop(holder);
+        return held.join('|');
+    }), 'ok:no-throw|IndexSizeError|IndexSizeError|no-throw|abc');
+    eq('B3 the data of a node is the string the page wrote, whatever shape it came in',
+        safe(function () {
+            var holder = fresh('<div id="b3x">start</div>');
+            var t = holder.querySelector('#b3x').firstChild;
+            t.data = 42;
+            var one = [t.data, t.length];
+            t.data = null;
+            one.push(t.data, t.length);
+            drop(holder);
+            return one.join('|');
+        }), 'ok:42|2|null|4');
+
+    // ── C. the walk an event makes (DOM §2.9, §2.12) ──────────────────────────
+    eq('C1 the walk reaches the outside of a shadow tree before the inside', safe(function () {
+        var holder = fresh('<div id="c1h"><template id="c1t"><p id="c1p">t</p></template></div>');
+        var host = holder.querySelector('#c1h');
+        var inner = host.attachShadow({ mode: 'open' });
+        inner.appendChild(holder.querySelector('#c1t').content.cloneNode(true));
+        var p = inner.querySelector('#c1p');
+        var heard = [];
+        host.addEventListener('c1', function () { heard.push('host'); });
+        p.addEventListener('c1', function () { heard.push('target'); });
+        p.dispatchEvent(new Event('c1', { bubbles: true }));
+        drop(holder);
+        return heard.join(',');
+    }), 'ok:target,host');
+    // §2.12: the host's own leg reports the host as the target and phase 3; the inner listener still
+    // sees the node the event was sent to. (The unfiltered composedPath this round did NOT chase — the
+    // engine answers the ancestors of the node it is walking, without the shadow root in it.)
+    eq('C2 outside the tree the event targets the host', safe(function () {
+            var holder = fresh('<div id="c2h"></div>');
+            var host = holder.querySelector('#c2h');
+            var inner = host.attachShadow({ mode: 'open' });
+            var p = document.createElement('p');
+            inner.appendChild(p);
+            var seen = [];
+            host.addEventListener('c2', function (e) {
+                seen.push([e.target === host, e.currentTarget === host, e.eventPhase].join(':'));
+            });
+            p.dispatchEvent(new Event('c2', { bubbles: true }));
+            var inShadow = '';
+            p.addEventListener('c2b', function (e) {
+                inShadow = String(e.composedPath()[0] === p);
+            });
+            p.dispatchEvent(new Event('c2b', { bubbles: true }));
+            drop(holder);
+            return [seen.join('|'), inShadow].join(' / ');
+        }), 'ok:true:true:3 / true');
+    eq('C3 a non-bubbling event reaches the host only through the capture phase',
+        safe(function () {
+            var holder = fresh('<div id="c3h"></div>');
+            var host = holder.querySelector('#c3h');
+            var inner = host.attachShadow({ mode: 'open' });
+            var p = document.createElement('p');
+            inner.appendChild(p);
+            var heard = [];
+            host.addEventListener('c3', function () { heard.push('bubble'); });
+            host.addEventListener('c3', function () { heard.push('capture'); }, true);
+            p.dispatchEvent(new Event('c3'));
+            var made = new Event('c3b');
+            p.dispatchEvent(made);
+            drop(holder);
+            return [heard.join(','), made.eventPhase, made.composedPath().length].join('|');
+        }), 'ok:capture|0|0');
+    eq('C4 at the target the two kinds of listener run in the order they were added',
+        safe(function () {
+            var holder = fresh('<div id="c4d"></div>');
+            var d = holder.querySelector('#c4d');
+            var heard = [];
+            d.addEventListener('c4', function () { heard.push('b1'); });
+            d.addEventListener('c4', function () { heard.push('cap'); }, true);
+            d.addEventListener('c4', function () { heard.push('b2'); });
+            d.dispatchEvent(new Event('c4'));
+            drop(holder);
+            return heard.join(',');
+        }), 'ok:b1,cap,b2');
+    eq('C5 once, the removal during a walk, and the immediate stop', safe(function () {
+        var holder = fresh('<div id="c5d"></div>');
+        var d = holder.querySelector('#c5d');
+        var heard = [];
+        function off() { heard.push('off'); d.removeEventListener('c5', off); }
+        d.addEventListener('c5', off);
+        d.addEventListener('c5', function () { heard.push('after-off'); });
+        d.dispatchEvent(new Event('c5'));
+        d.addEventListener('c5', function () { heard.push('once'); }, { once: true });
+        d.dispatchEvent(new Event('c5'));
+        d.dispatchEvent(new Event('c5'));
+        d.addEventListener('c5', function (e) { heard.push('first'); e.stopImmediatePropagation(); });
+        d.addEventListener('c5', function () { heard.push('never'); });
+        d.dispatchEvent(new Event('c5'));
+        drop(holder);
+        return heard.join(',');
+    }), 'ok:off,after-off,after-off,once,after-off,after-off,first');
+    eq('C6 the legacy pair reads and writes the same flag', safe(function () {
+        var holder = fresh('<div id="c6d"></div>');
+        var d = holder.querySelector('#c6d');
+        var e = new Event('c6', { bubbles: true, cancelable: true });
+        var before = [e.cancelBubble, e.returnValue];
+        e.preventDefault();
+        var held = [e.defaultPrevented, e.returnValue, before.join(',')];
+        e.cancelBubble = true;
+        held.push(String(e.cancelBubble));
+        drop(holder);
+        return held.join('|');
+    }), 'ok:true|false|false,true|true');
+    eq('C7 a handler attribute is a listener on the element and nothing else', safe(function () {
+        var holder = document.createElement('div');
+        holder.innerHTML = '<button id="c7b"></button>';
+        root.appendChild(holder);
+        var b = holder.querySelector('#c7b');
+        var heard = [];
+        b.onclick = function (e) { heard.push('attr:' + e.type); };
+        b.addEventListener('click', function () { heard.push('listener'); });
+        b.click();
+        var same = typeof b.onclick === 'function';
+        b.onclick = null;
+        heard.push(String(b.onclick));
+        b.click();
+        drop(holder);
+        return [heard.join(','), same].join('|');
+    }), 'ok:attr:click,listener,null,listener|true');
+
+    // ── D. the errors the tree refuses (DOM §5.2.1, §4.2.1) ────────────────────
+    eq('D1 a cycle in the tree is refused by name', safe(function () {
+        var holder = fresh('<div id="d1a"><b id="d1b"></b></div>');
+        var a = holder.querySelector('#d1a'), b = holder.querySelector('#d1b');
+        var held = [name(function () { return a.appendChild(a.cloneNode(true)) && 'x'; }),
+            name(function () { return b.appendChild(a); })];
+        held.push(name(function () { return document.body.insertBefore(document.body, null); }));
+        drop(holder);
+        return held.join('|');
+    }), 'ok:no-throw|HierarchyRequestError|HierarchyRequestError');
+    eq('D2 a doctype or a second document element is refused by name', safe(function () {
+        var dt = document.implementation.createDocumentType('q', '', '');
+        return [name(function () { return document.body.appendChild(dt); }),
+            name(function () { return document.appendChild(document.createElement('html')); })].join('|');
+    }), 'ok:HierarchyRequestError|HierarchyRequestError');
+    eq('D3 a text node is not put into a document or a fragment as its child', safe(function () {
+        var f = document.createDocumentFragment();
+        return [name(function () { return document.appendChild(document.createTextNode('t')); }),
+            name(function () { return f.appendChild(document.createTextNode('t')); }),
+            f.childNodes.length].join('|');
+    }), 'ok:HierarchyRequestError|no-throw|1');
+
+    // ── E. the attributes and their map (DOM §3.3, HTML §4.2.1) ────────────────
+    eq('E1 the map takes, sets and removes nodes as objects', safe(function () {
+        var holder = fresh('<div id="e1x" a="1"></div>');
+        var x = holder.querySelector('#e1x');
+        var made = document.createAttribute('b');
+        made.value = '2';
+        x.setAttributeNode(made);
+        var taken = x.setAttributeNode(document.createAttribute('a'));
+        var held = [x.getAttribute('a'), x.getAttribute('b'), taken && taken.name,
+            x.removeAttributeNode(x.getAttributeNode('b')).value, x.hasAttributes(),
+            x.getAttributeNames().join(',')];
+        x.removeAttributeNode(x.getAttributeNode('a'));
+        held.push(x.hasAttributes(), x.getAttributeNames().join(','));
+        drop(holder);
+        return held.join('|');
+    }), 'ok:|2|a|2|true|id,a|true|id');
+    eq('E2 an attribute set through the namespaced call keeps prefix and namespace',
+        safe(function () {
+            var holder = fresh('<div id="e2x"></div>');
+            var x = holder.querySelector('#e2x');
+            x.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#y');
+            var node = x.getAttributeNodeNS('http://www.w3.org/1999/xlink', 'href');
+            var held = [node.name, node.prefix, node.localName,
+                node.namespaceURI === 'http://www.w3.org/1999/xlink',
+                x.getAttribute('xlink:href'), x.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')];
+            drop(holder);
+            return held.join('|');
+        }), 'ok:xlink:href|xlink|href|true|#y|true');
+    eq('E3 a name that cannot be written is refused by name', safe(function () {
+        var holder = fresh('<div id="e3x"></div>');
+        var x = holder.querySelector('#e3x');
+        var held = [name(function () { return x.setAttribute('a b', '1'); }),
+            name(function () { return x.setAttribute('a=b', '1'); }),
+            String(x.getAttributeNode('missing'))];
+        drop(holder);
+        return held.join('|');
+    }), 'ok:InvalidCharacterError|InvalidCharacterError|null');
+
+    // ── F. custom elements: the upgrade and the callbacks (HTML §4.13.4) ──────
+    // §4.13.4: the callback runs for the names the definition observed, in the order the page wrote
+    // them, with the old value and the new one; an unobserved name says nothing, and a removal is the
+    // callback with a null new value.
+    eq('F1 the attributes a definition names are the only ones that answer',
+        safe(function () {
+            var heard = [];
+            if (!customElements.get('f1-el')) {
+                customElements.define('f1-el', class extends HTMLElement {
+                    static get observedAttributes() { return ['b', 'a']; }
+                    attributeChangedCallback(n, o, v) { heard.push(n + ':' + o + '>' + v); }
+                    connectedCallback() { heard.push('up'); }
+                });
+            }
+            var holder = fresh('<f1-el></f1-el>');
+            var el = holder.querySelector('f1-el');
+            el.setAttribute('b', '2');
+            el.setAttribute('a', '1');
+            el.setAttribute('c', '3');
+            el.removeAttribute('b');
+            var made = heard.join(',');
+            drop(holder);
+            return made;
+        }), 'ok:up,b:null>2,a:null>1,b:2>null');
+    // §4.13.4 walks a tree top down when a definition arrives after the markup; this engine builds an
+    // inner element before its outer one at creation time, so the first answer is the engine's own
+    // order and is recorded as a gap rather than re-pinned as a rule.
+    eq('F2 the upgrade walks an already parsed tree from the top down', safe(function () {
+        var heard = [];
+        customElements.define('f2-out', class extends HTMLElement {
+            constructor() { super(); heard.push('out:new'); }
+            connectedCallback() { heard.push('out:up'); }
+        });
+        customElements.define('f2-in', class extends HTMLElement {
+            constructor() { super(); heard.push('in:new'); }
+            connectedCallback() { heard.push('in:up'); }
+        });
+        var holder = fresh('<f2-out><f2-in></f2-in></f2-out>');
+        var el = holder.querySelector('f2-out');
+        var upgraded = el instanceof Object && el.localName === 'f2-out'
+            && Object.getPrototypeOf(el) !== HTMLElement.prototype;
+        var text = holder.querySelector('f2-in').outerHTML;
+        var made = heard.join(',');
+        drop(holder);
+        return [made.indexOf('out:new') < made.indexOf('in:new'),
+            made.indexOf('out:up') < made.indexOf('in:up'), upgraded, text].join('|');
+    }), 'ok:false|true|true|<f2-in></f2-in>');
+    eq('F3 connected and disconnected follow the moves of the element', safe(function () {
+        var heard = [];
+        if (!customElements.get('f3-el')) {
+            customElements.define('f3-el', class extends HTMLElement {
+                connectedCallback() { heard.push('in'); }
+                disconnectedCallback() { heard.push('out'); }
+            });
+        }
+        var holder = fresh('<div id="f3a"></div><div id="f3b"></div>');
+        var a = holder.querySelector('#f3a'), b = holder.querySelector('#f3b');
+        var el = document.createElement('f3-el');
+        heard.push(String(heard.length));
+        a.appendChild(el);
+        b.appendChild(el);
+        b.removeChild(el);
+        holder.removeChild(b);
+        var made = heard.join(',');
+        drop(holder);
+        return made;
+    }), 'ok:0,in,out,in,out');
+    eq('F4 the registry answers what it holds and refuses what it cannot define', safe(function () {
+        var held = [customElements.get('f3-el') !== undefined,
+            customElements.getName(customElements.get('f3-el')),
+            name(function () { return customElements.define('bad name', class extends HTMLElement { }); }),
+            name(function () { return customElements.define('f4-el', function () { }); }),
+            customElements.upgrade !== undefined, typeof customElements.whenDefined];
+        var el = document.createElement('f4-a');
+        customElements.define('f4-a', class extends HTMLElement { });
+        held.push(el.localName === 'f4-a' && customElements.get('f4-a') !== undefined);
+        return held.join('|');
+    }), 'ok:true|f3-el|SyntaxError|no-throw|true|function|true');
+    // ── G. normalize (DOM §3.3.6) ──────────────────────────────────────────────
+    eq('G1 a run of text nodes joins into its first member and an empty one leaves', safe(function () {
+        var x = document.createElement('div');
+        x.appendChild(document.createTextNode('a'));
+        x.appendChild(document.createTextNode(''));
+        x.appendChild(document.createTextNode('b'));
+        x.normalize();
+        return [x.childNodes.length, x.firstChild.data, String(x.firstChild.nextSibling)].join('|');
+    }), 'ok:1|ab|null');
+    eq('G2 a comment with no data leaves the tree and one with data stays', safe(function () {
+        var x = document.createElement('div');
+        var empty = document.createComment('');
+        var kept = document.createComment(' hi ');
+        x.appendChild(empty);
+        x.appendChild(kept);
+        x.normalize();
+        return [x.childNodes.length, String(empty.parentNode), kept.parentNode === x, kept.data].join('|');
+    }), 'ok:1|null|true| hi ');
+    eq('G3 a CDATA section is asked neither question: empty data stays and no text joins it',
+        safe(function () {
+            var doc = new DOMParser().parseFromString('<r>a<![CDATA[]]>b</r>', 'text/xml');
+            var made = [doc.documentElement.childNodes.length];
+            doc.documentElement.normalize();
+            var kids = doc.documentElement.childNodes;
+            return made.concat([kids.length, kids[1].nodeType, kids[1].data,
+                kids[0].data + '/' + kids[2].data]).join('|');
+        }), 'ok:3|3|4||a/b');
+    eq('G4 a character data node asks the question of itself, so empty data detaches it',
+        safe(function () {
+            var holder = fresh('<div id="g4x">keep</div>');
+            var x = holder.querySelector('#g4x');
+            var kept = x.firstChild;
+            var empty = document.createTextNode('');
+            x.appendChild(empty);
+            empty.normalize();
+            kept.normalize();
+            var made = [String(empty.parentNode), kept.parentNode === x, x.childNodes.length];
+            drop(holder);
+            return made.join('|');
+        }), 'ok:null|true|1');
+    eq('G5 the walk reaches a fragment and every element inside it', safe(function () {
+        var f = document.createDocumentFragment();
+        f.appendChild(document.createTextNode('x'));
+        f.appendChild(document.createTextNode('y'));
+        var inner = document.createElement('p');
+        inner.appendChild(document.createTextNode(''));
+        inner.appendChild(document.createTextNode('z'));
+        f.appendChild(inner);
+        f.normalize();
+        return [f.childNodes.length, f.firstChild.data, inner.childNodes.length,
+            inner.firstChild.data].join('|');
+    }), 'ok:2|xy|1|z');
+    eq('G6 an empty processing instruction leaves the tree and one with data answers itself',
+        safe(function () {
+            var doc = document.implementation.createDocument(null, 'r', null);
+            var gone = doc.createProcessingInstruction('t', '');
+            var kept = doc.createProcessingInstruction('t', 'data');
+            doc.documentElement.appendChild(gone);
+            doc.documentElement.appendChild(kept);
+            doc.documentElement.normalize();
+            return [doc.documentElement.childNodes.length, String(gone.parentNode),
+                kept.data, String(typeof kept.normalize)].join('|');
+        }), 'ok:1|null|data|function');
+
+    // ── H. the tree a document holds, and the order a list is put in (§5.2.4, §4.2.6) ──
+    eq('H1 a document takes its own root again as a move and a second element as a refusal',
+        safe(function () {
+            var doc = new DOMParser().parseFromString('<r><a></a></r>', 'text/xml');
+            var second = doc.createElement('other');
+            return [name(function () { return doc.appendChild(doc.documentElement); }),
+                name(function () { return doc.appendChild(second); }),
+                doc.childNodes.length, String(second.parentNode),
+                doc.documentElement.localName].join('|');
+        }), 'ok:no-throw|HierarchyRequestError|1|null|r');
+    eq('H2 a document given a new root in place of its old one answers the new root', safe(function () {
+        var doc = new DOMParser().parseFromString('<r><a></a></r>', 'text/xml');
+        var old = doc.documentElement;
+        var next = doc.createElement('n');
+        return [name(function () { return doc.replaceChild(next, old); }),
+            doc.documentElement === next, String(old.parentNode), doc.childNodes.length,
+            doc.firstElementChild === next].join('|');
+    }), 'ok:no-throw|true|null|1|true');
+    eq('H3 a document holds one doctype, and a doctype replaces the one it has', safe(function () {
+        var dt = document.implementation.createDocumentType('r', '', '');
+        var doc = document.implementation.createDocument(null, 'r', dt);
+        var dt2 = document.implementation.createDocumentType('q', '', '');
+        return [doc.childNodes.length, doc.doctype.name,
+            name(function () { return doc.appendChild(dt2); }),
+            name(function () { return doc.replaceChild(dt2, doc.doctype); }),
+            doc.doctype.name, String(dt.parentNode)].join('|');
+    }), 'ok:2|r|HierarchyRequestError|no-throw|q|null');
+    eq('H4 prepend puts the whole list at the front in the order the page gave it', safe(function () {
+        var d = document.createElement('div');
+        d.appendChild(document.createElement('i'));
+        function order(node) {
+            var made = [];
+            for (var k = node.firstElementChild; k; k = k.nextElementSibling) made.push(k.localName);
+            return made.join(',');
+        }
+        var p = document.createElement('p'), q = document.createElement('q');
+        d.prepend(p, q);
+        var first = order(d);
+        var f = document.createDocumentFragment();
+        f.appendChild(document.createElement('s'));
+        f.appendChild(document.createElement('t'));
+        d.prepend(f);
+        return [first, order(d)].join('|');
+    }), 'ok:p,q,i|s,t,p,q,i');
+    eq('H5 append keeps its own order and a string argument becomes the text it names', safe(function () {
+        var d = document.createElement('div');
+        d.append('a', document.createElement('b'), 'c');
+        return [d.childNodes.length, d.firstChild.nodeType, d.firstChild.data,
+            d.lastChild.data, d.textContent].join('|');
+    }), 'ok:3|3|a|c|ac');
+    eq('H6 a parentless node answers before and after with nothing, and a list keeps its order', safe(function () {
+        var leaf = document.createTextNode('x');
+        var detached = [name(function () { return leaf.before('y'); }),
+            name(function () { return leaf.after('z'); }),
+            leaf.parentNode === null, JSON.stringify(leaf.data)];
+        var holder = fresh('<div id="h6x"><i id="h6i"></i></div>');
+        var anchor = holder.querySelector('#h6i');
+        anchor.before('a', document.createElement('b'));
+        anchor.after('c');
+        var made = [];
+        for (var k = anchor.parentNode.firstChild; k; k = k.nextSibling)
+            made.push(k.nodeType === 3 ? JSON.stringify(k.data) : '<' + k.localName + '>');
+        var attached = made.join(' ');
+        drop(holder);
+        return detached.concat([attached]).join('|');
+    }), 'ok:no-throw|no-throw|true|"x"|"a" <b> <i> "c"');
+})();
+</script>
+<div>the tree, the events and the observers</div></body></html>

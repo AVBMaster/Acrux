@@ -8,9 +8,23 @@ namespace Acrux.Core.Dom;
 public class Document : Node
 {
     private Element? _documentElement;
+
+    /// <summary>DOM §3.2, §4.1: the document element IS the element child the document holds, so the
+    /// read follows the tree. A stored answer alone goes stale the moment a page takes the root out or
+    /// puts another in its place — both leave the tree the question is asked of, and the walk answers
+    /// what is there now.</summary>
     public Element? DocumentElement
     {
-        get => _documentElement;
+        get
+        {
+            if (_documentElement != null && ReferenceEquals(_documentElement.Parent, this))
+                return _documentElement;
+            foreach (var kid in Children)
+            {
+                if (kid is Element el) return _documentElement = el;
+            }
+            return _documentElement = null;
+        }
         set
         {
             _documentElement = value;

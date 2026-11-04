@@ -42,8 +42,12 @@ public class DocumentHost : IDomPrototypeHost
     {
         get
         {
-            if (_document.DocumentElement == null) return null;
-            _documentElementHost ??= WrapElement(_document.DocumentElement);
+            var root = _document.DocumentElement;
+            if (root == null) return null;
+            // The cached host only answers while it IS the root the document holds: a page that takes
+            // the root out or puts another in its place reads the element that is there now (§3.2, §4.1).
+            if (!ReferenceEquals(_documentElementHost?.NativeElement, root))
+                _documentElementHost = WrapElement(root);
             return _documentElementHost;
         }
     }
@@ -375,12 +379,19 @@ public class DocumentHost : IDomPrototypeHost
     /// 'document.append(frag)' before the body exists expects the nodes to land on the document.</summary>
     public void append(params object?[] nodes)
     {
-        foreach (var n in nodes) InsertOnDocument(n, atEnd: true);
+        var incoming = new List<Acrux.Core.Dom.Node>();
+        foreach (var n in nodes) ElementHost.CollectChildNodes(n, incoming);
+        foreach (var n in incoming) _document.AppendChild(n);
     }
 
     public void prepend(params object?[] nodes)
     {
-        foreach (var n in nodes) InsertOnDocument(n, atEnd: false);
+        // The list the page hands over keeps its order at the front of the tree, so it is flattened
+        // first and then laid down from its last member to its first (ParentNode, §4.2.6).
+        var incoming = new List<Acrux.Core.Dom.Node>();
+        foreach (var n in nodes) ElementHost.CollectChildNodes(n, incoming);
+        for (var i = incoming.Count - 1; i >= 0; i--)
+            _document.InsertBefore(incoming[i], _document.Children.FirstOrDefault());
     }
 
     public void replaceChildren(params object?[] nodes)
@@ -390,23 +401,6 @@ public class DocumentHost : IDomPrototypeHost
         _document.ReplaceAllWith(incoming);
     }
 
-    private void InsertOnDocument(object? child, bool atEnd)
-    {
-        Node? node = child is string text ? new TextNode(text) : ElementHost.UnwrapNode(child);
-        if (node == null) return;
-        if (node is DocumentFragment frag)
-        {
-            foreach (var moved in frag.Children.ToList())
-            {
-                if (atEnd) _document.AppendChild(moved);
-                else _document.InsertBefore(moved, _document.Children.FirstOrDefault());
-            }
-            return;
-        }
-        if (atEnd) _document.AppendChild(node);
-        else _document.InsertBefore(node, _document.Children.FirstOrDefault());
-    }
-
     /// <summary>DOM §4.4.1: a document is a node, so the four mutation methods reach its children the
     /// same way they reach an element's — and the tree a document allows is the one the reference
     /// guards by name (measured: 'document.appendChild(secondElement)' is a HierarchyRequestError
@@ -414,7 +408,6 @@ public class DocumentHost : IDomPrototypeHost
     public object? appendChild(object? child)
     {
         var node = ElementHost.NodeArgument(child, "appendChild", 1);
-        RequireDocumentSlot(node, "appendChild");
         _document.AppendChild(node);
         return child;
     }
@@ -422,7 +415,6 @@ public class DocumentHost : IDomPrototypeHost
     public object? insertBefore(object? newChild, object? refChild)
     {
         var node = ElementHost.NodeArgument(newChild, "insertBefore", 1);
-        RequireDocumentSlot(node, "insertBefore");
         Node? refNode = refChild == null ? null : ElementHost.UnwrapNode(refChild);
         _document.InsertBefore(node, refNode);
         return newChild;
@@ -439,19 +431,8 @@ public class DocumentHost : IDomPrototypeHost
     {
         var newNode = ElementHost.NodeArgument(newChild, "replaceChild", 1);
         var oldNode = ElementHost.NodeArgument(oldChild, "replaceChild", 2);
-        RequireDocumentSlot(newNode, "replaceChild");
         _document.ReplaceChild(newNode, oldNode);
         return oldChild;
-    }
-
-    private void RequireDocumentSlot(Node node, string operation)
-    {
-        if (node is not Element || _document.DocumentElement == null) return;
-        // The element being moved out of the document is not a second element child, so the guard
-        // is only the arrival of an element the document does not already hold.
-        if (ReferenceEquals(node, _document.DocumentElement)) return;
-        throw new DOMException("Failed to execute '" + operation + "' on 'Node': Only one element "
-            + "on document allowed.", "HierarchyRequestError");
     }
 
     /// <summary>DOM §4.1: 'document.contains(other)' is the ancestor question asked from the root of
@@ -1684,7 +1665,12 @@ public class DocumentFragmentHost : IDomPrototypeHost
 
     public object? prepend(params object?[] nodes)
     {
-        foreach (var n in nodes) InsertIntoFragment(n, atEnd: false);
+        // The list keeps its order at the front of the tree: flattened first, then laid down from its
+        // last member to its first (ParentNode, §4.2.6).
+        var incoming = new List<Node>();
+        foreach (var n in nodes) ElementHost.CollectChildNodes(n, incoming);
+        for (var i = incoming.Count - 1; i >= 0; i--)
+            _fragment.InsertBefore(incoming[i], _fragment.Children.FirstOrDefault());
         return nodes.Length > 0 ? nodes[^1] : null;
     }
 
@@ -1701,11 +1687,10 @@ public class DocumentFragmentHost : IDomPrototypeHost
         if (node == null) return;
         if (node is Acrux.Core.Dom.DocumentFragment contributed)
         {
-            var first = atEnd ? null : _fragment.Children.FirstOrDefault();
             foreach (var moved in contributed.Children.ToList())
             {
                 if (atEnd) _fragment.AppendChild(moved);
-                else _fragment.InsertBefore(moved, first);
+                else _fragment.InsertBefore(moved, _fragment.Children.FirstOrDefault());
             }
             return;
         }
@@ -1811,6 +1796,7 @@ public class DocumentFragmentHost : IDomPrototypeHost
     public bool hasChildNodes() => _fragment.Children.Count > 0;
     public string? nodeValue { get => null; set { } }
     public void remove() => _fragment.Remove();
+    public void normalize() => _fragment.Normalize();
 
     public object cloneNode(bool deep = false)
         => JsIntegrationService.WrapAny(_fragment.CloneNode(deep)) ?? this;
@@ -1904,6 +1890,7 @@ public class DocumentTypeHost : IDomPrototypeHost
     public object? notations => null;
     public object? cloneNode(bool deep = false) => JsIntegrationService.WrapAny(_docType.CloneNode(deep));
     public void remove() => _docType.Parent?.RemoveChild(_docType);
+    public void normalize() => _docType.Normalize();
 }
 
 /// <summary>DOM §4.3.3: the attribute list of an element is live and array-like — 'el.attributes[0]'

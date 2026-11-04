@@ -40,9 +40,20 @@ public abstract class CharacterData : Node
 
     public int Length => _data.Length;
 
+    /// <summary>DOM §3.6.3-§3.6.7: the offset is an index into the data and a place past the end is
+    /// the IndexSizeError the text names — a negative one arrives as an enormous unsigned long and is
+    /// the same error. A count that runs off the end is not an error: it is cut to what is left,
+    /// which is why a page may ask for more of the string than it holds.</summary>
+    private void CheckRange(int offset, int count)
+    {
+        if (count < 0 || offset < 0 || offset > _data.Length)
+            throw new DOMException("Failed to execute on CharacterData: the offset is past the end "
+                + "of the data, or the count is negative.", "IndexSizeError");
+    }
+
     public string SubstringData(int offset, int count)
     {
-        if (offset < 0 || offset >= _data.Length) return string.Empty;
+        CheckRange(offset, count);
         count = Math.Min(count, _data.Length - offset);
         return _data.Substring(offset, count);
     }
@@ -54,20 +65,20 @@ public abstract class CharacterData : Node
 
     public void InsertData(int offset, string data)
     {
-        if (offset < 0 || offset > _data.Length) return;
+        CheckRange(offset, 0);
         Data = _data.Insert(offset, data);
     }
 
     public void DeleteData(int offset, int count)
     {
-        if (offset < 0 || offset >= _data.Length) return;
+        CheckRange(offset, count);
         count = Math.Min(count, _data.Length - offset);
         Data = _data.Remove(offset, count);
     }
 
     public void ReplaceData(int offset, int count, string data)
     {
-        if (offset < 0 || offset > _data.Length) return;
+        CheckRange(offset, count);
         count = Math.Min(count, _data.Length - offset);
         Data = _data.Remove(offset, count).Insert(offset, data);
     }

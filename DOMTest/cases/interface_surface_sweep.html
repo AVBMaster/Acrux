@@ -326,8 +326,10 @@
             return n.nodeType === 3 ? '#' + n.data : n.nodeName.toLowerCase(); }).join(','),
             String(bold.previousElementSibling)].join('/'); })());
     // DOM §4.3.15: the doors belong to the interface, and a node with no parent has nowhere to put
-    // anything — the call answers and changes nothing (measured: 'detachedText.before("y")' is
-    // undefined and the text keeps its data, and the same hold for a doctype).
+    // anything — the call answers and changes nothing (measured: a detached text's 'before' is
+    // undefined and the text keeps its data). A doctype DOES have a parent, the document, and §5.2.4
+    // lets no text into a document, so the same call on a doctype is the HierarchyRequestError the
+    // rules name — which is what round 24's insertion checks turned the old silent answer into.
     ck('E2 the ChildNode doors are the interface\'s own and do nothing without a parent',
         typeof CharacterData.prototype.before === 'function'
         && typeof CharacterData.prototype.after === 'function'
@@ -343,10 +345,12 @@
         // A method is a value the level carries, so reading it off the level answers the function;
         // it is the read of an attribute that is refused (I3 covers that half).
         && typeof CharacterData.prototype.before === 'function'
-        && refused(function () { return document.doctype.before('y'); }).indexOf('no-throw') === 0,
+        && refused(function () { return document.doctype.before('y'); })
+            .indexOf('HierarchyRequestError:') === 0,
         [typeof CharacterData.prototype.before, typeof DocumentType.prototype.before,
             refused(function () { var leaf = document.createTextNode('x'); leaf.before('y');
-                return leaf.data; })].join('/'));
+                leaf.after('z'); return [leaf.parentNode === null, leaf.data].join('+'); }),
+            refused(function () { return document.doctype.before('y'); })].join('/'));
 
     // HTML §6.3: the legacy document members, which are the body element and the modern state.
     ck('F1 the legacy colours live on the body element', (function () {

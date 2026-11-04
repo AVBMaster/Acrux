@@ -143,35 +143,40 @@ public abstract class Node : EventTarget
 
     public bool HasChildNodes() => _children.Count > 0;
 
-    public void Normalize()
+    /// <summary>DOM §3.3.6: a node asks the same two questions of every child — is its data empty, and
+    /// is the text node before it also a text node — and a CDATA section is asked neither, because the
+    /// standard keeps a section's own text apart from the text around it. An empty text, comment or
+    /// processing instruction leaves the tree; a run of text nodes joins into its first member, whose
+    /// data is what the page reads after the walk. The node asks the first question of itself too,
+    /// which is why an empty text node's own normalize() detaches it.</summary>
+    public virtual void Normalize()
     {
-        var newChildren = new List<Node>();
-        TextNode? lastText = null;
-        foreach (var child in _children)
+        if (this is CharacterData self && NodeType != NodeType.CDataSection
+            && string.IsNullOrEmpty(self.Data))
         {
-            if (child is TextNode tn)
-            {
-                if (lastText != null)
-                {
-                    lastText.Data += tn.Data;
-                }
-                else
-                {
-                    lastText = tn;
-                    newChildren.Add(tn);
-                }
-            }
-            else
-            {
-                if (child is Element el)
-                    el.Normalize();
-                lastText = null;
-                newChildren.Add(child);
-            }
+            this.Remove();
+            return;
         }
-        _children.Clear();
-        _children.AddRange(newChildren);
-        RebuildParentLinks();
+        for (var i = 0; i < _children.Count;)
+        {
+            var child = _children[i];
+            if (child is CharacterData data && child.NodeType != NodeType.CDataSection
+                && string.IsNullOrEmpty(data.Data))
+            {
+                RemoveChild(child);
+                continue;
+            }
+            if (child is CharacterData text && child.NodeType == NodeType.Text && i > 0
+                && _children[i - 1].NodeType == NodeType.Text)
+            {
+                var previous = (TextNode)_children[i - 1];
+                previous.Data += text.Data;
+                RemoveChild(child);
+                continue;
+            }
+            child.Normalize();
+            i++;
+        }
     }
 
     public Node CloneNode(bool deep = false)
@@ -256,12 +261,71 @@ public abstract class Node : EventTarget
 
     // ===== Tree Mutation Methods =====
 
-    public virtual Node AppendChild(Node child)
+    /// <summary>Whether a parent already holds a node of the kind besides the ones being put in and
+    /// pushed out: an append takes the node out of the list before the list is asked its questions, so
+    /// a document given the root element it already carries is a move, and a document given a new root
+    /// in place of its old one is a replacement — neither is a second element (§5.2.4).</summary>
+    private bool HasChildOfTypeOtherThan(NodeType wanted, params Node?[] except)
+    {
+        foreach (var kid in _children)
+        {
+            if (Array.IndexOf(except, kid) >= 0) continue;
+            if (kid.NodeType == wanted) return true;
+        }
+        return false;
+    }
+
+    /// <summary>DOM §5.2.4, the rules for appending a child: a node is not put inside itself nor
+    /// inside its own descendant, a doctype belongs to a document alone and only one of them, a
+    /// document holds no text of its own, and a Document node is nobody's child but the window's. The
+    /// same checks close an insertion, because a ref child is placed by the same door.</summary>
+    protected void ValidateAppend(Node child, Node? outgoing = null)
     {
         if (child == this)
             throw new DOMException("Cannot append a node to itself", "HierarchyRequestError");
-        if (child.NodeType == NodeType.Document && this.NodeType != NodeType.Document)
+        if (child.Contains(this))
+            throw new DOMException("Cannot append a node to a descendant of itself",
+                "HierarchyRequestError");
+        if (child.NodeType == NodeType.Document && NodeType != NodeType.Document)
             throw new DOMException("Cannot append a Document node", "HierarchyRequestError");
+        if (child.NodeType == NodeType.DocumentType && NodeType != NodeType.Document)
+            throw new DOMException("A doctype belongs to a document", "HierarchyRequestError");
+        if (NodeType == NodeType.Document && (child.NodeType == NodeType.Text
+            || child.NodeType == NodeType.CDataSection))
+            throw new DOMException("A document holds no text of its own", "HierarchyRequestError");
+        // §5.2.4, the same rules the document's own appendMember already gave: one root element, one
+        // doctype, and a fragment is emptied into its place so each of its children is what the rules
+        // are asked of.
+        if (NodeType == NodeType.Document && child.NodeType == NodeType.DocumentFragment)
+        {
+            foreach (var moved in child.Children)
+            {
+                if (moved.NodeType == NodeType.Element
+                    && HasChildOfTypeOtherThan(NodeType.Element, moved, outgoing))
+                    throw new DOMException("Only one element on document allowed.",
+                        "HierarchyRequestError");
+                if (moved.NodeType == NodeType.DocumentType
+                    && HasChildOfTypeOtherThan(NodeType.DocumentType, moved, outgoing))
+                    throw new DOMException("Only one doctype on document allowed.",
+                        "HierarchyRequestError");
+            }
+        }
+        else if (NodeType == NodeType.Document && child.NodeType == NodeType.Element
+            && HasChildOfTypeOtherThan(NodeType.Element, child, outgoing))
+            throw new DOMException("Only one element on document allowed.", "HierarchyRequestError");
+        else if (NodeType == NodeType.Document && child.NodeType == NodeType.DocumentType
+            && HasChildOfTypeOtherThan(NodeType.DocumentType, child, outgoing))
+            throw new DOMException("Only one doctype on document allowed.", "HierarchyRequestError");
+    }
+
+    /// <summary>DOM §5.2.4, the rules for replacing a child: the arriving node is asked what an append
+    /// asks it, except that the node it pushes out no longer counts — which is what makes a document's
+    /// new root element legal where a second element beside the old one is not.</summary>
+    protected void ValidateReplace(Node child, Node outgoing) => ValidateAppend(child, outgoing);
+
+    public virtual Node AppendChild(Node child)
+    {
+        ValidateAppend(child);
 
         child.Remove();
         var previousOwner = child.OwnerDocument;
@@ -288,11 +352,9 @@ public abstract class Node : EventTarget
 
     public virtual Node InsertBefore(Node newChild, Node? refChild)
     {
-        if (newChild == this)
-            throw new DOMException("Cannot insert a node before itself", "HierarchyRequestError");
-
         if (refChild == null)
             return AppendChild(newChild);
+        ValidateAppend(newChild);
 
         int index = _children.IndexOf(refChild);
         if (index < 0)
@@ -329,6 +391,10 @@ public abstract class Node : EventTarget
         int index = _children.IndexOf(oldChild);
         if (index < 0)
             throw new DOMException("Node is not a child", "NotFoundError");
+        // A node replaced by itself ends up exactly where it was: the removal and the arrival are the
+        // same move, so the tree is asked nothing and the child keeps its place (§5.2.3).
+        if (ReferenceEquals(newChild, oldChild)) return oldChild;
+        ValidateReplace(newChild, oldChild);
 
         newChild.Remove();
         // The slot is found again after the incoming node left the tree: when it was one of this
@@ -434,12 +500,6 @@ public abstract class Node : EventTarget
         // with 'document.implementation' counts too — measured, an element moved into one still reads
         // true here — so the registry, not the connection, is what keeps its reactions off those trees.
         return ShadowIncludingRoot().NodeType == NodeType.Document;
-    }
-
-    private void RebuildParentLinks()
-    {
-        foreach (var child in _children)
-            child._parent = this;
     }
 
     protected virtual Node CloneNodeInternal(bool deep)

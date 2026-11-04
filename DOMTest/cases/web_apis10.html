@@ -104,7 +104,10 @@ ckAll('D1 the options dictionary is honoured', [
         p1.dispatchEvent(new Event('probe-once'));
         p1.removeEventListener('probe-once', only);
         return hits === 1; })()],
-    ['capture runs first at the target', (function () { var order = [];
+    // DOM §2.9: at the node the event was sent to, the capture flag is not asked about at all — both
+    // kinds run in the order they were put down. (This row claimed the capture one first, which the
+    // standard settled in 2016; task #38 carries it with the other claims to re-measure.)
+    ['the target runs its listeners in registration order', (function () { var order = [];
         function second() { order.push('once'); }
         function first() { order.push('cap'); }
         p1.addEventListener('probe-order', second, false);
@@ -112,7 +115,9 @@ ckAll('D1 the options dictionary is honoured', [
         p1.dispatchEvent(new Event('probe-order'));
         p1.removeEventListener('probe-order', second, false);
         p1.removeEventListener('probe-order', first, true);
-        return order.join(',') === 'cap,once'; })()],
+        // 'second' was put down first and 'first' second: the target hears them in that order,
+        // whichever way the capture flag reads.
+        return order.join(',') === 'once,cap'; })()],
     ['passive is accepted', (function () { var hits = 0;
         function fn(e) { hits++; }
         p1.addEventListener('probe-passive', fn, { passive: true });

@@ -25,6 +25,10 @@ function ckOk(name, fn, info) {
     __T(name, !threw, threw ? 'threw ' + (threw.name || '') + ': ' + threw.message
         : (info === undefined ? '' : String(typeof info === 'function' ? info() : info)));
 }
+function refused(fn) {
+    try { fn(); return 'no-throw'; }
+    catch (e) { return String(e && e.name) + ':' + String(e && e.message); }
+}
 
 // ── A. the interface a tag names ───────────────────────────────────────────
 ck('A1 an input is an HTMLInputElement down to Node', function () {
@@ -156,7 +160,6 @@ ck('C5 multiple and size travel on the attributes they are written to', function
     return se.hasAttribute('multiple') && se.getAttribute('size') === '4'
         && se.size === 4 && se.type === 'select-multiple';
 });
-var docMade = null;
 var fmRef = null;
 ck('C6 a form submits when the page asks it to, through the submit event', function () {
     var holder = document.getElementById('holder');
@@ -411,25 +414,35 @@ ck('G4 a window that is not framed has no ancestor origins', function () {
     return !!list && list.length === 0 && list.item(0) === null && list.contains('http://a') === false
         && typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency >= 1;
 }, function () { return String(location.ancestorOrigins && location.ancestorOrigins.length); });
-ck('G5a the document answers the ParentNode mixin', function () {
-    var made = docMade = document.createElement('p');
+ck('G5a the document answers the ParentNode mixin and the tree rules with it', function () {
+    // ParentNode is mixed into Document (HTML §4.2.6), so the doors are there — and §5.2.4 decides
+    // what may go through them into a document: no text, and one root element. Round 24 moved the
+    // second of those rules out of the single append path that guarded it and into the rules the
+    // doors all walk through, so a page that tries either of them is refused whichever way it asks.
+    var p = document.createElement('p');
     var frag = document.createDocumentFragment();
-    frag.appendChild(made);
-    document.append(frag);
-    var appended = made.parentNode === document;
-    document.prepend(document.createTextNode('x'));
-    return appended && made.parentNode === document && document.contains(made) === true
-        && document.contains(document.createElement('div')) === false;
+    frag.appendChild(document.createElement('span'));
+    return typeof document.append === 'function' && typeof document.prepend === 'function'
+        && typeof document.replaceChildren === 'function'
+        && refused(function () { document.append(document.createTextNode('x')); }).indexOf('HierarchyRequestError') === 0
+        && refused(function () { document.append(p); }).indexOf('HierarchyRequestError') === 0
+        && refused(function () { document.append(frag); }).indexOf('HierarchyRequestError') === 0
+        && document.contains(p) === false && p.parentNode === null;
 }, function () {
-    var other = document.createElement('span');
-    return [String(docMade && docMade.parentNode === document), String(document.contains(docMade)),
-        String(document.contains(other))].join('/');
+    return [typeof document.append,
+        refused(function () { return document.append(document.createElement('i')); }),
+        refused(function () { return document.append(document.createTextNode('y')); })].join('/');
 });
+
 ck('G5b the document answers its own state reads', function () {
     return document.fullscreenElement === null && document.fullscreenEnabled === true
         && document.pictureInPictureElement === null && document.pictureInPictureEnabled === false
         && document.pointerLockElement === null && Array.isArray(document.getAnimations())
-        && document.firstChild === docMade.parentNode.firstChild || document.firstChild !== null;
+        // DOM §3.1.4: a document holds its doctype and its one root element, in that order, and the
+        // element is the node the document names as its own.
+        && document.doctype !== null && document.firstChild === document.doctype
+        && document.documentElement !== null && document.documentElement.parentNode === document
+        && document.lastChild === document.documentElement;
 }, function () {
     return [String(document.fullscreenElement), String(document.fullscreenEnabled),
         String(document.firstChild && document.firstChild.nodeType),

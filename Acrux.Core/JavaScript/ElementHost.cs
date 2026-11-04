@@ -470,29 +470,22 @@ public partial class ElementHost : IDomPrototypeHost
     /// nodes and a fragment as its children (ParentNode mixin).</summary>
     public void append(params object?[] nodes)
     {
-        foreach (var n in nodes) InsertChild(n, atEnd: true);
+        var incoming = new List<Node>();
+        foreach (var n in nodes) CollectChildNodes(n, incoming);
+        foreach (var n in incoming) _element.AppendChild(n);
     }
 
     public void prepend(params object?[] nodes)
     {
-        foreach (var n in nodes) InsertChild(n, atEnd: false);
-    }
-
-    private void InsertChild(object? child, bool atEnd)
-    {
-        Node? node = child is string s ? new TextNode(s) : UnwrapNode(child);
-        if (node == null) return;
-        if (node is DocumentFragment frag)
-        {
-            foreach (var moved in frag.Children.ToList())
-            {
-                if (atEnd) _element.AppendChild(moved);
-                else _element.InsertBefore(moved, _element.Children.FirstOrDefault());
-            }
-            return;
-        }
-        if (atEnd) _element.AppendChild(node);
-        else _element.InsertBefore(node, _element.Children.FirstOrDefault());
+        // Element.prepend(nodes…) puts the whole list at the front in the order the page gave it, which
+        // is not the order a walk that inserts each argument before the current first child leaves
+        // them: the list is flattened first — a fragment contributes its children in their own order —
+        // and then laid down from its last member to its first, each before whoever holds the front
+        // (ParentNode, §4.2.6).
+        var incoming = new List<Node>();
+        foreach (var n in nodes) CollectChildNodes(n, incoming);
+        for (var i = incoming.Count - 1; i >= 0; i--)
+            _element.InsertBefore(incoming[i], _element.Children.FirstOrDefault());
     }
 
     public object? insertBefore(object? newChild, object? refChild)
@@ -570,7 +563,8 @@ public partial class ElementHost : IDomPrototypeHost
     /// reads the dictionary, turns a live signal into a token, and calls this with what they amount to
     /// (measured: a listener whose signal aborted never hears the event, and one registered against an
     /// already-aborted signal is never registered at all).</summary>
-    public void addEventListenerFlags(string type, object callback, bool useCapture, bool once, int signalToken)
+    public void addEventListenerFlags(string type, object callback, bool useCapture, bool once,
+        int signalToken)
     {
         var engine = JavaScriptEngine.Current ?? Engine;
         if (engine == null) return;
@@ -620,27 +614,45 @@ public partial class ElementHost : IDomPrototypeHost
         removeEventListener(type, callback, null);
     }
 
+    /// <summary>DOM §2.7.4: one listener is taken out — the one whose function and capture flag match
+    /// what the page hands over — and a listener that was never registered is simply nothing to do.
+    /// The function is recognised by the id the script side keeps for it, so the same function is the
+    /// same listener on both sides of the boundary; a JS wrapper object is not, and comparing those
+    /// is what once made this clear the whole type instead of the one listener it was given.</summary>
     public void removeEventListener(string type, object callback, object? options)
     {
         var engine = JavaScriptEngine.Current ?? Engine;
         if (engine == null) return;
+        if (!_eventCallbackIds.TryGetValue(type, out var list) || list.Count == 0) return;
 
-        // Remove all listeners of this type on this element.
-        // Jint creates different CLR wrappers for the same JS function each time
-        // it crosses the boundary, so matching individual callbacks is unreliable.
-        // Tracked callbackIds from addEventListener guarantee correct cleanup.
-        if (_eventCallbackIds.TryGetValue(type, out var list))
+        var capture = options switch
         {
-            foreach (var cbId in list)
+            bool b => b,
+            _ => ReadEngineOption(engine, options, "capture"),
+        };
+        var id = 0;
+        var integration = engine.IntegrationService;
+        try
+        {
+            var made = integration?.Facade.CallFunction("__g_store", callback);
+            id = made switch
             {
-                engine.RemoveCallback(cbId);
-                _listenerCapture.Remove(cbId);
-                _onceCallbacks.Remove(cbId);
-                _listenerSignal.Remove(cbId);
-            }
-            list.Clear();
-            _eventCallbackIds.Remove(type);
+                int i => i,
+                double d => (int)d,
+                long l => (int)l,
+                _ => 0,
+            };
         }
+        catch
+        {
+            id = 0;
+        }
+        if (id <= 0) return;   // the function was never stored: there is nothing of ours to remove
+
+        var doomed = list.Where(cbId => cbId == id
+            && ((_listenerCapture.TryGetValue(cbId, out var flag) && flag) == capture)).ToList();
+        foreach (var cbId in doomed) DropListener(list, cbId, engine);
+        if (list.Count == 0) _eventCallbackIds.Remove(type);
     }
 
     private static int _optProbeCounter;
@@ -1164,15 +1176,40 @@ public partial class ElementHost : IDomPrototypeHost
 
         var engine = JavaScriptEngine.Current ?? Engine;
 
+        // DOM §2.12: the walk crosses a shadow boundary at the host — the host's own listeners are
+        // heard, and from there up the event reports the HOST as its target, because a page outside
+        // the tree is not shown what is inside it. An event that is not composed stops there: the
+        // host is the last node it reaches.
         var path = new List<ElementHost> { this };
-        for (var p = _element.ParentElement; p != null; p = p.ParentElement)
-            path.Add(WrapWithCache(p) ?? new ElementHost(p));
+        var boundary = -1;
+        var walked = _element;
+        while (true)
+        {
+            var parent = walked.ParentElement;
+            if (parent is not null)
+            {
+                path.Add(WrapWithCache(parent) ?? new ElementHost(parent));
+                walked = parent;
+                continue;
+            }
+            if (walked.Parent is Core.Dom.ShadowRoot shadow
+                && shadow.Host is { } shadowHost)
+            {
+                boundary = path.Count;
+                path.Add(WrapWithCache(shadowHost) ?? new ElementHost(shadowHost));
+                walked = shadowHost;
+                if (!evt.composed) break;
+                continue;
+            }
+            break;
+        }
+        var lastEntry = boundary >= 0 && !evt.composed ? boundary : path.Count - 1;
 
         evt.target = this;
         // The document — and the window, which shares its bag — comes first on the capture leg and
         // last on the way back out, before and after the element ancestors it holds (DOM §2.5).
-        var reachesDocument = path.Count > 0
-            && path[path.Count - 1]._element.Parent is Core.Dom.Document;
+        var reachesDocument = lastEntry >= 0
+            && path[lastEntry]._element.Parent is Core.Dom.Document;
         var documentHost = engine?.DocumentHost;
         if (reachesDocument && documentHost != null)
         {
@@ -1184,20 +1221,26 @@ public partial class ElementHost : IDomPrototypeHost
             }
             catch { }
         }
-        for (var i = path.Count - 1; i >= 1; i--)
+        var captureFirst = boundary >= 0 && !evt.composed ? lastEntry : path.Count - 1;
+        for (var i = captureFirst; i >= 1; i--)
         {
             if (evt.PropagationStopped || evt.ImmediateStopped) break;
+            evt.target = i >= boundary && boundary >= 0 ? path[boundary] : this;
             path[i].InvokeListeners(evt, 1, engine);
         }
+        evt.target = this;
         if (!evt.PropagationStopped && !evt.ImmediateStopped) InvokeListeners(evt, 2, engine);
 
         if (evt.bubbles && !evt.PropagationStopped && !evt.ImmediateStopped)
         {
-            for (var i = 1; i < path.Count; i++)
+            var bubbleLast = boundary >= 0 && !evt.composed ? lastEntry : path.Count - 1;
+            for (var i = 1; i <= bubbleLast; i++)
             {
                 if (evt.PropagationStopped || evt.ImmediateStopped) break;
+                evt.target = i >= boundary && boundary >= 0 ? path[boundary] : this;
                 path[i].InvokeListeners(evt, 3, engine);
             }
+            evt.target = this;
             // The document is the last node on the path, and its listeners live in the bridge's bag
             // rather than in a list kept per element (DOM §2.5).
             if (!evt.PropagationStopped && !evt.ImmediateStopped && reachesDocument
@@ -1231,11 +1274,11 @@ public partial class ElementHost : IDomPrototypeHost
         if (_eventCallbackIds.TryGetValue(evt.type, out var cbIds))
         {
             // §2.9: the walk runs the capture listeners on the way in and the rest on the way out; at
-            // the target itself both kinds run, and the reference puts the capture ones first
-            // (measured: a capture listener registered second still hears the event before the
-            // non-capture one registered first).
+            // the target itself the capture flag is not asked about at all, so both kinds run in the
+            // order they were put down (the standard settled this in 2016 and every engine followed;
+            // the capture-first order this file used to claim as measured is on the list to re-check
+            // against the reference, and the row in DOMTest/cases/web_apis10.html says so).
             var order = cbIds.ToList();
-            if (phase == 2) order.Sort((a, b) => CaptureRank(a).CompareTo(CaptureRank(b)));
             foreach (var cbId in order)
             {
                 if (evt.ImmediateStopped) break;
@@ -1269,9 +1312,6 @@ public partial class ElementHost : IDomPrototypeHost
         }
         RunInlineHandler(evt, engine, phase);
     }
-
-    private int CaptureRank(int cbId)
-        => _listenerCapture.TryGetValue(cbId, out var flag) && flag ? 0 : 1;
 
     /// <summary>Takes one listener out of the element's bookkeeping, releasing the callback the engine
     /// is holding for it.</summary>
@@ -1826,35 +1866,11 @@ public partial class ElementHost : IDomPrototypeHost
         return host;
     }
 
-    public void normalize() => NormalizeNode(_element);
+    public void normalize() => _element.Normalize();
 
-    /// <summary>DOM 4 §4.5.1: walk the subtree, drop empty text nodes, and glue each run of
-    /// adjacent text nodes into the first one. Removals go through RemoveChild so a detached
-    /// node's parent pointer is cleared — the old Clear()+AppendChild path left a stale parent on
-    /// every kept child and threw on the re-append.</summary>
-    private static void NormalizeNode(Node node)
-    {
-        foreach (var child in node.Children.ToList())
-            if (child is Element) NormalizeNode(child);
-
-        var kids = node.Children;
-        int i = 0;
-        while (i < kids.Count)
-        {
-            if (kids[i] is TextNode tn)
-            {
-                if (string.IsNullOrEmpty(tn.Data)) { node.RemoveChild(tn); continue; }
-                int j = i + 1;
-                while (j < kids.Count && kids[j] is TextNode next)
-                {
-                    tn.Data += next.Data;
-                    node.RemoveChild(next);
-                }
-                i++;
-            }
-            else i++;
-        }
-    }
+    // The tree walk normalize() runs is the core's own (§3.3.6): it asks each child whether its data is
+    // empty and whether the text node before it is also a text node, and a CDATA section is asked
+    // neither — a second walk written here only drifted from the rules the core kept.
 
     // The three namespace helpers live with the table and URL reflections in ElementHost.Tables.cs,
     // where they read the declarations the ancestry carries (DOM §5.4).
@@ -3052,7 +3068,7 @@ public class TextNodeWrapper : IDomPrototypeHost
     private bool IsCData => _node is CDataSection;
     public string nodeName => IsCData ? "#cdata-section" : "#text";
     public string? textContent { get => _node.TextContent; set => _node.Data = value ?? ""; }
-    public string? data { get => _node.TextContent; set => _node.Data = value ?? ""; }
+    public string? data { get => _node.TextContent; set => _node.Data = value ?? "null"; }
     public string? nodeValue { get => _node.TextContent; set => _node.Data = value ?? ""; }
     public int nodeType => IsCData ? 4 : 3;
     public string? wholeText => _node.WholeText;
@@ -3143,7 +3159,7 @@ public class CommentHost : IDomPrototypeHost
     internal CommentNode NativeNode => _node;
     public string nodeName => "#comment";
     public int nodeType => 8;
-    public string? data { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? data { get => _node.Data; set => _node.Data = value ?? "null"; }
     public string? nodeValue { get => _node.Data; set => _node.Data = value ?? ""; }
     public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
     public int length => _node.Data?.Length ?? 0;
@@ -3177,7 +3193,9 @@ public class CommentHost : IDomPrototypeHost
     public object? firstChild => null;
     public object? lastChild => null;
     public bool hasChildNodes() => false;
-    public void normalize() { }
+    // A comment is a leaf, so its walk finds nothing — except that §3.3.6 asks the first question of the
+    // node itself, and a comment whose data is the empty string detaches itself when normalized.
+    public void normalize() => _node.Normalize();
     public bool isConnected => _node.IsConnected;
     public object? getRootNode() => JsIntegrationService.WrapAny(_node.GetRootNode());
     public bool isEqualNode(object? other) => _node.IsEqualNode(ElementHost.UnwrapNode(other));
@@ -3463,10 +3481,13 @@ public class ProcessingInstructionHost : IDomPrototypeHost
     public string target => _node.Target;
     public string nodeName => _node.Target;
     public int nodeType => 7;
-    public string? data { get => _node.Data; set => _node.Data = value ?? ""; }
+    public string? data { get => _node.Data; set => _node.Data = value ?? "null"; }
     public string? nodeValue { get => _node.Data; set => _node.Data = value ?? ""; }
     public string? textContent { get => _node.Data; set => _node.Data = value ?? ""; }
     public int length => _node.Data?.Length ?? 0;
+    // A processing instruction is character data, so §3.3.6 asks it the question it asks a text node or
+    // a comment: with empty data it leaves the tree.
+    public void normalize() => _node.Normalize();
     public string[] __domTypeChain => new[] { "EventTarget", "Node", "CharacterData", "ProcessingInstruction" };
     public override string ToString() => DomHostString.Tagged(this);
     public string baseURI => NodeBaseUri.For(_node);
