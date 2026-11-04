@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 math</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b312_math
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["width","minmax(10px, 20px)"],["width","minmax(auto, 10px)"],["height","minmax(1px, 2px)"],["left","minmax(1px, 2px)"],["grid-template-columns","minmax(10px, 20px)"],["width","calc(10px / 2)"],["width","calc(20px / 3)"],["width","calc(anchor-size(width) / 2)"],["width","calc(anchor-size(width) / anchor-size(width))"],["width","calc(1px / anchor-size(width))"],["width","calc(anchor-size(width) * 2 / 4)"],["width","calc(10px + anchor-size(width) / 2)"],["width","calc(2 * anchor-size(width))"],["width","anchor-size(width)"],["padding","anchor-size(width)"],["margin","calc(anchor-size(width) + 10px)"],["top","calc(anchor-size(self-inline) - 5px)"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+    el.remove();
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

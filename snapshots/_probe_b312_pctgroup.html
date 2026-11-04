@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 pctgroup</title>
+<style>
+  body { margin: 0; font: 16px/1 monospace; }
+  #wrap, #area { width: 400px; position: relative; }
+  #wrap > div { height: 4px; background: #ff8080; }
+  #area > div { position: absolute; left: 0; top: 0; height: 4px; background: #ff8080; }
+  #area { height: 4px; margin-top: 8px; }
+</style></head>
+<body>
+<div id="wrap">
+<div style="width: calc(100% - 10px)"></div>
+<div style="width: calc(100% - 1em - 20px)"></div>
+<div style="width: calc(100% - (1em + 20px))"></div>
+<div style="width: calc(100% - (20px + 1em))"></div>
+<div style="width: calc(1em + 20px - 100%)"></div>
+<div style="width: calc(100% - 1em + 20px)"></div>
+<div style="width: calc(100% * 2 - 40px)"></div>
+<div style="width: calc(50% + (1em + 20px))"></div>
+<div style="width: calc(100% - max(1em, 20px))"></div>
+<div style="width: calc(100% - min(1em, 20px))"></div>
+<div style="width: calc(100% / 2 + 1em)"></div>
+<div style="width: calc(100% - (1rem + 2ex))"></div>
+</div>
+<div id="area"></div>
+<script>
+// b312_pctgroup
+function build() {
+const rows = [];
+const cases = [["static","calc(100% - 10px)"],["static","calc(100% - 1em - 20px)"],["static","calc(100% - (1em + 20px))"],["static","calc(100% - (20px + 1em))"],["static","calc(1em + 20px - 100%)"],["static","calc(100% - 1em + 20px)"],["static","calc(100% * 2 - 40px)"],["static","calc(50% + (1em + 20px))"],["static","calc(100% - max(1em, 20px))"],["static","calc(100% - min(1em, 20px))"],["static","calc(100% / 2 + 1em)"],["static","calc(100% - (1rem + 2ex))"],["abs","calc(100% - 10px)"],["abs","calc(100% - (1em + 20px))"],["abs","calc(100% - 1em - 20px)"],["abs","calc(50% + (1em + 20px))"],["abs","50%"],["abs","2em"],["abs","calc(2em + 20px)"],["abs","50vw"],["abs","calc(50vw - 100px)"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+const host = cases[i][0] == 'abs' ? document.getElementById('area')
+                                   : document.getElementById('wrap');
+host.appendChild(el);
+  el.style.width = cases[i][1];
+  const r = el.getBoundingClientRect();
+  rows.push(i + '|width|' + cases[i][1]
+      + '|sup=' + (CSS.supports('width', cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.width
+      + '|comp=' + getComputedStyle(el).width
+      + '|w=' + (Math.round(r.width * 100) / 100));
+    el.remove();
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>

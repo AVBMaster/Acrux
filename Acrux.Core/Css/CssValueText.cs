@@ -43,6 +43,16 @@ public static class CssValueText
         // 'calc(3px)').
         value = CssValueGrammar.CloseUnfinishedFunctions(value);
 
+        // CSS Anchor Positioning 1 §5.1: an anchor-size() call says its anchor name in front of its
+        // size keyword whichever end the page wrote them on (measured: 'anchor-size(width --a)'
+        // reads 'anchor-size(--a width)'), and a call the grammar refuses is no value at all.
+        if (value.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            var anchored = CssValueGrammar.CanonicalAnchorSizeCalls(value);
+            if (anchored == null) return value;
+            value = anchored;
+        }
+
         // The 'animation' shorthand prints all eight of its parts in their canonical order, written
         // or not, so the reorder happens before anything else is folded and the parts it puts in are
         // folded like any other text (measured: '3s 2s LINEAR BOGUS' reads back
@@ -104,6 +114,11 @@ public static class CssValueText
         var sb = new System.Text.StringBuilder(value.Length + 8);
         bool pendingSpace = false;
         bool afterSlash = false;
+        // Whether the last thing printed was a sum's own '+' or '-'. The space standing between that
+        // operator and what comes next is not decoration: it is what makes the character an operator
+        // instead of a sign (CSS Values 4 §10.2.1), so the printer has to keep it and must never add
+        // one of its own.
+        bool afterOperator = false;
         int depth = 0;
         int i = 0;
         while (i < value.Length)
@@ -120,6 +135,7 @@ public static class CssValueText
                 sb.Append(", ");
                 pendingSpace = false;
                 afterSlash = false;
+                afterOperator = false;
                 i++;
                 // The space the comma owns is already printed, so swallow whatever the author
                 // put after it instead of adding a second one.
@@ -136,6 +152,7 @@ public static class CssValueText
                 sb.Append('/');
                 pendingSpace = true;
                 afterSlash = true;
+                afterOperator = false;
                 i++;
                 while (i < value.Length && IsWhitespace(value[i])) i++;
                 continue;
@@ -143,11 +160,19 @@ public static class CssValueText
             if (c is '(' or ')')
             {
                 // A parenthesis belongs to the token before it, and its first argument to it.
+                // But an operator is not a token a parenthesis can belong to: the space between a
+                // sum's '+' or '-' and the group behind it is what tells the tokenizer the operator
+                // was an operator, so dropping it would re-spell a value the grammar has already
+                // refused into one it accepts (measured: 'calc(10px +(1em + 2px))' is no value and
+                // reads back exactly as written, while 'calc(10px + (1em + 2px))' keeps its space
+                // and folds to 'calc(1em + 12px)').
+                if (pendingSpace && afterOperator) sb.Append(' ');
                 sb.Append(c);
                 // But unlike '(' the closing one ends a component, so whatever follows needs a
                 // separator of its own: 'translate(4px,5px)rotate(30deg)' is two functions, and
                 // printing them glued leaves one token for the shorthand splitter to fail on.
                 pendingSpace = c == ')';
+                afterOperator = false;
                 i++;
                 if (c == '(') depth++;
                 else if (depth > 0) depth--;
@@ -158,6 +183,7 @@ public static class CssValueText
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
                 i = CopyQuoted(value, i, sb);
                 afterSlash = false;
+                afterOperator = false;
                 continue;
             }
             if (c == '#')
@@ -171,6 +197,7 @@ public static class CssValueText
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
                 sb.Append(value, start, i - start);
                 afterSlash = false;
+                afterOperator = false;
                 continue;
             }
             if (IsIdentStart(c) && !(c is '-' or '+' && StartsNumber(value, i + 1)))
@@ -194,6 +221,7 @@ public static class CssValueText
                         sb.Append(value, start, attrEnd + 1 - start);
                         pendingSpace = true;
                         afterSlash = false;
+                        afterOperator = false;
                         i = attrEnd + 1;
                         continue;
                     }
@@ -212,6 +240,7 @@ public static class CssValueText
                         // closing parenthesis is separated from it in the printed form.
                         pendingSpace = true;
                         afterSlash = false;
+                        afterOperator = false;
                         i = end + 1;
                         continue;
                     }
@@ -223,6 +252,9 @@ public static class CssValueText
                 if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
                 sb.Append(word);
                 afterSlash = false;
+                // A lone '-' is read by the ident scanner above, but it is a sum's operator and no
+                // name: the space behind it belongs to it exactly as the space behind a '+' does.
+                afterOperator = word.Length == 1 && word[0] is '-' or '+';
                 continue;
             }
             if (char.IsAsciiDigit(c) || (c == '.' && i + 1 < value.Length && char.IsAsciiDigit(value[i + 1]))
@@ -241,6 +273,7 @@ public static class CssValueText
                 {
                     sb.Append(token);
                     afterSlash = false;
+                    afterOperator = false;
                     continue;
                 }
                 // A sign with no space in front of it is not a number's: written straight after a
@@ -253,6 +286,7 @@ public static class CssValueText
                 {
                     sb.Append(c).Append(FoldNumberAndUnit(token[1..], cut));
                     afterSlash = false;
+                    afterOperator = false;
                     continue;
                 }
                 if (depth == 0 && !afterSlash && lengths && token == "0") token = "0px";
@@ -261,10 +295,15 @@ public static class CssValueText
                 // 'margin: 10Px auto' both read back with a lower-case unit (measured).
                 sb.Append(FoldNumberAndUnit(token, cut));
                 afterSlash = false;
+                afterOperator = false;
                 continue;
             }
             if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
             sb.Append(c);
+            // A '+' or '-' that reaches here is not a number's sign: the number branch above has
+            // already taken every sign that stands in front of a digit. It is an operator, and the
+            // parenthesis branch has to know that the next space belongs to it.
+            afterOperator = c is '+' or '-';
             i++;
             afterSlash = false;
         }
@@ -2206,7 +2245,23 @@ public static class CssValueText
         var args = SplitTopLevelCommas(inner);
         if (args.Count != 3) return inner;
         var space = args[0].Trim();
-        if (space.Equals("in oklab", StringComparison.OrdinalIgnoreCase)) args[0] = string.Empty;
+        // 'in oklab' is the default space and 'shorter hue' the default method, so neither is said
+        // (measured: 'color-mix(in oklab, red, blue)' reads 'color-mix(red, blue)' and
+        // 'color-mix(in oklch shorter hue, red, blue)' reads 'color-mix(in oklch, red, blue)');
+        // the bare 'xyz' name is printed as the white point it stands for (measured: 'in xyz'
+        // reads 'in xyz-d65').
+        if (space.StartsWith("in ", StringComparison.OrdinalIgnoreCase))
+        {
+            var words = SplitTopLevelWords(space);
+            var name = words.Count > 1 ? words[1].ToLowerInvariant() : "";
+            if (name == "xyz") name = "xyz-d65";
+            bool hueSaid = words.Count > 3
+                && !words[2].Equals("shorter", StringComparison.OrdinalIgnoreCase);
+            args[0] = name.Length == 0 ? string.Empty
+                : name == "oklab" && !hueSaid ? string.Empty
+                : "in " + name + (hueSaid ? " " + words[2].ToLowerInvariant() + " hue" : "");
+        }
+        else if (space.Equals("in oklab", StringComparison.OrdinalIgnoreCase)) args[0] = string.Empty;
 
         var first = TakePercentageOff(args[1], out float firstShare);
         bool firstWritten = firstShare >= 0;

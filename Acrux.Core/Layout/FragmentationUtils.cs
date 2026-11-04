@@ -81,6 +81,21 @@ public static class AbsoluteUtils
                 ? Math.Max(borderPadding.HorizontalSum, baseSize)
                 : baseSize + borderPadding.HorizontalSum;
         }
+        // Every other length the style carries is priced from the box's own units, and a share of
+        // the container inside one of them is priced by the container: 'width: 2em' is two of this
+        // element's glyphs and 'width: calc(100% - 10px)' is the whole box minus ten pixels — the
+        // same reading the in-flow path gives (measured in a 400px container: an absolutely
+        // positioned box with 'calc(100% - 10px)' is 390px and with 'calc(100% - (1em + 20px))'
+        // 364px, where this branch did not exist and the box kept the 400px it started with). An
+        // 'auto', an intrinsic keyword, or a share with no base to price against answers null, and
+        // the box then stretches between its insets the way it does without a width at all.
+        else if (ResolveInset(style.Width, availableSize.InlineSize, style, style.FontSize, 0, 0)
+                 is { } sizedWidth)
+        {
+            inlineSize = borderBox
+                ? Math.Max(borderPadding.HorizontalSum, sizedWidth)
+                : sizedWidth + borderPadding.HorizontalSum;
+        }
         else if (leftSpecified && rightSpecified)
             inlineSize = Math.Max(0, availableSize.InlineSize - left - right);
 
@@ -96,6 +111,16 @@ public static class AbsoluteUtils
             blockSize = borderBox
                 ? Math.Max(borderPadding.VerticalSum, baseSize)
                 : baseSize + borderPadding.VerticalSum;
+        }
+        // The block axis reads its own lengths the same way the inline one above does, so a
+        // specified 'height' keeps its share of the equation and an over-constrained one drops
+        // 'bottom' (CSS 2.1 §10.3.7).
+        else if (ResolveInset(style.Height, availableSize.BlockSize, style, style.FontSize, 0, 0)
+                 is { } sizedHeight)
+        {
+            blockSize = borderBox
+                ? Math.Max(borderPadding.VerticalSum, sizedHeight)
+                : sizedHeight + borderPadding.VerticalSum;
         }
         else if (topSpecified && bottomSpecified)
             blockSize = Math.Max(0, availableSize.BlockSize - top - bottom);

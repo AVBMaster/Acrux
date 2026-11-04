@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 anchor4</title></head>
+<body>
+<div id="box" style="width:200px;font-size:16px;position:relative"></div>
+<script>
+// b312_anchor4
+function build() {
+const box = document.getElementById('box');
+const rows = [];
+const cases = [["margin-left","anchor-size(width)"],["margin-left","calc(anchor-size(width) + 10px)"],["margin-left","anchor-size(width, 10px)"],["margin-left","calc(anchor-size(width, 10px) + 10px)"],["margin-left","anchor-size(--nope width, 10px)"],["margin-left","anchor-size(--nope, 10px)"],["width","anchor-size(height)"],["width","calc(anchor-size(inline) + 1em)"],["width","calc(10px + anchor-size(self-inline, 30px))"],["top","anchor-size(width)"],["top","anchor-size(width, 5px)"],["padding-left","anchor-size(width, 10px)"],["font-size","anchor-size(width, 10px)"],["margin-block-start","anchor-size(block)"],["width","anchor-size()"],["width","anchor-size(, 20px)"],["height","calc(anchor-size(width) * 2)"],["min-width","anchor-size(width, 8px)"],["max-height","anchor-size(height, 12px)"],["margin","calc(anchor-size(width) + 10px)"],["left","calc(anchor-size(self-block) + 1px)"],["margin-left","calc(anchor-size(width) + anchor-size(height, 4px))"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+el.style.position = 'absolute';
+box.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  const read = getComputedStyle(el).getPropertyValue(cases[i][0]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + read);
+    el.remove();
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+}
+build();
+</script>
+</body></html>

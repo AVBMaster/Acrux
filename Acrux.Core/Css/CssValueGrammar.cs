@@ -239,7 +239,30 @@ public static class CssValueGrammar
         var grammar = ownSet ?? (id != CssPropertyId.Invalid
             ? GrammarFor(id) : LegacyPrefixedGrammar(propertyName));
         if (grammar != null && !TextIsValid(value, grammar)) return false;
+        // anchor-size() is a length only in the properties §5.1 lists, and 'anchor()' only in the
+        // insets; the generic length grammar lets any function through, so the scope is decided
+        // here, against the property the declaration names (measured property by property).
+        if (value.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) >= 0
+            && !PropertyTakesAnchorSize(id)) return false;
         return !MathTypeRejects(propertyName, value);
+    }
+
+    /// <summary>Whether the value is (or holds) a colour written in the relative form, whose
+    /// channel expressions the colour grammar owns and the math type checker must not judge
+    /// (CSS Color 5 §5).</summary>
+    private static bool IsRelativeColorValue(string text)
+    {
+        foreach (var word in SplitComponents(text))
+        {
+            int open = word.IndexOf('(');
+            if (open <= 0) continue;
+            var name = word[..open].ToLowerInvariant();
+            if (name is not ("rgb" or "rgba" or "hsl" or "hsla" or "hwb" or "lab" or "lch"
+                or "oklab" or "oklch" or "color")) continue;
+            if (word[(open + 1)..].TrimStart().StartsWith("from ", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>The properties whose value is a time, spelled every way the engine knows them. A
@@ -288,6 +311,11 @@ public static class CssValueGrammar
     private static bool MathTypeRejects(string propertyName, string value)
     {
         if (value.IndexOf('(') < 0) return false;
+        // A relative colour's channels are an expression over the origin colour's own values, not
+        // over numbers the property can type: 'hsl(from red calc(h + 90) s l)' and
+        // 'color(from red srgb r g calc(b + 0.5))' are typed by the colour grammar, which already
+        // read them (measured: both stand, and read 'calc(90 + h)' and 'calc(0.5 + b)').
+        if (IsRelativeColorValue(value)) return false;
         var types = MathValueTypes(propertyName);
         foreach (var call in CssMathValue.MathCalls(value))
         {
@@ -3686,6 +3714,15 @@ public static class CssValueGrammar
             else if (c == '"' || c == '\'') { i = SkipString(text, i); continue; }
             else if (depth == 0 && (c == '+' || c == '-'))
             {
+                // CSS Syntax 3 §4.4 reads a hyphen that follows an identifier's characters and is
+                // followed by another name character as part of that identifier, so the function
+                // 'anchor-size' is one token and not a difference: 'calc(anchor-size(width) + 10px)'
+                // is the two operands the reference engine keeps (measured).
+                if (c == '-' && i > 0 && i + 1 < text.Length
+                    && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] is '_' or '-'
+                        || text[i - 1] > '\u007F')
+                    && (char.IsLetter(text[i + 1]) || text[i + 1] == '_' || text[i + 1] > '\u007F'))
+                    continue;
                 var before = text[start..i].Trim();
                 // A sign belongs to the number in front of it unless there is something to take it
                 // from: 'calc(-37px + 1px)' and 'calc(1px * -2)' are one operand each, while
@@ -3852,9 +3889,281 @@ public static class CssValueGrammar
         {
             string name = token[..open].ToLowerInvariant();
             if (MathFunctions.Contains(name)) return IsMathFunctionCall(token, isOperand);
+            // The two anchor functions carry an argument grammar of their own, so a call that does
+            // not match it is no operand: 'calc(anchor-size(self-end) + 1px)' is dropped (measured).
+            if (name is "anchor-size" or "anchor") return IsAnchorSideCall(name, token);
             return true;   // var(), attr(), env() \u2026: somebody else's argument, taken as written
         }
         return false;
+    }
+
+    /// <summary>Whether a call of one of the two anchor functions carries arguments its own grammar
+    /// can read. 'anchor()' takes a side and 'anchor-size()' a size keyword, so one helper with the
+    /// two keyword sets covers both.</summary>
+    private static bool IsAnchorSideCall(string name, string token) =>
+        name == "anchor-size" ? IsAnchorSizeCall(token, out _) : IsAnchorCall(token);
+
+    /// <summary>A bare 'anchor()' or 'anchor-size()' is a value of its own in the properties that
+    /// take it, and its arguments are read here rather than waved through: a side keyword in the
+    /// size function, a second name, a second keyword or a fallback written without its comma all
+    /// make the call, and the declaration, nothing (all measured on 'width').</summary>
+    internal static bool IsAnchorCall(string token)
+    {
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)
+            || !token[..open].Equals("anchor", StringComparison.OrdinalIgnoreCase)) return false;
+        var inner = token[(open + 1)..^1].Trim();
+        if (inner.Length == 0) return false;
+        var parts = SplitTopLevel(inner);
+        // anchor( [ <anchor-name> || <anchor-side> ]? , <length-percentage>? )
+        string head = inner;
+        if (parts.Count == 2) head = parts[0].Trim();
+        else if (parts.Count != 1) return false;
+        if (parts.Count == 2 && (!IsLengthOrPercentage(parts[1].Trim())
+            || SplitComponents(parts[1]).Count != 1)) return false;
+        var words = SplitComponents(head);
+        string? name = null, side = null;
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower.Length > 2 && lower.StartsWith("--", StringComparison.Ordinal))
+            {
+                if (name != null) return false;
+                name = lower;
+                continue;
+            }
+            if (lower is "inside" or "outside" or "top" or "left" or "right" or "bottom"
+                or "start" or "end" or "self-start" or "self-end" or "center"
+                || IsPercentageWord(lower))
+            {
+                if (side != null) return false;
+                side = lower;
+                continue;
+            }
+            return false;
+        }
+        return name != null || side != null;
+    }
+
+    private static bool IsPercentageWord(string word) =>
+        word.EndsWith("%", StringComparison.Ordinal) && IsLengthOrPercentage(word);
+
+    /// <summary>CSS Anchor Positioning 1 \u00a75.1: <c>anchor-size( [ &lt;anchor-name&gt; ||
+    /// &lt;anchor-size&gt; ]? , &lt;length-percentage&gt;? )</c>, where the size keywords are the
+    /// spec's six \u2014 an anchor <em>side</em> is not an anchor <em>size</em>, so 'self-end', 'top' and
+    /// 'left' are refused here (all measured) while the older 'block' and 'inline' spellings of the
+    /// logical pair are still taken (measured). A second name or a second keyword is no call, and a
+    /// fallback needs its comma ('anchor-size(width 10px)' falls, measured) \u2014 except for the one
+    /// argument that is only a length, which both this engine and the reference read as the fallback
+    /// (measured: 'anchor-size(10px)' computes 10px). The name is printed in front of the keyword
+    /// whichever way the page wrote them (measured: 'anchor-size(width --a)' reads
+    /// 'anchor-size(--a width)').</summary>
+    internal static bool IsAnchorSizeCall(string token, out string? canonical)
+    {
+        canonical = null;
+        if (!TrySplitAnchorSize(token, out var head, out var fallback)) return false;
+        var words = SplitComponents(head);
+        string? name = null, keyword = null;
+        foreach (var word in words)
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower.Length > 2 && lower.StartsWith("--", StringComparison.Ordinal)) name = lower;
+            else keyword = lower;
+        }
+        var printed = name != null ? (keyword != null ? name + " " + keyword : name) : (keyword ?? "");
+        // The fallback is separated from what came before it, except when nothing did: the
+        // one-argument form the page wrote without a comma is printed the same way (measured:
+        // 'anchor-size(10px)' reads itself back, 'anchor-size(width, 10px)' keeps its comma).
+        canonical = "anchor-size(" + printed
+            + (fallback.Length == 0 ? "" : (printed.Length == 0 ? "" : ", ") + fallback) + ")";
+        return true;
+    }
+
+    /// <summary>The two halves an <c>anchor-size()</c> argument list is made of: what names the size
+    /// and what the page wrote after the comma as the fallback. False for a text that is not such a
+    /// call, which is the same question the grammar asks.</summary>
+    private static bool TrySplitAnchorSize(string token, out string head, out string fallback)
+    {
+        head = ""; fallback = "";
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)
+            || !token[..open].Equals("anchor-size", StringComparison.OrdinalIgnoreCase)) return false;
+        var inner = token[(open + 1)..^1].Trim();
+        var parts = SplitTopLevel(inner);
+        if (parts.Count == 1)
+        {
+            // One argument: a size or a name, or the fallback the comma would have introduced.
+            var only = parts[0].Trim();
+            if (IsOnlyLengthFallback(only)) fallback = only;
+            else head = only;
+        }
+        else if (parts.Count == 2)
+        {
+            head = parts[0].Trim();
+            fallback = parts[1].Trim();
+            // The comma separates a size from its fallback, so a list that opens with one names
+            // nothing to fall back from (measured: 'anchor-size(, 20px)' is no value, while
+            // 'anchor-size(20px)' — the same words without the comma — is the fallback alone).
+            if (head.Length == 0) return false;
+            if (SplitComponents(fallback).Count != 1 || !IsLengthOrPercentage(fallback)) return false;
+        }
+        else return false;
+
+        if (head.Length > 0 && (SplitComponents(head).Count > 2 || !IsAnchorSizeHead(head))) return false;
+        return true;
+    }
+
+    /// <summary>Whether the one argument of an argument-less <c>anchor-size()</c> is the fallback
+    /// rather than the size it names: a single length, not one of the six keywords and not a name
+    /// (measured: 'anchor-size(10px)' computes 10px).</summary>
+    private static bool IsOnlyLengthFallback(string text) =>
+        text.Length > 0 && IsLengthOrPercentage(text) && SplitComponents(text).Count == 1
+        && !IsAnchorSizeKeyword(text)
+        && !(text.Length > 2 && text.StartsWith("--", StringComparison.Ordinal));
+
+    /// <summary>True when a value reads an anchor's size and the page gave nothing to stand in for
+    /// it. CSS Anchor Positioning 1 §5.1.1 makes that declaration invalid at computed-value time,
+    /// and this engine has no anchor object to ask, so the missing-anchor branch is the only one
+    /// (measured: 'margin-left: calc(anchor-size(width) + 10px)' computes '0px', the initial, while
+    /// 'calc(anchor-size(width, 10px) + 10px)' computes '20px' from its fallback).</summary>
+    internal static bool HasUnresolvableAnchorSize(string value)
+    {
+        if (value.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) < 0) return false;
+        int i = 0;
+        while (true)
+        {
+            int at = IndexOfAnchorSize(value, i);
+            if (at < 0) return false;
+            int close = MatchingClose(value, value.IndexOf('(', at));
+            if (close < 0) return false;
+            if (!TrySplitAnchorSize(value[at..(close + 1)], out _, out var fallback)
+                || fallback.Length == 0) return true;
+            i = close + 1;
+        }
+    }
+
+    /// <summary>The value text with every <c>anchor-size()</c> that carries a fallback standing in
+    /// for the size it could not read. The fallback is put in as the page wrote it, so a percentage
+    /// is still a share of the box the layout owns and a font unit is still priced by the element.</summary>
+    internal static string SubstituteAnchorSizeFallbacks(string text)
+    {
+        if (text.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) < 0) return text;
+        var builder = new System.Text.StringBuilder(text.Length);
+        int i = 0;
+        while (i < text.Length)
+        {
+            int at = IndexOfAnchorSize(text, i);
+            if (at < 0)
+            {
+                builder.Append(text, i, text.Length - i);
+                break;
+            }
+            int close = MatchingClose(text, text.IndexOf('(', at));
+            if (close < 0) return text;
+            builder.Append(text, i, at - i);
+            builder.Append(TrySplitAnchorSize(text[at..(close + 1)], out _, out var fallback)
+                && fallback.Length > 0 ? fallback : text[at..(close + 1)]);
+            i = close + 1;
+        }
+        return builder.ToString();
+    }
+
+    private static bool IsAnchorSizeKeyword(string word) =>
+        word.ToLowerInvariant() is "width" or "height" or "block" or "inline"
+            or "self-block" or "self-inline";
+
+    private static bool IsAnchorSizeHead(string head)
+    {
+        string? name = null, keyword = null;
+        foreach (var word in SplitComponents(head))
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower.Length > 2 && lower.StartsWith("--", StringComparison.Ordinal))
+            {
+                if (name != null) return false;
+                name = lower;
+                continue;
+            }
+            if (IsAnchorSizeKeyword(lower))
+            {
+                if (keyword != null) return false;
+                keyword = lower;
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The properties CSS Anchor Positioning 1 \u00a75.1 lists as gaining anchor-size(): the
+    /// sizes, the insets and the margins. Everywhere else the function is not a value, which the
+    /// reference engine shows by dropping the declaration \u2014 'padding-left', 'border-width', 'gap',
+    /// 'font-size', 'line-height', 'translate', 'flex-basis' and 'outline-offset' each refuse it,
+    /// while 'margin', 'top', 'inset-block-start', 'width' and 'max-width' all take it (measured).</summary>
+    internal static bool PropertyTakesAnchorSize(CssPropertyId id) => id switch
+    {
+        CssPropertyId.Width or CssPropertyId.Height
+            or CssPropertyId.InlineSize or CssPropertyId.BlockSize
+            or CssPropertyId.MinWidth or CssPropertyId.MinHeight
+            or CssPropertyId.MinInlineSize or CssPropertyId.MinBlockSize
+            or CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
+            or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize
+            or CssPropertyId.Top or CssPropertyId.Right or CssPropertyId.Bottom or CssPropertyId.Left
+            or CssPropertyId.Inset or CssPropertyId.InsetBlock or CssPropertyId.InsetInline
+            or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
+            or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
+            or CssPropertyId.Margin or CssPropertyId.MarginBlock or CssPropertyId.MarginInline
+            or CssPropertyId.MarginTop or CssPropertyId.MarginRight
+            or CssPropertyId.MarginBottom or CssPropertyId.MarginLeft
+            or CssPropertyId.MarginBlockStart or CssPropertyId.MarginBlockEnd
+            or CssPropertyId.MarginInlineStart or CssPropertyId.MarginInlineEnd
+            => true,
+        _ => false,
+    };
+
+    /// <summary>The same scope question asked of the name a declaration carries, for the paths that
+    /// hold the name and not the id (the applier reads its property out of the declaration text).</summary>
+    internal static bool PropertyTakesAnchorSize(string propertyName) =>
+        PropertyTakesAnchorSize(CssPropertyIdExtensions.BehaviourId(
+            CssPropertyIdExtensions.FromString(propertyName)));
+
+    /// <summary>Every 'anchor-size()' call in a value text, rewritten into the order the grammar
+    /// prints — the name in front of the keyword. Null when one of them is no call at all.</summary>
+    internal static string? CanonicalAnchorSizeCalls(string text)
+    {
+        if (text.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) < 0) return text;
+        var builder = new System.Text.StringBuilder(text.Length);
+        int i = 0;
+        while (i < text.Length)
+        {
+            int at = IndexOfAnchorSize(text, i);
+            if (at < 0)
+            {
+                builder.Append(text, i, text.Length - i);
+                break;
+            }
+            int close = MatchingClose(text, text.IndexOf('(', at));
+            if (close < 0) return null;
+            if (!IsAnchorSizeCall(text[at..(close + 1)], out var canonical)) return null;
+            builder.Append(text, i, at - i);
+            builder.Append(canonical);
+            i = close + 1;
+        }
+        return builder.ToString();
+    }
+
+    private static int IndexOfAnchorSize(string text, int from)
+    {
+        for (int i = from; i + 12 <= text.Length; i++)
+        {
+            if (text[i] != 'a' && text[i] != 'A') continue;
+            if (i > 0 && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] is '-' or '_')) continue;
+            if (string.Compare(text, i, "anchor-size", 0, 11, StringComparison.OrdinalIgnoreCase) != 0)
+                continue;
+            if (text[i + 11] != '(') continue;
+            return i;
+        }
+        return -1;
     }
 
     /// <summary>A function call that is not a math function. Its arguments belong to the property's
@@ -3863,7 +4172,18 @@ public static class CssValueGrammar
     private static bool IsOtherFunctionCall(string token)
     {
         int open = token.IndexOf('(');
-        return open > 0 && token.EndsWith(")") && !MathFunctions.Contains(token[..open].ToLowerInvariant());
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var name = token[..open].ToLowerInvariant();
+        if (MathFunctions.Contains(name)) return false;
+        // The two anchor functions carry an argument grammar of their own, so their calls are read
+        // here and not waved through as somebody else's parentheses (measured: 'anchor-size(top)'
+        // and 'anchor-size(--a self-end)' are both dropped).
+        if (name is "anchor-size" or "anchor") return IsAnchorSideCall(name, token);
+        // 'minmax()' and 'repeat()' belong to a track list and to nothing else: a length-valued
+        // property that is handed one has no value (measured: 'width: minmax(10px, 20px)' and
+        // 'left: minmax(1px, 2px)' are each dropped while 'grid-template-columns' keeps them).
+        if (name is "minmax" or "repeat") return false;
+        return true;
     }
 
     private static readonly HashSet<string> MathFunctions = new(StringComparer.OrdinalIgnoreCase)
@@ -4451,18 +4771,138 @@ public static class CssValueGrammar
         }
         if (name == "color")
         {
-            if (inner.StartsWith("from ", StringComparison.OrdinalIgnoreCase)) return true;
             // 'color()' is a colour space and its three channels. The space is not one of the
             // channels, and a comma is not a separator this function was ever written with
             // (measured: 'color(1 2 3)', 'color(srgb, 1, 0, 0)', 'color(srgb 1 2 3 4)' and
             // 'color(srgb 1 0)' are each dropped, 'color(srgb 1 0 0 / 0.5)' stands).
+            //
+            // The relative form says which space it is reading into, and that name is part of the
+            // grammar (CSS Color 5 §5.2.1): 'color(from red r g b)', 'color(from red 25% g b)' and
+            // 'color(from red r g b / 0.5)' are each dropped while 'color(from red srgb r g b)'
+            // stands (all measured). Only the spaces this function was written for are named:
+            // 'oklab' and 'lch' have functions of their own, so 'color(from red oklab 0.5 0 0)' and
+            // 'color(from red lch l c h)' both fall, and a space no @color-profile declared is no
+            // space at all (measured: 'color(--my-space 1 2 3)' is dropped).
             if (!TrySplitColorAlpha(inner, out var body, out var alpha)) return false;
-            if (body.Contains(',', StringComparison.Ordinal)) return false;
             if (alpha != null && !IsAlphaWord(alpha)) return false;
-            return SplitComponents(body).Count == 4;
+            // A comma is not a separator this function was ever written with: the channels are a
+            // space-separated list, so 'color(srgb, 1, 0, 0)' names no colour (measured).
+            if (body.Contains(',', StringComparison.Ordinal)) return false;
+            var words = SplitComponents(body);
+            if (words.Count == 0) return false;
+            int at = 0;
+            bool relative = words[0].Equals("from", StringComparison.OrdinalIgnoreCase);
+            if (relative)
+            {
+                if (words.Count < 3 || !IsWellFormedColor(words[1])) return false;
+                at = 2;
+            }
+            if (words.Count != at + 4 || !IsRectangularColorSpace(words[at])) return false;
+            for (int i = 1; i <= 3; i++)
+                if (!IsColorChannelWord(words[at + i], relative)) return false;
+            return true;
         }
-        if (name == "color-mix") return ColorParser.IsColorToken(token);
+        if (name == "color-mix") return IsWellFormedColorMix(inner);
         return false;
+    }
+
+    /// <summary>The spaces <c>color()</c> was written for: the RGB triples and the three XYZ
+    /// variants. A space with its own function — 'lab', 'lch', 'oklab', 'oklch', 'hsl', 'hwb' — is
+    /// not named here (measured: 'color(from red oklab 0.5 0 0)' and 'color(from red lch l c h)'
+    /// are both dropped).</summary>
+    private static readonly string[] RectangularColorSpaces =
+    {
+        "srgb", "srgb-linear", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020",
+        "xyz", "xyz-d50", "xyz-d65",
+    };
+
+    /// <summary>The spaces with a hue channel, which are the only ones a hue interpolation method
+    /// travels with (CSS Color 4 §14: a hue method belongs to the cylindrical half of the
+    /// &lt;color-interpolation-method&gt; production).</summary>
+    private static readonly string[] CylindricalColorSpaces = { "hsl", "hwb", "lch", "oklch" };
+
+    /// <summary>The spaces <c>color-mix()</c> may mix in: everything <c>color()</c> takes plus the
+    /// four with their own function names, since the mixing space is a name and not a call
+    /// (measured: 'in lab', 'in oklab', 'in lch', 'in oklch', 'in hsl', 'in xyz' all stand).</summary>
+    private static readonly string[] InterpolationColorSpaces =
+    {
+        "srgb", "srgb-linear", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020",
+        "xyz", "xyz-d50", "xyz-d65", "lab", "oklab", "lch", "oklch", "hsl", "hwb",
+    };
+
+    private static bool IsRectangularColorSpace(string word) =>
+        RectangularColorSpaces.Contains(word.ToLowerInvariant());
+
+    private static bool IsColorSpaceName(string word) =>
+        InterpolationColorSpaces.Contains(word.ToLowerInvariant());
+
+    /// <summary>One channel of <c>color()</c>: a number, a percentage or <c>none</c> — and in the
+    /// relative form also the channel keywords the space's own axes answer to (measured:
+    /// 'color(from red srgb r g b)' and 'color(from red display-p3 r g b)' stand,
+    /// 'color(from red srgb 1 g b)' mixes the two and also stands, while 'color(from red srgb r g)'
+    /// leaves a channel unsaid and falls).</summary>
+    private static bool IsColorChannelWord(string word, bool relative)
+    {
+        var lower = word.ToLowerInvariant();
+        if (lower == "none") return true;
+        if (relative && lower is "r" or "g" or "b") return true;
+        // A channel may be an arithmetic expression over the origin colour's own channels, which is
+        // the whole point of the relative form (measured: 'color(from red srgb r g calc(b + 0.5))'
+        // stands and reads 'calc(0.5 + b)' inside).
+        if (relative && IsMathFunctionCall(word, IsColorChannelNumber)) return true;
+        return IsLengthOrPercentage(lower) || IsNumberWord(lower);
+    }
+
+    /// <summary>What a colour channel's own math expression is built from: numbers, percentages and
+    /// the channel keywords, which stand for the origin colour's values and are not numbers yet.</summary>
+    private static bool IsColorChannelNumber(string word) =>
+        IsLengthOrPercentage(word) || IsNumberWord(word)
+        || word.ToLowerInvariant() is "r" or "g" or "b" or "l" or "c" or "h"
+            or "x" or "y" or "z" or "alpha";
+
+    private static bool IsNumberWord(string word) =>
+        Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(word, out _, out var unit)
+        && unit.Length == 0;
+
+    /// <summary>CSS Color 5 §3: <c>color-mix()</c> is an interpolation method and one or more
+    /// colours, each with an optional percentage. The method names a space, and a hue adjustment
+    /// rides only with a space that has a hue — 'in hsl longer hue' and 'in oklch increasing hue'
+    /// stand while 'in srgb longer hue', 'in oklab longer hue', 'in lab longer hue' and
+    /// 'in xyz shorter hue' are each dropped (all measured). 'in oklab' is the default, so the
+    /// method may be left out entirely (measured: 'color-mix(red, blue)' stands).</summary>
+    private static bool IsWellFormedColorMix(string inner)
+    {
+        var parts = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(inner, ',');
+        if (parts.Count < 2) return false;
+        int first = 0;
+        var head = parts[0].Trim();
+        if (head.StartsWith("in ", StringComparison.OrdinalIgnoreCase))
+        {
+            var words = SplitComponents(head[3..]);
+            if (words.Count is not (1 or 3) || !IsColorSpaceName(words[0])) return false;
+            if (words.Count == 3)
+            {
+                if (!words[2].Equals("hue", StringComparison.OrdinalIgnoreCase)) return false;
+                if (words[1].ToLowerInvariant()
+                    is not ("shorter" or "longer" or "increasing" or "decreasing")) return false;
+                // A hue method needs a hue to adjust (measured, four spaces that have none).
+                if (!CylindricalColorSpaces.Contains(words[0].ToLowerInvariant())) return false;
+            }
+            first = 1;
+        }
+        else if (head.Length > 0 && !IsWellFormedColor(head)) return false;
+        for (int i = first; i < parts.Count; i++)
+        {
+            var words = SplitComponents(parts[i].Trim());
+            if (words.Count == 0) return false;
+            if (words.Count > 1)
+            {
+                if (!IsPercentageWord(words[^1])) return false;
+                words.RemoveAt(words.Count - 1);
+            }
+            if (!IsWellFormedColor(string.Join(" ", words))) return false;
+        }
+        return parts.Count - first >= 1;
     }
 
     /// <summary>Split a colour function's arguments at the slash that opens its alpha, refusing a

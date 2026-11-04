@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 sweep</title></head>
+<body>
+<div id="host"></div>
+<script>
+// sweep
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["color","device-cmyk(0% 50% 100% 0.5)"],["color","device-cmyk(0 0 0 1)"],["color","color(from red r g b)"],["color","color(from red 25% g b)"],["color","color(from red r g b / 0.5)"],["color","color(from blue h 50% 50%)"],["color","lab(from red 50% a b)"],["color","lch(from red l c h / 50%)"],["color","color-mix(in oklab, red 30%, blue)"],["color","color-mix(in srgb longer hue, red, blue)"],["color","rgb(1 2 3 / none)"],["color","hsl(none 50% 50%)"],["color","rgb(1 2 3 / calc(10% + 5))"],["color","rgb(1 2 3 / 1e2%)"],["color","color(srgb 1 0 0 / none)"],["color","light-dark(red, blue)"],["color","light-dark(red)"],["transition-property","-webkit-transform"],["transition-property","anchor-size(width)"],["transition-property","--custom"],["transition-property","all, none"],["transition-property","none, all"],["transition-property","span-a"],["hyphens","manual"],["hyphens","auto"],["hyphens","none"],["hyphenate-character","\"-\""],["hyphenate-character","'\u2026'"],["hyphenate-character","auto"],["hyphenate-character","none"],["hyphenate-limit-chars","auto"],["hyphenate-limit-chars","5"],["hyphenate-limit-chars","5 3 3"],["hyphenate-limit-chars","5 3 3 2"],["hyphenate-limit-zone","10px"],["hyphenate-limit-zone","20%"],["hyphenate-limit-zone","auto"],["text-justify","auto"],["text-justify","inter-word"],["text-justify","distribute"],["text-justify","none"],["line-padding","10px"],["line-padding","auto"],["line-padding","10px 20px"],["line-padding","50%"],["justify-content","right"],["justify-content","left"],["justify-content","legacy"],["justify-content","legacy right"],["justify-content","center baseline"],["justify-content","first center"],["scrollbar-color","auto"],["scrollbar-color","red blue"],["scrollbar-color","red"],["scrollbar-color","transparent auto"],["scrollbar-width","auto"],["scrollbar-width","thin"],["scrollbar-width","none"],["scrollbar-width","vertical"],["scroll-start","auto"],["scroll-start","center"],["scroll-start","auto center"],["scroll-start","none"],["scroll-start-target","auto"],["scroll-start-target","none"],["target-text","none"],["target-text","auto"],["target-text","highlight"],["target-text","current"],["target-text","span-a"],["anchor-default","--a"],["anchor-default","none"],["anchor-default","--a --b"],["width","anchor-size(self-inline)"],["width","anchor-size(--a self-end)"],["width","calc(anchor-size(width) + 10px)"],["box-sizing","border-box"],["box-sizing","content-box"],["box-sizing","stretch"],["box-sizing","inherit"],["marker-side","block-start"],["marker-side","inline-start"],["marker-side","auto"],["margin-block","10px 20px"],["margin-inline","auto"],["margin-block-start","10px"],["margin-trim","none"],["margin-trim","block"],["margin-trim","inline"],["margin-trim","all"],["margin-trim","block start"],["font-variant-numeric","ordinal slashed-zero tabular-nums"],["font-variant-numeric","diagonal-fractions stacked-fractions"],["font-variant-numeric","proportional-figures tabular-nums oldstyle-nums"],["font-variant-numeric","normal normal"],["font-variant-numeric","lining-nums slashed-zero"],["line-break","loose"],["line-break","anywhere"],["line-break","strict"],["line-break","normal"],["line-break","easy"],["tab-size","4"],["tab-size","10px"],["tab-size","0"],["tab-size","auto"],["white-space-trim","none"],["white-space-trim","discard newlines"],["white-space-trim","discard space leading"],["white-space-trim","trim trailing"],["text-autospace","normal"],["text-autospace","no-autospace"],["text-autospace","ideograph-ascii-space"],["text-autospace","trim space-start"],["text-spacing-trim","trim-both"],["text-spacing-trim","trim-atomic-start"],["text-spacing-trim","space-all"],["text-spacing-trim","normal"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

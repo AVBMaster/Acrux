@@ -347,6 +347,16 @@ public class CascadeResolverState
         // The test reads the text as written; once the substitution has run, the failure it is
         // looking for has been papered over into 'calc(10px + )'.
         if (CssFunctionEvaluator.HasUnresolvedVar(text, Element)) return;
+        // An anchor-size() that names no anchor and writes no fallback is the same kind of hole: the
+        // declaration has no value at computed-value time, so the property keeps what it would have
+        // had without it (CSS Anchor Positioning 1 §5.1.1, measured: 'margin-left:
+        // calc(anchor-size(width) + 10px)' computes '0px', 'width: calc(anchor-size(inline) + 1em)'
+        // computes 'auto', and 'anchor-size(width, 10px)' with its fallback computes '10px'). This
+        // engine has no anchor object yet, so a call without a fallback is always the missing-anchor
+        // case. Like the var() test above it reads the text as written: the evaluator below has
+        // already turned the unreadable call into the number 0 and the sum into a length.
+        if (CssValueGrammar.HasUnresolvableAnchorSize(text)
+            && CssValueGrammar.PropertyTakesAnchorSize(name)) return;
         // 'content' keeps its counters as written; the layout that owns the counter scope turns
         // them into text (CssFunctionEvaluator.EvaluateForContent says why).
         // An attr() whose fallback is not a string is no content at all: the declaration stays in

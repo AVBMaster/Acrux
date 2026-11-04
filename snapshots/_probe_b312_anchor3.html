@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 anchor 3</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b312_anchor_3
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["margin","anchor-size(width)"],["padding-left","anchor-size(width)"],["top","anchor-size(width)"],["line-height","anchor-size(width)"],["border-width","anchor-size(width)"],["gap","anchor-size(width)"],["font-size","anchor-size(width)"],["translate","anchor-size(width)"],["inset-block-start","anchor-size(width)"],["max-width","anchor-size(width)"],["anchor-size(10px)","auto"],["width","anchor-size(10px)"],["width","anchor-size(width --a)"],["width","anchor-size(self-inline self-block)"],["width","anchor-size(--a --b width)"],["width","anchor-size(width, 10px, 20px)"],["width","anchor-size(width width width)"],["width","anchor-size(--)"],["width","anchor-size(inline, 10px)"],["width","anchor-size(block, 1em)"],["width","calc(anchor-size(width) + 1s)"],["width","calc(anchor-size(width) * anchor-size(width))"],["width","calc(anchor-size(width) + 10%)"],["width","calc(anchor-size(width) + 1px + 2px)"],["width","calc(100% - anchor-size(width))"],["width","calc(anchor-size(width) / 2)"],["width","calc(2px - anchor-size(width))"],["width","minmax(anchor-size(width), 10px)"],["flex-basis","anchor-size(width)"],["outline-offset","anchor-size(width)"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

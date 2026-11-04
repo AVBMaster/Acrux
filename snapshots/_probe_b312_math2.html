@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 math2</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b312_math2
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["width","calc(10px + 2 * 1em)"],["width","calc(2 * 1em + 10px)"],["width","calc(10px + 1em * 2)"],["width","calc(10px + var(--x) * 2)"],["width","calc(2 * var(--x) + 10px)"],["width","calc(10px + var(--x) + var(--y))"],["width","calc(var(--x) / 2 + 10px)"],["width","calc(10px + (1em + 2px))"],["width","calc(10px - (1em + 2px))"],["width","calc(anchor-size(width) * 2)"],["width","calc(anchor-size(width) * 2 + 10px)"],["width","width"],["width","minmax"],["width","repeat"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0]));
+    el.remove();
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

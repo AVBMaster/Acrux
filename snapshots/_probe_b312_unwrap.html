@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b312 unwrap</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b312_unwrap
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["width","calc(10px)"],["width","calc(anchor-size(width))"],["width","calc(10px + 20px)"],["width","calc(min(1px, 2px))"],["width","calc(1px * 2)"],["width","calc((10px))"],["width","calc(var(--x))"],["width","calc(anchor-size(width) * 1)"],["width","calc(10px + anchor-size(width))"],["width","calc(100% )"],["width","calc(2 * (1px + 2px))"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+    el.remove();
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

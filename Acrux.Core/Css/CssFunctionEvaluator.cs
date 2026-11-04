@@ -489,6 +489,14 @@ public static class CssFunctionEvaluator
         // 'calc(l + 20)' refers to channel keywords this evaluator cannot resolve.
         if (ColorParser.IsFunctionalColor(value)) return value;
 
+        // CSS Anchor Positioning 1 §5.1.1: with no anchor to read, an anchor-size() is worth the
+        // fallback the page wrote behind its comma. The substitution happens before any expression is
+        // read, so a call written on its own is a length and one written inside a calc() joins the
+        // sum as the length the fallback says (measured: 'margin-left: anchor-size(width, 10px)'
+        // computes '10px' and 'calc(anchor-size(width, 10px) + 10px)' computes '20px'). A call with
+        // no fallback never reaches here — its declaration is invalid at computed-value time.
+        value = CssValueGrammar.SubstituteAnchorSizeFallbacks(value);
+
         var calls = CssMathValue.MathCalls(value);
         if (calls.Count == 0) return value;
 

@@ -49,6 +49,14 @@ public static class CssMathValue
         "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
     };
 
+    /// <summary>The bare identifiers a math expression may carry as a term of its own: the channel
+    /// names of a relative colour (CSS Color 5 §5.2), whose value belongs to the origin colour and
+    /// is not the engine's to combine here.</summary>
+    private static readonly HashSet<string> ChannelKeyword = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "r", "g", "b", "x", "y", "z", "l", "c", "h", "a", "alpha",
+    };
+
     /// <summary>The value text with every math function in it reduced.</summary>
     public static string Fold(string text)
     {
@@ -126,8 +134,17 @@ public static class CssMathValue
             // does fold keeps its wrapper — 'calc(min(1px, 2px))' is 'calc(1px)', not '1px'
             // (measured, both).
             if (IsSingleCall(inner)) return inner;
-            return TryReadSum(inner, out var sum) && sum!.Printable
-                ? "calc(" + sum.Print() + ")" : "calc(" + inner + ")";
+            if (TryReadSum(inner, out var sum) && sum!.Printable)
+            {
+                var printed = sum.Print();
+                // A calc() that says one function term and nothing else after its arithmetic is that
+                // function talking, and the wrapper adds nothing it does not already say (measured:
+                // 'calc(anchor-size(width))' and 'calc(anchor-size(width) * 1)' both read
+                // 'anchor-size(width)'), while a number or a folded call keeps its wrapper
+                // ('calc(10px)', 'calc(min(1px, 2px))' → 'calc(1px)').
+                return sum.IsSingleOpaqueTerm ? printed : "calc(" + printed + ")";
+            }
+            return "calc(" + inner + ")";
         }
 
         var arguments = SplitArguments(inner);
@@ -391,6 +408,14 @@ public static class CssMathValue
         /// unreadable.</summary>
         public bool Printable => !Broken && (Terms.Count > 0 || Opaque.Count > 0);
 
+        /// <summary>True when the sum says exactly one function term at its own scale and nothing
+        /// beside it — the shape a calc() drops its own wrapper for, because the function already
+        /// says all of it (measured: 'calc(anchor-size(width))' and 'calc(anchor-size(width) * 1)'
+        /// both read 'anchor-size(width)', while a scaled one keeps the wrapper the product
+        /// needs: 'calc(anchor-size(width) * 2)' reads 'calc(2 * anchor-size(width))').</summary>
+        public bool IsSingleOpaqueTerm => Terms.Count == 0 && Opaque.Count == 1
+            && Opaque[0].Sign == 1;
+
         public void Add(double coefficient, string unit)
         {
             var canonical = Canonical(unit);
@@ -437,7 +462,17 @@ public static class CssMathValue
                 }
                 Append(sb, value < 0, Number(System.Math.Abs(value)) + unit);
             }
-            foreach (var (sign, text) in Opaque) Append(sb, sign < 0, text);
+            foreach (var (coefficient, text) in Opaque)
+            {
+                // A product inside a sum is parenthesised the way CSS Values 4 §10.13 writes it,
+                // and only when it says a scale: 'calc(anchor-size(width) * 2 + 10px)' reads
+                // 'calc(10px + (2 * anchor-size(width)))' while the same term with nothing beside
+                // it keeps no parentheses ('calc(2 * anchor-size(width))', both measured).
+                var magnitude = System.Math.Abs(coefficient);
+                var body = magnitude == 1 ? text : Number(magnitude) + " * " + text;
+                Append(sb, coefficient < 0, magnitude != 1 && (Terms.Count > 0 || Opaque.Count > 1)
+                    ? "(" + body + ")" : body);
+            }
             return sb.ToString();
         }
 
@@ -678,6 +713,12 @@ public static class CssMathValue
             case "calc":
             case "-webkit-calc":
                 return TypeOfExpression(argument);
+            case "anchor-size":
+                // A size of an anchor box is a length, which is what makes
+                // 'calc(anchor-size(width) + 10%)' a length while 'calc(anchor-size(width) + 1s)'
+                // is nothing at all (measured, both).
+                return Acrux.Core.Css.CssValueGrammar.IsAnchorSizeCall("anchor-size(" + argument + ")", out _)
+                    ? "length" : TypedBad;
             case "min":
             case "max":
             case "hypot":
@@ -1115,10 +1156,10 @@ public static class CssMathValue
 
             if (opaque != null)
             {
-                // A function the sum carries whole keeps its own text, so only a sign may be put
-                // in front of it — a scale would have to be printed inside an expression this does
-                // not own.
-                if (number != 1 && number != -1) return null;
+                // A function the sum carries whole keeps its own text, and a scale in front of it is
+                // printed as the product CSS Values 4 §10.13 writes one (measured:
+                // 'calc(anchor-size(width) / 2)' reads 'calc(0.5 * anchor-size(width))' and
+                // 'calc(anchor-size(width) * 2 / 4)' reads the same, because the two factors fold).
                 product.Opaque.Add((number, opaque));
                 return product;
             }
@@ -1167,12 +1208,33 @@ public static class CssMathValue
                 int start = _i;
                 while (_i < _text.Length && IsIdentPart(_text[_i])) _i++;
                 var word = _text[start.._i];
-                if (Peek() != '(') return null;
+                if (Peek() != '(')
+                {
+                    // A relative colour's channel expression is built from the origin colour's own
+                    // channel names, which stand for numbers the engine has not read yet — so they
+                    // carry the same opaque term the sum gives an anchor-size(), and the sort puts
+                    // the number in front of them (CSS Color 5 §5.2, CSS Values 4 §10.13; measured:
+                    // 'hsl(from red calc(h + 90) s l)' reads 'calc(90 + h)').
+                    return ChannelKeyword.Contains(word.ToLowerInvariant())
+                        ? Primary.OfFunction(word.ToLowerInvariant()) : null;
+                }
                 int close = MatchingParen(_text, _i);
                 if (close < 0) return null;
                 var argument = Fold(_text[(_i + 1)..close]);
                 _i = close + 1;
-                if (!FoldableNames.Contains(word)) return null;
+                if (!FoldableNames.Contains(word))
+                {
+                    // anchor-size() is a length the engine cannot work out at this stage — CSS
+                    // Anchor Positioning 1 §5.1.1 resolves it at computed-value time, through style
+                    // and layout interleaving — so it keeps its own text and stands in the sum as a
+                    // term of its own (measured: 'calc(anchor-size(width) + 10px)' reads
+                    // 'calc(10px + anchor-size(width))', and a call whose arguments the grammar
+                    // refuses takes the whole declaration down with it).
+                    if (!word.Equals("anchor-size", StringComparison.OrdinalIgnoreCase)) return null;
+                    if (!Acrux.Core.Css.CssValueGrammar.IsAnchorSizeCall(
+                            word + "(" + argument + ")", out var anchor)) return null;
+                    return Primary.OfFunction(anchor!);
+                }
                 var reduced = Reduce(word, argument);
                 // What comes back is either the function still standing, which the sum carries as
                 // a term of its own, or a calc() of it, whose terms the sum can merge with its own.
