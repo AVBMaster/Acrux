@@ -115,7 +115,7 @@ public static class CssPropertyApplier
     /// different words on the computed surface, and which of them a property takes is decided by
     /// that property's grammar, not here.</summary>
     private static Length ParseSizingValue(string value) =>
-        SizingKeywordLength.For(value) ?? Length.Parse(value);
+        SizingKeywordLength.For(value) ?? ParseCalcSizeValue(value) ?? Length.Parse(value);
 
     public static void ApplyScrollbarColors(ComputedStyle style, string value)
     {
@@ -133,6 +133,40 @@ public static class CssPropertyApplier
         if (track.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
             style.CurrentColorSlots |= (uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack;
         else style.CurrentColorSlots &= ~(uint)ComputedStyle.CurrentColorSlot.ScrollbarTrack;
+    }
+
+    /// <summary>CSS Values 4 §11.1: 'calc-size()' asks what the property's size would be worth once
+    /// its expression has read the word 'size'. This engine cannot yet work an expression around
+    /// 'size' out, and the answer must not be the zero an unread expression gives: a call whose whole
+    /// expression says nothing more than 'size' is worth exactly the size written in front of the
+    /// comma (measured: 'width: calc-size(100px, size)' is 100px and 'calc-size(auto, size)' is the
+    /// width a box with no 'width' was given), and every other call leaves the box with that same
+    /// size rather than with nothing (measured: 'calc-size(auto, size + 20px)' is 20px where the
+    /// arithmetic is priced — the arithmetic around 'size' is the gap #316 records).</summary>
+    private static Length? ParseCalcSizeValue(string value)
+    {
+        if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) < 0) return null;
+        if (!CssValueGrammar.TrySplitCalcSize(value.Trim(), out var head, out var expression))
+            return null;
+        if (expression.Equals("size", StringComparison.OrdinalIgnoreCase)
+            && !head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase))
+            return Length.Parse(head) ?? AutoLength.Instance;
+        // An expression that never says 'size' does not ask the question at all, so the call is
+        // worth exactly what the expression says (measured: 'height: calc-size(auto, 20px)' is
+        // 20px). Everything else needs the size the layout would have produced, which this path
+        // does not have yet — the box keeps that size rather than being collapsed to nothing
+        // (measured against the reference engine's 'calc-size(auto, size + 20px)' = 20px, which is
+        // gap #316's arithmetic).
+        if (!expression.Contains("size", StringComparison.OrdinalIgnoreCase))
+        {
+            // The expression is a calc-sum, so it is read as one (CSS Values 4 §11.1): '20px' is the
+            // length, '100% - 20px' is the share the layout prices.
+            var whole = expression.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+                ? expression : "calc(" + expression + ")";
+            return Length.Parse(whole) ?? AutoLength.Instance;
+        }
+        return AutoLength.Instance;
     }
 
     public static void Apply(ComputedStyle style, string name, string value)

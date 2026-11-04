@@ -53,6 +53,15 @@ public static class CssValueText
             value = anchored;
         }
 
+        // CSS Values 4 §11.1: a calc-size() sorts its own expression, in which 'size' is a term the
+        // layout prices, and the two arguments are separated the way the printer separates them.
+        if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            var sized = CssValueGrammar.CanonicalCalcSizeCalls(value);
+            if (sized == null) return value;
+            value = sized;
+        }
+
         // The 'animation' shorthand prints all eight of its parts in their canonical order, written
         // or not, so the reorder happens before anything else is folded and the parts it puts in are
         // folded like any other text (measured: '3s 2s LINEAR BOGUS' reads back
@@ -340,6 +349,11 @@ public static class CssValueText
                 result = CanonicalizeOpacityNumber(result, property);
                 result = CanonicalizeBorderSpacing(result, property);
                 result = FoldKeywordCase(result, property);
+                if (property.Equals("grid-template-columns", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("grid-template-rows", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("grid-template", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("grid", StringComparison.OrdinalIgnoreCase))
+                    result = FoldSubgridWord(result);
                 if (property.Equals("font", StringComparison.OrdinalIgnoreCase))
                 {
                     result = CanonicalizeFontShorthand(result);
@@ -2344,6 +2358,18 @@ public static class CssValueText
             var bare = word.EndsWith(",", StringComparison.Ordinal) ? word[..^1] : word;
             if (IsBareIdentifier(bare)) words[i] = bare.ToLowerInvariant() + (word.Length - bare.Length == 1 ? "," : "");
         }
+        return string.Join(" ", words);
+    }
+
+    /// <summary>'subgrid' is a keyword of a grid axis and CSS keywords are ASCII case-insensitive,
+    /// so a reference engine prints its one spelling whichever way the page wrote it — while the
+    /// line names in the brackets beside it are the page's own and keep their case (measured:
+    /// 'grid-template-columns: SUBGRID' reads 'subgrid' and 'subgrid [a]' reads itself back).</summary>
+    private static string FoldSubgridWord(string text)
+    {
+        var words = SplitTopLevelWords(text);
+        for (int i = 0; i < words.Count; i++)
+            if (words[i].Equals("subgrid", StringComparison.OrdinalIgnoreCase)) words[i] = "subgrid";
         return string.Join(" ", words);
     }
 

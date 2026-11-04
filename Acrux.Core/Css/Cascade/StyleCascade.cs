@@ -355,8 +355,9 @@ public class CascadeResolverState
         // engine has no anchor object yet, so a call without a fallback is always the missing-anchor
         // case. Like the var() test above it reads the text as written: the evaluator below has
         // already turned the unreadable call into the number 0 and the sum into a length.
-        if (CssValueGrammar.HasUnresolvableAnchorSize(text)
-            && CssValueGrammar.PropertyTakesAnchorSize(name)) return;
+        if (CssValueGrammar.HasUnresolvableAnchorCall(text)
+            && (CssValueGrammar.PropertyTakesAnchorSize(name)
+                || CssValueGrammar.PropertyTakesAnchorSide(name))) return;
         // 'content' keeps its counters as written; the layout that owns the counter scope turns
         // them into text (CssFunctionEvaluator.EvaluateForContent says why).
         // An attr() whose fallback is not a string is no content at all: the declaration stays in

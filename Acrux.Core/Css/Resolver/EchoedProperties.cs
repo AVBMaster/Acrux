@@ -191,7 +191,7 @@ public static class EchoedProperties
             new() { Name = "position-area", Initial = "none",
                 Normalize = NormalizePositionArea, ComputedText = PositionAreaComputed },
             new() { Name = "position-visibility", Initial = "anchors-visible",
-                Normalize = Single("anchors-visible") },
+                Normalize = NormalizePositionVisibility },
             new() { Name = "position-try", Initial = "none",
                 Normalize = NormalizePositionTry, ComputedText = PositionTryComputed },
 
@@ -235,6 +235,30 @@ public static class EchoedProperties
             // together are no value (all measured, both surfaces).
             new() { Name = "anchor-name", Initial = "none", Normalize = NormalizeTimelineName },
             new() { Name = "anchor-scope", Initial = "none", Normalize = NormalizeAnchorScope },
+            // CSS Rounding 1 §3.1, §4: the shape of a corner, said once for all four or once per
+            // corner, and printed back in the shortest form that says the same four — 'round round
+            // round round' is 'round', 'round square round square' is 'round square', while
+            // 'round square square round' needs all four (all measured). 'uncurved' and 'none' are
+            // words this engine does not take and a fifth shape is no value (measured). The
+            // longhands say one corner and take exactly one shape.
+            new() { Name = "corner-shape", Initial = "round",
+                Normalize = NormalizeCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-top-left-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-top-right-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-bottom-right-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-bottom-left-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-start-start-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-start-end-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-end-start-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
+            new() { Name = "corner-end-end-shape", Initial = "round",
+                Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
             new() { Name = "position-try-order", Initial = "normal",
                 Normalize = Single("normal", "most-width", "most-height",
                     "most-inline-size", "most-block-size") },
@@ -605,6 +629,141 @@ public static class EchoedProperties
     /// Positioning §3.3); 'position-anchor' is 'auto', 'none' or one dashed name (§4.3), and the
     /// engine's initial for it is 'none' — a box that declares nothing answers 'none', not 'auto'
     /// (measured).</summary>
+    /// <summary>CSS Rounding 1 §4: the shorthand's one to four shapes, expanded to the four corners
+    /// in the order the grammar names them (top left, top right, bottom right, bottom left) and
+    /// printed back in the shortest form that still says them (measured, all four shapes of the
+    /// table above).</summary>
+    private static string? NormalizeCornerShape(string value)
+    {
+        var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ' ');
+        if (words.Count is < 1 or > 4) return null;
+        var said = new List<string>();
+        foreach (var word in words)
+        {
+            if (CornerShapeText(word) is not { } shape) return null;
+            said.Add(shape);
+        }
+        return CollapseCorners(said);
+    }
+
+    /// <summary>The four corners the list says, printed in the shortest form that still says them:
+    /// the bottom left repeats the top right and the bottom right repeats the top left whenever the
+    /// page left them out, so a shape said for every corner is said once (measured: 'round round
+    /// round round' reads 'round' and 'round square round square' reads 'round square', while
+    /// 'round square square round' needs all four).</summary>
+    private static string CollapseCorners(List<string> said)
+    {
+        var corners = said.Count switch
+        {
+            1 => new[] { said[0], said[0], said[0], said[0] },
+            2 => new[] { said[0], said[1], said[0], said[1] },
+            3 => new[] { said[0], said[1], said[2], said[1] },
+            _ => new[] { said[0], said[1], said[2], said[3] },
+        };
+        if (corners[3] == corners[1]) corners = [corners[0], corners[1], corners[2]];
+        if (corners.Length == 3 && corners[2] == corners[0]) corners = [corners[0], corners[1]];
+        if (corners.Length == 2 && corners[1] == corners[0]) corners = [corners[0]];
+        return string.Join(" ", corners);
+    }
+
+    /// <summary>One corner's shape, and only one (measured: 'corner-top-left-shape: scoop' stands
+    /// while a second word on the longhand is nobody's corner).</summary>
+    private static string? NormalizeOneCornerShape(string value)
+    {
+        var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ' ');
+        return words.Count == 1 ? CornerShapeText(words[0]) : null;
+    }
+
+    /// <summary>One shape as the engine prints it: one of the five words, or 'superellipse()' with
+    /// the exponent folded to the number or expression it means (measured: 'SUPERELLIPSE(2)' reads
+    /// 'superellipse(2)', 'superellipse(1e0)' reads 'superellipse(1)' and
+    /// 'superellipse(calc(1 + 1))' reads 'superellipse(calc(2))'; 'superellipse()' and
+    /// 'superellipse(none)' are no shape).</summary>
+    private static string? CornerShapeText(string word)
+    {
+        var lower = word.ToLowerInvariant();
+        if (lower is "round" or "square" or "scoop" or "notch" or "bevel") return lower;
+        int open = word.IndexOf('(');
+        if (open <= 0 || !word.EndsWith(")", StringComparison.Ordinal)
+            || !word[..open].Equals("superellipse", StringComparison.OrdinalIgnoreCase)) return null;
+        var inner = word[(open + 1)..^1].Trim();
+        if (inner.Length == 0) return null;
+        if (inner is "infinity" or "-infinity" or "+infinity" or "nan")
+            return "superellipse(" + (inner[0] == '+' ? inner[1..] : inner) + ")";
+        if (double.TryParse(inner, NumberStyles.Float, CultureInfo.InvariantCulture, out var exponent))
+            return "superellipse(" + Acrux.Core.Css.CssMathValue.Number(exponent) + ")";
+        return Acrux.Core.Css.CssFunctionEvaluator.IsMathFunctionText(inner)
+            ? "superellipse(" + Acrux.Core.Css.CssMathValue.Fold(inner) + ")" : null;
+    }
+
+    /// <summary>The shape a computed value says for a superellipse exponent: the five words the
+    /// grammar has for the shapes it can name exactly. CSS Rounding 1 §3.1 makes exponent 1 the
+    /// circle, 0 the bevel, an infinite exponent the square and its negative the notch, and the
+    /// engine's own word for the exponent 2 the reference engine prints is 'squircle' (all
+    /// measured); any other exponent is printed as the function that says it.</summary>
+    private static string CornerShapeComputedWord(string shape)
+    {
+        if (!shape.StartsWith("superellipse(", StringComparison.Ordinal)) return shape;
+        var inner = shape["superellipse(".Length..^1];
+        if (inner.Equals("calc(2)", StringComparison.Ordinal)) return "squircle";
+        if (!double.TryParse(inner, NumberStyles.Float, CultureInfo.InvariantCulture, out var exponent))
+            return shape;
+        return exponent switch
+        {
+            1 => "round",
+            0 => "bevel",
+            2 => "squircle",
+            double.PositiveInfinity => "square",
+            double.NegativeInfinity => "notch",
+            _ => shape,
+        };
+    }
+
+    /// <summary>The computed value of a corner shape: the same shapes the page wrote, with the
+    /// exponents that name a known shape said by their own word (measured: 'corner-shape:
+    /// superellipse(2)' computes 'squircle', 'superellipse(1)' computes 'round' and
+    /// 'superellipse(-infinity)' computes 'notch'), and the four corners collapsed again afterwards,
+    /// because the mapping can make two shapes that were written apart turn out to be one.</summary>
+    private static string CornerShapeComputed(string canonical,
+        Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var said = new List<string>();
+        foreach (var word in Acrux.Core.Css.MaskLayerParser.SplitTopLevel(canonical, ' '))
+            said.Add(CornerShapeComputedWord(word));
+        return CollapseCorners(said) ?? canonical;
+    }
+
+    /// <summary>CSS Anchor Positioning 1 §7: 'position-visibility' says one or both of its two
+    /// words, printed in the order the grammar names them, and a word said twice is no value
+    /// (measured: 'no-overflow anchors-visible' reads 'anchors-visible no-overflow', while 'auto' —
+    /// the word an earlier draft used — and 'anchors-visible no-overflow auto' are both refused).
+    /// </summary>
+    private static string? NormalizePositionVisibility(string value)
+    {
+        var words = Words(value);
+        if (words.Length is < 1 or > 2) return null;
+        bool anchored = false, noOverflow = false;
+        foreach (var word in words)
+        {
+            if (word.Equals("anchors-visible", StringComparison.OrdinalIgnoreCase))
+            {
+                if (anchored) return null;
+                anchored = true;
+                continue;
+            }
+            if (word.Equals("no-overflow", StringComparison.OrdinalIgnoreCase))
+            {
+                if (noOverflow) return null;
+                noOverflow = true;
+                continue;
+            }
+            return null;
+        }
+        var kept = new List<string>();
+        if (anchored) kept.Add("anchors-visible");
+        if (noOverflow) kept.Add("no-overflow");
+        return string.Join(" ", kept);
+    }
     private static string? NormalizeAnchorScope(string value)
     {
         var words = Words(value);
@@ -1982,20 +2141,83 @@ public static class EchoedProperties
     {
         var trimmed = text.Trim();
         if (trimmed.Length == 0) return null;
+        var layers = new List<string>();
         foreach (var layer in trimmed.Split(','))
         {
             var one = layer.Trim();
             if (one.Length == 0) return null;
             if (one.Equals("auto", StringComparison.OrdinalIgnoreCase)
-                || one.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
-            if (IsDashedIdent(one)) continue;
+                || one.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                layers.Add(one.ToLowerInvariant());
+                continue;
+            }
+            if (IsDashedIdent(one)) { layers.Add(one); continue; }
             int open = one.IndexOf('(');
             if (open <= 0 || !one.EndsWith(")", StringComparison.Ordinal)) return null;
-            var function = one[..open].TrimEnd();
-            if (!function.Equals("scroll", StringComparison.OrdinalIgnoreCase)
-                && !function.Equals("view", StringComparison.OrdinalIgnoreCase)) return null;
+            var function = one[..open].TrimEnd().ToLowerInvariant();
+            var inner = one[(open + 1)..^1].Trim();
+            var printed = function switch
+            {
+                "scroll" => ScrollTimelineArguments(inner),
+                "view" => ViewTimelineArguments(inner),
+                _ => null,
+            };
+            if (printed == null) return null;
+            layers.Add(function + "(" + printed + ")");
         }
-        return trimmed.ToLowerInvariant();
+        return string.Join(", ", layers);
+    }
+
+    /// <summary>The arguments 'scroll()' prints. A scroller and an axis are both said in the
+    /// function's own words, and neither is printed when the page said the default it stands for:
+    /// 'nearest' is the scroller an author gets without naming one and 'block' is the axis the
+    /// grammar starts on (measured: 'scroll(nearest block)' reads 'scroll()', 'scroll(self block)'
+    /// reads 'scroll(self)', 'scroll(nearest inline)' reads 'scroll(inline)' and 'scroll(root
+    /// block)' reads 'scroll(root)'). A third word, or a second of either kind, is no argument
+    /// list.</summary>
+    private static string? ScrollTimelineArguments(string inner)
+    {
+        if (inner.Length == 0) return "";
+        string? scroller = null, axis = null;
+        foreach (var word in Words(inner))
+        {
+            var lower = word.ToLowerInvariant();
+            if (lower is "root" or "nearest" or "self")
+            {
+                if (scroller != null) return null;
+                scroller = lower;
+                continue;
+            }
+            if (lower is "block" or "inline" or "x" or "y")
+            {
+                if (axis != null) return null;
+                axis = lower;
+                continue;
+            }
+            return null;
+        }
+        var kept = new List<string>();
+        if (scroller != null && scroller != "nearest") kept.Add(scroller);
+        if (axis != null && axis != "block") kept.Add(axis);
+        return string.Join(" ", kept);
+    }
+
+    /// <summary>The insets 'view()' prints. Both default to 'auto', so a list that says nothing
+    /// but 'auto' prints as an empty pair of parentheses (measured: 'view(auto)' reads 'view()'
+    /// while 'view(10px 20px)' reads itself). A visibility word is not an inset — 'view(cover)' and
+    /// 'view(none auto)' are no value at all (both measured).</summary>
+    private static string? ViewTimelineArguments(string inner)
+    {
+        if (inner.Length == 0) return "";
+        var kept = new List<string>();
+        foreach (var word in Words(inner))
+        {
+            if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!Acrux.Core.Css.CssValueGrammar.IsLengthOrPercentage(word)) return null;
+            kept.Add(word.ToLowerInvariant());
+        }
+        return string.Join(" ", kept);
     }
 
     private static string? NormalizeViewTransitionName(string text)

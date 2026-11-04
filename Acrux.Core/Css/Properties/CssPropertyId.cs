@@ -598,6 +598,21 @@ public enum CssPropertyId
     // computed surface prints (measured: 'font-variant-alternates: historical-forms' echoes AND
     // computes itself, where an unknown name only echoes).
     FontVariantAlternates,
+    // CSS Rounding 1 §3, §4. The reference engine declares 'corner-shape' and reads a shape per
+    // corner, in the physical and the logical spelling of the same four corners; this engine has no
+    // shape consumer in the paint yet, so the nine names live in the echo table — and they need ids
+    // for the reason the note above gives: without one a declaration is dropped before it can reach
+    // the text the computed surface prints (measured: 'corner-shape: scoop' echoes AND computes
+    // 'scoop', where an unknown name only echoes).
+    CornerShape,
+    CornerTopLeftShape,
+    CornerTopRightShape,
+    CornerBottomRightShape,
+    CornerBottomLeftShape,
+    CornerStartStartShape,
+    CornerStartEndShape,
+    CornerEndStartShape,
+    CornerEndEndShape,
     MaxProperties
 }
 

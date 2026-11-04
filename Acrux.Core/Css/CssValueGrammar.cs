@@ -244,7 +244,62 @@ public static class CssValueGrammar
         // here, against the property the declaration names (measured property by property).
         if (value.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) >= 0
             && !PropertyTakesAnchorSize(id)) return false;
+        if (IndexOfAnchorCall(value, 0) >= 0 && !PropertyTakesAnchorSide(id)) return false;
+        // calc-size() is a size, so it belongs to the properties whose whole value is one, and its
+        // own two arguments are read here rather than waved through with the generic length
+        // grammar (measured property by property: 'width' takes it, 'line-height' does not). The
+        // type checker is not asked about such a value: 'size' is a term only inside calc-size(),
+        // and the argument reader above has already read the expression it carries.
+        if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (!PropertyTakesCalcSize(id)) return false;
+            int at = IndexOfCalcSize(value, 0);
+            while (at >= 0)
+            {
+                int open = value.IndexOf('(', at);
+                int close = MatchingClose(value, open);
+                if (close < 0) return false;
+                if (!IsCalcSizeCall(value[at..(close + 1)], out _)) return false;
+                at = IndexOfCalcSize(value, close + 1);
+            }
+            return true;
+        }
         return !MathTypeRejects(propertyName, value);
+    }
+
+    /// <summary>The properties CSS Anchor Positioning 1 §5.2 lists as reading an anchor's edge:
+    /// the physical and the logical insets. A margin, a padding or a size does not take
+    /// 'anchor()' (measured: 'top: anchor(--a bottom)' and 'inset-block-start: anchor(--a start)'
+    /// are values while 'margin-top: anchor(--a top)' and 'padding-left: anchor(--a left)' are not).
+    /// </summary>
+    internal static bool PropertyTakesAnchorSide(CssPropertyId id) => id switch
+    {
+        CssPropertyId.Top or CssPropertyId.Right or CssPropertyId.Bottom or CssPropertyId.Left
+            or CssPropertyId.Inset or CssPropertyId.InsetBlock or CssPropertyId.InsetInline
+            or CssPropertyId.InsetBlockStart or CssPropertyId.InsetBlockEnd
+            or CssPropertyId.InsetInlineStart or CssPropertyId.InsetInlineEnd
+            => true,
+        _ => false,
+    };
+
+    internal static bool PropertyTakesAnchorSide(string propertyName) =>
+        PropertyTakesAnchorSide(CssPropertyIdExtensions.BehaviourId(
+            CssPropertyIdExtensions.FromString(propertyName)));
+
+    /// <summary>The start of the next bare 'anchor(' call at or after 'from', or -1. The name is
+    /// read as one identifier, so 'anchor-size(' never answers here.</summary>
+    private static int IndexOfAnchorCall(string text, int from)
+    {
+        for (int i = from; i + 7 <= text.Length; i++)
+        {
+            if (text[i] != 'a' && text[i] != 'A') continue;
+            if (i > 0 && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] is '-' or '_')) continue;
+            if (string.Compare(text, i, "anchor", 0, 6, StringComparison.OrdinalIgnoreCase) != 0)
+                continue;
+            if (text[i + 6] != '(') continue;
+            return i;
+        }
+        return -1;
     }
 
     /// <summary>Whether the value is (or holds) a colour written in the relative form, whose
@@ -2466,8 +2521,28 @@ public static class CssValueGrammar
         if (trimmed.Length == 0) return false;
         if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
             || trimmed.Equals("subgrid", StringComparison.OrdinalIgnoreCase)) return true;
-        if (trimmed.StartsWith("subgrid", StringComparison.OrdinalIgnoreCase)) return false;
+        if (trimmed.StartsWith("subgrid", StringComparison.OrdinalIgnoreCase))
+        {
+            // CSS Grid 2 §4.2: a subgrid may still name its lines, and it names them only inside
+            // brackets — 'subgrid [a] [b]' is a subgrid carrying two names, while 'subgrid a'
+            // carries none and is no value (both measured).
+            var rest = trimmed["subgrid".Length..].Trim();
+            return rest.Length == 0 || IsLineNameGroup(rest);
+        }
         return HasATrackAndOnlyTracks(trimmed);
+    }
+
+    /// <summary>A run of bracketed line-name groups and nothing else: '[a] [b c]', which is what a
+    /// subgrid writes between its keyword and the end of the axis.</summary>
+    private static bool IsLineNameGroup(string text)
+    {
+        var items = SplitGridItems(text);
+        if (items.Count == 0) return false;
+        foreach (var item in items)
+        {
+            if (item.Length < 2 || item[0] != '[' || item[^1] != ']') return false;
+        }
+        return true;
     }
 
     /// <summary>The track list every grid axis shares: bracketed line names, at least one track,
@@ -4021,6 +4096,112 @@ public static class CssValueGrammar
         && !IsAnchorSizeKeyword(text)
         && !(text.Length > 2 && text.StartsWith("--", StringComparison.Ordinal));
 
+    /// <summary>CSS Values 4 §11.1: 'calc-size( [ auto | stretch | &lt;length-percentage&gt; ] ,
+    /// &lt;calc-sum&gt; )' asks what the property's size would be worth once the expression has read
+    /// it, and the expression says that size with the word 'size'. The reference engine takes
+    /// 'auto', 'stretch' and a plain length in front of the comma, and refuses the
+    /// '&lt;length-percentage&gt;' type notation, 'fit-content(20px)' and a call with one argument
+    /// written to it (all measured); behind the comma a minus written in front of 'size' is no
+    /// expression either ('calc-size(auto, -size)' is refused, measured).</summary>
+    internal static bool IsCalcSizeCall(string token, out string? canonical)
+    {
+        canonical = null;
+        if (!TrySplitCalcSize(token, out var head, out var expression)) return false;
+        canonical = "calc-size(" + head + ", " + expression + ")";
+        return true;
+    }
+
+    /// <summary>The two halves of a 'calc-size()' call: the size it is asked about and the
+    /// expression that reads it, both as the grammar prints them. False for a text that is not such
+    /// a call, which is the same question the grammar asks.</summary>
+    internal static bool TrySplitCalcSize(string token, out string head, out string expression)
+    {
+        head = ""; expression = "";
+        int open = token.IndexOf('(');
+        if (open <= 0 || !token.EndsWith(")", StringComparison.Ordinal)
+            || !token[..open].Equals("calc-size", StringComparison.OrdinalIgnoreCase)) return false;
+        var parts = SplitTopLevel(token[(open + 1)..^1]);
+        if (parts.Count != 2) return false;
+        head = parts[0].Trim();
+        expression = parts[1].Trim();
+        if (head.Length == 0 || expression.Length == 0) return false;
+        if (!head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+            && !(SplitComponents(head).Count == 1 && IsLengthOrPercentage(head))) return false;
+        if ((expression.StartsWith("-", StringComparison.Ordinal)
+                || expression.StartsWith("+", StringComparison.Ordinal))
+            && expression[1..].TrimStart().StartsWith("size", StringComparison.OrdinalIgnoreCase))
+            return false;
+        head = head.ToLowerInvariant();
+        return true;
+    }
+
+    /// <summary>The properties whose whole value is a size, which are the ones 'calc-size()' is
+    /// written for (measured: 'width', 'height' and 'min-height' take it and 'line-height' does
+    /// not).</summary>
+    internal static bool PropertyTakesCalcSize(CssPropertyId id) => id switch
+    {
+        CssPropertyId.Width or CssPropertyId.Height
+            or CssPropertyId.InlineSize or CssPropertyId.BlockSize
+            or CssPropertyId.MinWidth or CssPropertyId.MinHeight
+            or CssPropertyId.MinInlineSize or CssPropertyId.MinBlockSize
+            or CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
+            or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize
+            => true,
+        _ => false,
+    };
+
+    internal static bool PropertyTakesCalcSize(string propertyName) =>
+        PropertyTakesCalcSize(CssPropertyIdExtensions.BehaviourId(
+            CssPropertyIdExtensions.FromString(propertyName)));
+
+    /// <summary>The start of the next 'calc-size(' call at or after 'from', or -1.</summary>
+    private static int IndexOfCalcSize(string text, int from)
+    {
+        for (int i = from; i + 10 <= text.Length; i++)
+        {
+            if (text[i] != 'c' && text[i] != 'C') continue;
+            if (i > 0 && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] is '-' or '_')) continue;
+            if (string.Compare(text, i, "calc-size", 0, 9, StringComparison.OrdinalIgnoreCase) != 0)
+                continue;
+            if (text[i + 9] != '(') continue;
+            return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Every 'calc-size()' in a value text, with its expression sorted the way CSS Values 4
+    /// §10.13 sorts a sum that carries 'size' as one of its terms (measured: 'calc-size(auto,
+    /// size + 10px)' reads 'calc-size(auto, 10px + size)', 'calc-size(auto, size * 2)' reads
+    /// 'calc-size(auto, 2 * size)' and 'calc-size( auto , size + 10px )' loses the spaces the page
+    /// put around its first argument). Null when one of them is no call at all.</summary>
+    internal static string? CanonicalCalcSizeCalls(string text)
+    {
+        if (text.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) < 0) return text;
+        var builder = new System.Text.StringBuilder(text.Length);
+        int i = 0;
+        while (i < text.Length)
+        {
+            int at = IndexOfCalcSize(text, i);
+            if (at < 0)
+            {
+                builder.Append(text, i, text.Length - i);
+                break;
+            }
+            int open = text.IndexOf('(', at);
+            int close = MatchingClose(text, open);
+            if (close < 0) return null;
+            if (!IsCalcSizeCall(text[at..(close + 1)], out var canonical)) return null;
+            var parts = SplitTopLevel(text[(open + 1)..close]);
+            var sorted = Acrux.Core.Css.CssMathValue.SortSizeSum(parts[1].Trim());
+            builder.Append(text, i, at - i);
+            builder.Append(sorted == null ? canonical
+                : "calc-size(" + parts[0].Trim().ToLowerInvariant() + ", " + sorted + ")");
+            i = close + 1;
+        }
+        return builder.ToString();
+    }
+
     /// <summary>True when a value reads an anchor's size and the page gave nothing to stand in for
     /// it. CSS Anchor Positioning 1 §5.1.1 makes that declaration invalid at computed-value time,
     /// and this engine has no anchor object to ask, so the missing-anchor branch is the only one
@@ -4042,27 +4223,72 @@ public static class CssValueGrammar
         }
     }
 
+    /// <summary>True when a value reads an anchor's <em>edge</em> and the page wrote no fallback
+    /// behind the comma. The rule is the size function's own (§5.1.1) applied to 'anchor()': with
+    /// nothing to stand in, the declaration is invalid at computed-value time (measured: 'top:
+    /// calc(anchor(--a top) + 10px)' computes 'auto', the value an inset with no declaration has).
+    /// </summary>
+    private static bool HasUnresolvableAnchorSide(string value)
+    {
+        int i = 0;
+        while (true)
+        {
+            int at = IndexOfAnchorCall(value, i);
+            if (at < 0) return false;
+            int open = value.IndexOf('(', at);
+            int close = MatchingClose(value, open);
+            if (close < 0) return true;
+            var parts = SplitTopLevel(value[(open + 1)..close]);
+            if (parts.Count < 2 || parts[1].Trim().Length == 0) return true;
+            i = close + 1;
+        }
+    }
+
+    /// <summary>Whether the value reads an anchor at all — its edge or its size — and has nothing
+    /// to read it from. The two functions share the fallback rule and the cascade's answer.</summary>
+    internal static bool HasUnresolvableAnchorCall(string value) =>
+        value.IndexOf("anchor", StringComparison.OrdinalIgnoreCase) >= 0
+        && (HasUnresolvableAnchorSize(value) || HasUnresolvableAnchorSide(value));
+
     /// <summary>The value text with every <c>anchor-size()</c> that carries a fallback standing in
     /// for the size it could not read. The fallback is put in as the page wrote it, so a percentage
     /// is still a share of the box the layout owns and a font unit is still priced by the element.</summary>
+    /// <summary>The value text with every anchor call that carries a fallback standing in for the
+    /// edge or the size it could not read. The fallback is put in as the page wrote it, so a
+    /// percentage is still a share of the box the layout owns and a font unit is still priced by the
+    /// element. Both functions take it: 'anchor-size(width, 10px)' and 'anchor(--a top, 10px)'.
+    /// </summary>
     internal static string SubstituteAnchorSizeFallbacks(string text)
     {
-        if (text.IndexOf("anchor-size(", StringComparison.OrdinalIgnoreCase) < 0) return text;
+        if (text.IndexOf("anchor", StringComparison.OrdinalIgnoreCase) < 0) return text;
         var builder = new System.Text.StringBuilder(text.Length);
         int i = 0;
         while (i < text.Length)
         {
-            int at = IndexOfAnchorSize(text, i);
+            int sizeAt = IndexOfAnchorSize(text, i);
+            int sideAt = IndexOfAnchorCall(text, i);
+            int at = sizeAt < 0 ? sideAt : sideAt < 0 ? sizeAt : Math.Min(sizeAt, sideAt);
             if (at < 0)
             {
                 builder.Append(text, i, text.Length - i);
                 break;
             }
-            int close = MatchingClose(text, text.IndexOf('(', at));
+            int open = text.IndexOf('(', at);
+            int close = MatchingClose(text, open);
             if (close < 0) return text;
+            var token = text[at..(close + 1)];
+            string fallback = "";
+            if (text[at..open].Equals("anchor-size", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TrySplitAnchorSize(token, out _, out var sizeFallback)) fallback = sizeFallback;
+            }
+            else
+            {
+                var parts = SplitTopLevel(text[(open + 1)..close]);
+                if (parts.Count == 2) fallback = parts[1].Trim();
+            }
             builder.Append(text, i, at - i);
-            builder.Append(TrySplitAnchorSize(text[at..(close + 1)], out _, out var fallback)
-                && fallback.Length > 0 ? fallback : text[at..(close + 1)]);
+            builder.Append(fallback.Length > 0 ? fallback : token);
             i = close + 1;
         }
         return builder.ToString();

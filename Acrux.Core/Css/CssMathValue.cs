@@ -119,7 +119,7 @@ public static class CssMathValue
 
     // ------------------------------------------------------------------ reducing one function
 
-    private static string Reduce(string name, string inner)
+    private static string Reduce(string name, string inner, bool sizeIsTerm = false)
     {
         // A term whose value belongs to a custom property, an attribute or the environment is not
         // the engine's to combine, so the whole function is printed as written.
@@ -134,7 +134,7 @@ public static class CssMathValue
             // does fold keeps its wrapper — 'calc(min(1px, 2px))' is 'calc(1px)', not '1px'
             // (measured, both).
             if (IsSingleCall(inner)) return inner;
-            if (TryReadSum(inner, out var sum) && sum!.Printable)
+            if (TryReadSum(inner, out var sum, sizeIsTerm) && sum!.Printable)
             {
                 var printed = sum.Print();
                 // A calc() that says one function term and nothing else after its arithmetic is that
@@ -719,6 +719,12 @@ public static class CssMathValue
                 // is nothing at all (measured, both).
                 return Acrux.Core.Css.CssValueGrammar.IsAnchorSizeCall("anchor-size(" + argument + ")", out _)
                     ? "length" : TypedBad;
+            case "anchor":
+                // An edge of an anchor box is a length too, so the sum it stands in sorts and
+                // prices like any other length: 'calc(anchor(--a top) + 10px)' reads back
+                // 'calc(10px + anchor(--a top))' (measured).
+                return Acrux.Core.Css.CssValueGrammar.IsAnchorCall("anchor(" + argument + ")")
+                    ? "length" : TypedBad;
             case "min":
             case "max":
             case "hypot":
@@ -985,12 +991,22 @@ public static class CssMathValue
 
     // ------------------------------------------------------------------ reading an expression
 
-    private static bool TryReadSum(string text, out Sum? sum)
+    private static bool TryReadSum(string text, out Sum? sum, bool sizeIsTerm = false)
     {
-        var reader = new Reader(text);
+        var reader = new Reader(text, sizeIsTerm);
         sum = reader.ReadSum();
         return sum is not null && !sum.Broken && !reader.HasRest;
     }
+
+    /// <summary>The sum a <c>calc-size()</c> carries, sorted the way CSS Values 4 §10.13 sorts one
+    /// with <c>size</c> standing as an opaque term of its own (measured: 'calc-size(auto,
+    /// size + 10px)' reads 'calc-size(auto, 10px + size)', 'calc-size(auto, size * 2)' reads
+    /// 'calc-size(auto, 2 * size)', 'calc-size(auto, size / 2)' reads 'calc-size(auto, 0.5 * size)'
+    /// and a nested 'calc(size + 1px)' merges into the sum it was written inside). Null when the
+    /// expression says something the reader cannot take, which leaves the page's own text standing.
+    /// </summary>
+    public static string? SortSizeSum(string text)
+        => TryReadSum(text, out var sum, sizeIsTerm: true) && sum!.Printable ? sum.Print() : null;
 
     /// <summary>The arguments of a function, split on the commas that are not inside another
     /// function or a quote.</summary>
@@ -1071,8 +1087,16 @@ public static class CssMathValue
     {
         private readonly string _text;
         private int _i;
+        // Whether 'size' is a term of its own here. It is one only inside a calc-size(), where it
+        // stands for the size the property would have had without the expression; written in a plain
+        // calc() it is nobody's value, and the reader refuses the expression.
+        private readonly bool _sizeIsTerm;
 
-        public Reader(string text) { _text = text; }
+        public Reader(string text, bool sizeIsTerm = false)
+        {
+            _text = text;
+            _sizeIsTerm = sizeIsTerm;
+        }
 
         public bool HasRest { get { SkipSpace(); return _i < _text.Length; } }
 
@@ -1215,8 +1239,13 @@ public static class CssMathValue
                     // carry the same opaque term the sum gives an anchor-size(), and the sort puts
                     // the number in front of them (CSS Color 5 §5.2, CSS Values 4 §10.13; measured:
                     // 'hsl(from red calc(h + 90) s l)' reads 'calc(90 + h)').
-                    return ChannelKeyword.Contains(word.ToLowerInvariant())
-                        ? Primary.OfFunction(word.ToLowerInvariant()) : null;
+                    var lower = word.ToLowerInvariant();
+                    if (ChannelKeyword.Contains(lower)) return Primary.OfFunction(lower);
+                    // 'size' is the same kind of term inside a calc-size(): it names the size the
+                    // property would have had, which the layout knows and this reader does not
+                    // (CSS Values 4 §11.1, measured through the sorted echoes).
+                    if (_sizeIsTerm && lower == "size") return Primary.OfFunction(lower);
+                    return null;
                 }
                 int close = MatchingParen(_text, _i);
                 if (close < 0) return null;
@@ -1229,17 +1258,28 @@ public static class CssMathValue
                     // and layout interleaving — so it keeps its own text and stands in the sum as a
                     // term of its own (measured: 'calc(anchor-size(width) + 10px)' reads
                     // 'calc(10px + anchor-size(width))', and a call whose arguments the grammar
-                    // refuses takes the whole declaration down with it).
-                    if (!word.Equals("anchor-size", StringComparison.OrdinalIgnoreCase)) return null;
-                    if (!Acrux.Core.Css.CssValueGrammar.IsAnchorSizeCall(
-                            word + "(" + argument + ")", out var anchor)) return null;
-                    return Primary.OfFunction(anchor!);
+                    // refuses takes the whole declaration down with it). An anchor edge, read the
+                    // same way, sorts the same way: 'calc(anchor(--a top) + 10px)' reads
+                    // 'calc(10px + anchor(--a top))' (measured).
+                    if (word.Equals("anchor-size", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!Acrux.Core.Css.CssValueGrammar.IsAnchorSizeCall(
+                                word + "(" + argument + ")", out var anchor)) return null;
+                        return Primary.OfFunction(anchor!);
+                    }
+                    if (word.Equals("anchor", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!Acrux.Core.Css.CssValueGrammar.IsAnchorCall(
+                                word + "(" + argument + ")")) return null;
+                        return Primary.OfFunction("anchor(" + argument + ")");
+                    }
+                    return null;
                 }
-                var reduced = Reduce(word, argument);
+                var reduced = Reduce(word, argument, _sizeIsTerm);
                 // What comes back is either the function still standing, which the sum carries as
                 // a term of its own, or a calc() of it, whose terms the sum can merge with its own.
                 if (reduced.StartsWith("calc(", StringComparison.Ordinal) && reduced.Length > 6
-                    && TryReadSum(reduced[5..^1], out var calcSum))
+                    && TryReadSum(reduced[5..^1], out var calcSum, _sizeIsTerm))
                     return Primary.OfSum(calcSum!);
                 return Primary.OfFunction(reduced);
             }
