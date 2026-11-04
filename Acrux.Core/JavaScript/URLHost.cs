@@ -1,15 +1,16 @@
 using Acrux.Core.Dom;
 
 using System.Collections.Generic;
+using System.Text;
 
 namespace Acrux.Core.JavaScript;
 
-/// <summary>The URL interface (URL §2.2): the parts read back out of the parsed address, each one
+/// <summary>The URL interface (URL §2.2, §7): the parts read back out of the parsed address, each one
 /// writable through the whole it belongs to. The host declares its interface so the page sees a URL and
 /// not the fields behind it (measured: '[object URL]' with no own keys).</summary>
 public class URLHost : IDomPrototypeHost
 {
-    private readonly Uri _uri;
+    private WhatwgUrl _url;
     private URLSearchParamsHost? _searchParams;
 
     /// <summary>URL §2.2, §4.1: the constructor IS the parser, and a parse that fails is a TypeError —
@@ -18,84 +19,101 @@ public class URLHost : IDomPrototypeHost
     /// base URL' for a base that is not itself absolute).</summary>
     public URLHost(string url, string? baseUrl = null)
     {
-        _uri = Parse(url ?? "", baseUrl);
-    }
-
-    private static Uri Parse(string text, string? baseUrl)
-    {
-        if (TryAbsolute(text, out var made)) return made!;
-        if (string.IsNullOrEmpty(baseUrl)) throw Invalid("Failed to construct 'URL': Invalid URL.");
-        if (!TryAbsolute(baseUrl, out var baseUri))
-            throw Invalid("Failed to construct 'URL': Invalid base URL.");
-        try
+        var made = WhatwgUrl.Parse(url ?? "", string.IsNullOrEmpty(baseUrl) ? null : baseUrl, out var baseBad);
+        if (made == null)
         {
-            return new Uri(baseUri, text);
+            throw Invalid(baseBad
+                ? "Failed to construct 'URL': Invalid base URL."
+                : "Failed to construct 'URL': Invalid URL.");
         }
-        catch (UriFormatException)
-        {
-            throw Invalid("Failed to construct 'URL': Invalid URL.");
-        }
+        _url = made;
     }
 
     private static DOMException Invalid(string message) => new(message, "TypeError");
 
-    private static bool TryAbsolute(string text, out Uri? uri)
+    public string href => _url.Href();
+
+    /// <summary>URL §2.6, §6.5: only the schemes that can name an origin do — a file, data or about
+    /// address has an opaque one, and an opaque origin is serialised as the string 'null'.</summary>
+    public string origin => _url.Origin();
+
+    public string protocol
     {
-        uri = null;
-        if (text.Length == 0) return false;
-        // A url is absolute only when it opens with a scheme: a platform that reads 'nope' as a file
-        // path would otherwise accept what the URL parser calls a relative reference (§4.1).
-        if (!HasSchemePrefix(text)) return false;
-        if (!Uri.TryCreate(text, UriKind.Absolute, out var made)) return false;
-        // A hierarchical scheme with nothing after the slashes ('http://') is a failure too.
-        if (string.IsNullOrEmpty(made!.Host) && !AllowsEmptyHost(made.Scheme)) return false;
-        uri = made;
-        return true;
+        get => _url.Scheme + ":";
+        set => _url.SetProtocol(value);
     }
 
-    private static bool HasSchemePrefix(string text)
+    public string username
     {
-        var i = 0;
-        if (i < text.Length && !(char.IsAsciiLetter(text[i]))) return false;
-        while (i < text.Length && (char.IsAsciiLetterOrDigit(text[i]) || text[i] is '+' or '-' or '.')) i++;
-        return i < text.Length && text[i] == ':';
+        get => _url.Username;
+        set => _url.SetUsername(value);
     }
 
-    private static bool AllowsEmptyHost(string scheme) =>
-        scheme is "file" or "about" or "data" or "blob" or "javascript" or "mailto" or "urn" or "chrome";
-
-    public string href => _uri.ToString();
-
-    /// <summary>URL §2.6: the origin is the scheme, the host AND the port when the port is not the one
-    /// the scheme already implies (measured: 'https://example.org:8443/p' has the origin
-    /// 'https://example.org:8443', and a file document's is 'file://').</summary>
-    public string origin
+    public string password
     {
-        get
+        get => _url.Password;
+        set => _url.SetPassword(value);
+    }
+
+    /// <summary>§7.4: the host and the port the url carries, the port left out when the scheme already
+    /// implies it.</summary>
+    public string host
+    {
+        get => _url.Host + (_url.Port != null ? ":" + _url.Port.Value : "");
+        set => _url.SetHost(value);
+    }
+
+    /// <summary>§7.5: the host alone — brackets and all for an IPv6 address, which is how the standard
+    /// serialises one — and never the port beside it.</summary>
+    public string hostname
+    {
+        get => _url.Host;
+        set => _url.SetHostname(value);
+    }
+
+    public string port
+    {
+        get => _url.Port != null ? _url.Port.Value.ToString() : "";
+        set => _url.SetPort(value);
+    }
+
+    public string pathname
+    {
+        get => _url.Pathname();
+        set => _url.SetPathname(value);
+    }
+
+    public string search
+    {
+        get => _url.Query != null ? "?" + _url.Query : "";
+        set
         {
-            var authority = _uri.Authority;
-            return _uri.Scheme + "://" + (string.IsNullOrEmpty(authority) ? "" : authority);
+            _url.SetSearch(value);
+            _searchParams?.Reload(_url.QueryForSearchParams());
         }
     }
 
-    public string protocol => _uri.Scheme + ":";
-    public string username => _uri.UserInfo.Split(':').FirstOrDefault() ?? "";
-    public string password => _uri.UserInfo.Split(':').ElementAtOrDefault(1) ?? "";
-    public string host => _uri.Host + (_uri.IsDefaultPort ? "" : ":" + _uri.Port);
-    public string hostname => _uri.Host;
-    public string port => _uri.IsDefaultPort ? "" : _uri.Port.ToString();
-    public string pathname => _uri.AbsolutePath;
-    public string search => _uri.Query;
-    public string hash => _uri.Fragment;
+    public string hash
+    {
+        get => _url.Fragment != null ? "#" + _url.Fragment : "";
+        set => _url.SetHash(value);
+    }
 
+    /// <summary>URL §2.7: the params view is the query and not a copy of it — a pair appended through
+    /// it is in the address the page reads back, and a query written over the whole is what the view
+    /// answers afterwards.</summary>
     public URLSearchParamsHost searchParams
     {
         get
         {
-            _searchParams ??= new URLSearchParamsHost(_uri.Query);
+            if (_searchParams == null)
+                _searchParams = new URLSearchParamsHost(_url.QueryForSearchParams(), this);
             return _searchParams;
         }
     }
+
+    /// <summary>The write the params view makes back into the address it belongs to (§7.8).</summary>
+    internal void WriteQuery(string serialized) => _url.SetQueryFromSearchParams(serialized);
 
     /// <summary>URL §4.6: the serialisation the interface gives — every component of the address the
     /// page holds, under the names the interface reads them by.</summary>
@@ -118,92 +136,123 @@ public class URLHost : IDomPrototypeHost
     public static URLHost Create(string url, string? baseUrl = null) => new URLHost(url, baseUrl);
 }
 
-/// <summary>The query of a URL, read and written as a list of name-value pairs (URL §4). The list is
-/// the interface the page walks, so it declares itself as one (measured: '[object URLSearchParams]'
-/// with its members on the prototype and no own keys of its own).</summary>
+/// <summary>The query of a URL, read and written as a list of name-value pairs (URL §4, §7.1). The
+/// list is the interface the page walks, so it declares itself as one (measured: '[object
+/// URLSearchParams]' with its members on the prototype and no own keys of its own).</summary>
 public class URLSearchParamsHost : IDomPrototypeHost
 {
     public string __domType => "URLSearchParams";
     public string[] __domTypeChain => new[] { "URLSearchParams" };
-    private readonly Dictionary<string, List<string>> _params = new();
+    private readonly List<KeyValuePair<string, string>> _pairs = new();
+    private readonly URLHost? _owner;
 
-    public URLSearchParamsHost(string? queryString)
+    public URLSearchParamsHost(string? queryString, URLHost? owner = null)
     {
-        if (string.IsNullOrEmpty(queryString)) return;
-        
-        if (queryString.StartsWith("?"))
-            queryString = queryString[1..];
+        _owner = owner;
+        Parse(queryString);
+    }
 
-        foreach (var pair in queryString.Split('&', StringSplitOptions.RemoveEmptyEntries))
+    /// <summary>§5.3, the form-urlencoded parser: the pairs divided by ampersands, each name and value
+    /// percent-decoded with the plus already read as a space, and a pair without an equals sign
+    /// keeping the empty string as its value.</summary>
+    private void Parse(string? queryString)
+    {
+        _pairs.Clear();
+        if (string.IsNullOrEmpty(queryString)) return;
+        var text = queryString!;
+        if (text[0] == '?') text = text[1..];
+        foreach (var pair in text.Split('&'))
         {
+            if (pair.Length == 0) continue;
             var idx = pair.IndexOf('=');
-            if (idx >= 0)
-            {
-                var key = Uri.UnescapeDataString(pair[..idx]);
-                var value = idx < pair.Length - 1 ? Uri.UnescapeDataString(pair[(idx + 1)..]) : "";
-                if (!_params.ContainsKey(key))
-                    _params[key] = new List<string>();
-                _params[key].Add(value);
-            }
+            var key = idx < 0 ? pair : pair[..idx];
+            var value = idx < 0 ? "" : pair[(idx + 1)..];
+            // The plus is a space before anything is decoded, so an escape that reads as a plus
+            // stays the character the page wrote (§5.3).
+            _pairs.Add(new KeyValuePair<string, string>(
+                WhatwgUrl.Decode(key.Replace('+', ' ')), WhatwgUrl.Decode(value.Replace('+', ' '))));
         }
     }
 
+    internal void Reload(string? queryString) => Parse(queryString);
+
+    /// <summary>Every write to the view is a write to the address that holds it (§2.7).</summary>
+    private void Flush() => _owner?.WriteQuery(toString());
+
     public string? get(string name)
     {
-        return _params.TryGetValue(name, out var values) && values.Count > 0 ? values[0] : null;
+        foreach (var pair in _pairs) if (pair.Key == name) return pair.Value;
+        return null;
     }
 
     public string[] getAll(string name)
     {
-        return _params.TryGetValue(name, out var values) ? values.ToArray() : Array.Empty<string>();
+        var made = new List<string>();
+        foreach (var pair in _pairs) if (pair.Key == name) made.Add(pair.Value);
+        return made.ToArray();
     }
 
     public void append(string name, string value)
     {
-        if (!_params.ContainsKey(name))
-            _params[name] = new List<string>();
-        _params[name].Add(value);
+        _pairs.Add(new KeyValuePair<string, string>(name, value));
+        Flush();
     }
 
     public void set(string name, string value)
     {
-        _params[name] = new List<string> { value };
+        var kept = new List<KeyValuePair<string, string>>();
+        var written = false;
+        foreach (var pair in _pairs)
+        {
+            if (pair.Key != name) { kept.Add(pair); continue; }
+            if (written) continue;
+            kept.Add(new KeyValuePair<string, string>(name, value));
+            written = true;
+        }
+        if (!written) kept.Add(new KeyValuePair<string, string>(name, value));
+        _pairs.Clear();
+        _pairs.AddRange(kept);
+        Flush();
     }
 
     public void delete(string name)
     {
-        _params.Remove(name);
+        _pairs.RemoveAll(pair => pair.Key == name);
+        Flush();
     }
 
     public bool has(string name)
     {
-        return _params.ContainsKey(name);
+        foreach (var pair in _pairs) if (pair.Key == name) return true;
+        return false;
     }
 
+    /// <summary>§5.5: sorted by the name, and the run of pairs that share one name keeps the order it
+    /// was written in — the standard asks for a stable sort.</summary>
     public void sort()
     {
-        var sorted = _params.OrderBy(kv => kv.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
-        _params.Clear();
-        foreach (var kv in sorted)
-            _params[kv.Key] = kv.Value;
+        var sorted = new List<KeyValuePair<string, string>>(_pairs);
+        sorted.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
+        _pairs.Clear();
+        _pairs.AddRange(sorted);
+        Flush();
     }
 
-    public void forEach(object callback) { /* implemented in the JS URLSearchParams wrapper */ }
-
+    /// <summary>§5.3, the serializer: every name and value encoded with the form-urlencoded set, which
+    /// writes a space as a plus — the reason a round trip through this string is not the string that
+    /// came in.</summary>
     public string toString()
     {
-        var parts = new List<string>();
-        foreach (var kv in _params)
+        var sb = new StringBuilder();
+        foreach (var pair in _pairs)
         {
-            foreach (var value in kv.Value)
-            {
-                parts.Add($"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(value)}");
-            }
+            if (sb.Length > 0) sb.Append('&');
+            sb.Append(WhatwgUrl.FormUrlencode(pair.Key)).Append('=').Append(WhatwgUrl.FormUrlencode(pair.Value));
         }
-        return string.Join("&", parts);
+        return sb.ToString();
     }
 
-    public int size => _params.Sum(kv => kv.Value.Count);
+    public int size => _pairs.Count;
 
     // keys/values/entries are the iterator methods the interface defines (URL §5), each answering the
     // pairs/keys/values the page enumerates. The iterator is built on the script side — the interface
@@ -215,21 +264,21 @@ public class URLSearchParamsHost : IDomPrototypeHost
     private List<object> Names()
     {
         var list = new List<object>();
-        foreach (var kv in _params) foreach (var _ in kv.Value) list.Add(kv.Key);
+        foreach (var pair in _pairs) list.Add(pair.Key);
         return list;
     }
 
     private List<object> Values()
     {
         var list = new List<object>();
-        foreach (var kv in _params) foreach (var v in kv.Value) list.Add(v);
+        foreach (var pair in _pairs) list.Add(pair.Value);
         return list;
     }
 
     private List<object> Pairs()
     {
         var list = new List<object>();
-        foreach (var kv in _params) foreach (var v in kv.Value) list.Add(new object[] { kv.Key, v });
+        foreach (var pair in _pairs) list.Add(new object[] { pair.Key, pair.Value });
         return list;
     }
 

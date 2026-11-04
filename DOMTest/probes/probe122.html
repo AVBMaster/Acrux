@@ -1,0 +1,242 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe122 — the fetch family's own answers</title></head>
+<body><div id="box"></div>
+<script>
+// The other half of what round 22 asks: the values Fetch §4-§7 and File §2 fix by themselves, which
+// need no running browser to decide. A row that reads differently is an engine answer that
+// contradicts the text; the refusals whose SENTENCE the text leaves to the implementation are pinned
+// only as far as the kind of the error.
+(function () {
+    var bad = [];
+    var total = 0;
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 48); }
+    }
+    function eq(label, got, want) {
+        var g = String(got), w = String(want);
+        total++;
+        if (g !== w) bad.push(label + ' got=[' + g + '] want=[' + w + ']');
+    }
+    function eqp(label, got, prefix) {
+        var g = String(got);
+        total++;
+        if (g.slice(0, prefix.length) !== prefix) bad.push(label + ' got=[' + g + '] want['
+            + prefix + ']');
+    }
+
+    // ── A. Headers: the list of pairs with a case-insensitive name ────────────
+    eq('A1 the names come back lowercase and a repeated name joins', safe(function () {
+        var h = new Headers([['a', '1'], ['A', '2']]);
+        return [h.get('A'), h.get('a'), 'getAll' in Headers.prototype,
+            'size' in Headers.prototype].join('|');
+    }), 'ok:1, 2|1, 2|false|false');
+    eq('A2 append joins with a comma and a space, set replaces', safe(function () {
+        var h = new Headers();
+        h.append('x-thing', 'a');
+        h.append('X-Thing', 'b');
+        var joined = h.get('x-thing');
+        h.set('x-thing', 'c');
+        return [joined, h.get('x-thing'), h.has('X-THING'), String(h.delete('x-thing')),
+            h.has('x-thing')].join('|');
+    }), 'ok:a, b|c|true|undefined|false');
+    eq('A3 a dictionary of values is the list of pairs the name carries', safe(function () {
+        var h = new Headers({ a: '1', b: ['2', '3'] });
+        return [h.get('a'), h.get('b'), Array.from(h.keys()).join(',')].join('|');
+    }), 'ok:1|2, 3|a,b');
+    // The kind of the error is all the text fixes here: Fetch §4.1 names the refusal but leaves
+    // the sentence to the implementation, and the reference cannot be asked this round.
+    eq('A4 the name and the value a header line cannot carry are refused', safe(function () {
+        var h = new Headers();
+        var a = '', b = '', c = '';
+        try { h.set('a b', '1'); } catch (e) { a = String(e.name); }
+        try { h.set('a', 'line1\nline2'); } catch (e) { b = String(e.name); }
+        try { new Headers({ 'bad name': '1' }); } catch (e) { c = String(e.name); }
+        return [a, b, c].join('|');
+    }), 'ok:TypeError|TypeError|TypeError');
+    eq('A5 the iteration is sorted by the name', safe(function () {
+        var h = new Headers({ c: '3', a: '1', b: '2' });
+        return [Array.from(h.keys()).join(','), Array.from(h.values()).join(','),
+            Array.from(h.entries()).map(function (p) { return p.join('='); }).join(','),
+            typeof h[Symbol.iterator]].join('|');
+    }), 'ok:a,b,c|1,2,3|a=1,b=2,c=3|function');
+    eq('A6 forEach hands the pair and the list', safe(function () {
+        var h = new Headers({ a: '1', b: '2' });
+        var seen = [];
+        h.forEach(function (value, name, self) { seen.push(name + ':' + value); });
+        return [seen.join(','), String(h)].join('|');
+    }), 'ok:a:1,b:2|[object Headers]');
+
+    // ── B. Request and Response: the defaults the interface begins with ───────
+    eq('B1 a request reads the defaults its dictionary left out', safe(function () {
+        var r = new Request('http://e.com/x?q=1');
+        return [r.method, r.url, r.mode, r.credentials, r.cache, r.destination, r.referrer,
+            r.integrity, r.keepalive, r.redirect, r.bodyUsed].join('|');
+    }), 'ok:GET|http://e.com/x?q=1|cors|same-origin|default||||false|follow|false');
+    eq('B2 the method a page writes comes back uppercase', safe(function () {
+        return [new Request('http://e/', { method: 'post' }).method,
+            new Request('http://e/', { method: 'OPTIONS' }).method].join('|');
+    }), 'ok:POST|OPTIONS');
+    // Fetch §8.1: TRACE, TRACK and CONNECT are the methods a Request may not be given; GET and
+    // HEAD are the methods that may not be given a body.
+    eqp('B3 a method the request cannot carry is refused', safe(function () {
+        var a = '', b = '';
+        try { new Request('http://e/', { method: 'TRACE' }); } catch (e) { a = String(e.name); }
+        try { new Request('http://e/', { method: 'GET', body: 'x' }); } catch (e) { b = String(e.name); }
+        return a + '|' + b;
+    }), 'ok:TypeError|TypeError');
+    eq('B4 a request built from a request copies what it carries', safe(function () {
+        var made = new Request('http://e.com/x', { method: 'PUT', headers: { a: '1' },
+            body: 'text' });
+        var copy = new Request(made);
+        return [copy.method, copy.url, copy.headers.get('a'), copy.bodyUsed, made.bodyUsed].join('|');
+    }), 'ok:PUT|http://e.com/x|1|false|false');
+    eq('B5 the response reads the status the page gave it', safe(function () {
+        var r = new Response('body', { status: 201, statusText: 'made',
+            headers: { 'x-a': '1' } });
+        return [r.status, r.ok, r.statusText, r.type, r.url, r.headers.get('X-A'), r.bodyUsed,
+            String(r)].join('|');
+    }), 'ok:201|true|made|default||1|false|[object Response]');
+    // Fetch §7.1: the status of a response the page builds is 200-599, and §7.2 keeps only the
+    // redirect statuses for the redirect static.
+    eq('B6 a status outside the range the protocol allows is refused', safe(function () {
+        var a = '', b = '', c = '', d = '';
+        try { new Response('', { status: 199 }); } catch (e) { a = String(e.name); }
+        try { new Response('', { status: 600 }); } catch (e) { b = String(e.name); }
+        try { Response.redirect('http://e/', 300); } catch (e) { c = String(e.name); }
+        return [a, b, c, new Response(null, { status: 204 }).status].join('|');
+    }), 'ok:RangeError|RangeError|RangeError|204');
+    eq('B7 a null-body status carries no body and refuses one', safe(function () {
+        var thrown = '';
+        try { new Response('made up', { status: 204 }); } catch (e) { thrown = String(e.name); }
+        var r = new Response(null, { status: 204 });
+        return [thrown, String(r.body), r.status, String(r.bodyUsed)].join('|');
+    }), 'ok:TypeError|null|204|false');
+
+    // ── C. Blob and File: the bytes and their type ───────────────────────────
+    eq('C1 the type is the ASCII lower-case of what was written', safe(function () {
+        return [new Blob(['a'], { type: 'TeXT' }).type,
+            new Blob(['a'], { type: 'IMAGE/SVG+XML' }).type,
+            new Blob(['a']).type, new Blob(['a']).size].join('|');
+    }), 'ok:|image/svg+xml||1');
+    eq('C2 the slice is the window the page named, negative ends included', safe(function () {
+        var b = new Blob(['abcdef']);
+        return [b.slice(2).size, b.slice(0, 2).size, b.slice(-2).size, b.slice(3, 1).size,
+            b.slice(1, 1).size, b.slice(2).type].join('|');
+    }), 'ok:4|2|2|0|0|');
+    eq('C3 parts of any kind are joined into the bytes', safe(function () {
+        var b = new Blob(['a', new Uint8Array([98]), 'c']);
+        return [b.size, b.slice(1, 2).size].join('|');
+    }), 'ok:3|1');
+    eq('C4 a file is a blob with a name and a date', safe(function () {
+        var f = new File(['x'], 'note.txt', { type: 'text/plain', lastModified: 1000 });
+        return [f.name, f.size, f.type, f.lastModified, f instanceof Blob,
+            Object.prototype.toString.call(f)].join('|');
+    }), 'ok:note.txt|1|text/plain|1000|true|[object File]');
+    eq('C5 a name that names a path is cut to its file name', safe(function () {
+        return [new File(['x'], 'a/b/c.txt').name, new File(['x'], '').name].join('|');
+    }), 'ok:a/b/c.txt|');
+
+    // ── D. AbortSignal and AbortController ──────────────────────────────────
+    eq('D1 a fresh signal is not aborted and answers nothing', safe(function () {
+        var c = new AbortController();
+        return [c.signal.aborted, String(c.signal.reason), String(c.signal.onabort),
+            Object.prototype.toString.call(c.signal)].join('|');
+    }), 'ok:false|undefined|null|[object AbortSignal]');
+    eq('D2 aborting without a reason gives the error the interface names', safe(function () {
+        var c = new AbortController();
+        c.abort();
+        var thrown = '';
+        try { c.signal.throwIfAborted(); } catch (e) { thrown = String(e.name); }
+        var reason = c.signal.reason;
+        return [c.signal.aborted, reason && reason.name, thrown,
+            String(c.signal.reason === reason)].join('|');
+    }), 'ok:true|AbortError|AbortError|true');
+    // DOM §3.2.6: a signal already aborted keeps its first reason; the second abort answers nothing.
+    eq('D3 the reason a page gives is the reason the signal carries', safe(function () {
+        var c = new AbortController();
+        c.abort('gone');
+        c.abort('again');
+        return [String(c.signal.reason), String(c.signal.aborted)].join('|');
+    }), 'ok:gone|true');
+    eq('D4 a signal built aborted carries its own reason', safe(function () {
+        var s = AbortSignal.abort();
+        var withReason = AbortSignal.abort(new Error('why'));
+        return [s.aborted, s.reason && s.reason.name, withReason.reason.message].join('|');
+    }), 'ok:true|AbortError|why');
+    eq('D5 the static that watches several signals answers when one does', safe(function () {
+        var a = new AbortController(), b = new AbortController();
+        var any = AbortSignal.any([a.signal, b.signal]);
+        b.abort('second');
+        return [any.aborted, any.reason].join('|');
+    }), 'ok:true|second');
+    // DOM §3.2.6: 'any' wants signals, and a negative duration is clamped to nothing rather than
+    // refused — the signal it returns aborts on the next turn of the queue.
+    eq('D6 the statics answer the refusal and the default the text gives', safe(function () {
+        var a = '';
+        try { AbortSignal.any([1]); } catch (e) { a = String(e.name); }
+        var t = AbortSignal.timeout(-1);
+        return [a, Object.prototype.toString.call(t), t.aborted].join('|');
+    }), 'ok:TypeError|[object AbortSignal]|false');
+
+    window.__REPORT = bad;
+    document.title = 'P122';
+    window.__T && window.__T('fetch_family_audit', bad.length === 0,
+        bad.length + ' of ' + total + ' rows differ: ' + bad.join(' || ').slice(0, 3000));
+})();
+
+// ── E. the promises the same interfaces answer with ─────────────────────────
+(function () {
+    var out = [];
+    function note(label, value, want) {
+        if (String(value) !== String(want)) out.push(label + ' got=[' + value + '] want=[' + want + ']');
+    }
+    return Promise.resolve().then(function () {
+        var b = new Blob(['héllo']);
+        return b.text().then(function (text) {
+            note('E1 a blob reads back the text it holds', [text, text.length, b.size], 'héllo,5,6');
+            return b.arrayBuffer();
+        }).then(function (buffer) {
+            note('E2 the bytes come back as a buffer', [buffer.byteLength,
+                new Uint8Array(buffer)[0]], '6,104');
+            var r = new Response('plain');
+            return r.text().then(function (t) {
+                note('E3 reading the body uses it up', [t, r.bodyUsed], 'plain,true');
+                var twice = 'none';
+                try { r.text(); } catch (e) { twice = String(e.name); }
+                note('E4 reading it again is refused', twice, 'TypeError');
+                return new Request('http://e.com/x', { method: 'POST', body: 'sent' }).text();
+            });
+        }).then(function (text) {
+            note('E5 a request body reads back', text, 'sent');
+            return Response.json({ a: 1 });
+        }).then(function (r) {
+            note('E6 the static builds a json response',
+                [r.headers.get('content-type'), r.status, r.ok],
+                'application/json,200,true');
+            return r.json();
+        }).then(function (value) {
+            note('E7 the json body reads as the value', JSON.stringify(value), '{"a":1}');
+            var c = new AbortController();
+            var heard = [];
+            c.signal.addEventListener('abort', function (e) { heard.push(e.type, e.target === c.signal); });
+            c.signal.onabort = function () { heard.push('handler'); };
+            c.abort();
+            c.abort();
+            note('E8 one abort reaches the listener and the handler once',
+                heard.join(','), 'abort,true,handler');
+            return new Promise(function (resolve) {
+                var s = AbortSignal.timeout(10);
+                s.addEventListener('abort', function () {
+                    note('E9 the timeout signal aborts with a TimeoutError',
+                        [s.aborted, s.reason && s.reason.name].join(','), 'true,TimeoutError');
+                    resolve(null);
+                });
+            });
+        }).then(function () {
+            window.__T('fetch_family_async', out.length === 0, out.join(' || ').slice(0, 1200));
+            return null;
+        });
+    });
+})();
+</script>
+<div>the fetch family</div></body></html>

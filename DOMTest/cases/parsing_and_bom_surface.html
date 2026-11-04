@@ -177,9 +177,12 @@ ckErr('E6 and so is a character outside the alphabet', 'InvalidCharacterError',
 
 // ── F. the address the document was read at ──────────────────────────────────
 ck('F1 location reads the document URL', function () {
+    // URL §2.6, §6.5: the origin of a file address is opaque, and an opaque origin reads as 'null';
+    // 'protocol' keeps its colon (§5.3), which is the same pair of rules round 22 wrote the parser
+    // against.
     return location.href === document.URL && location.protocol === 'file:'
         && location.hostname === '' && location.pathname.length > 0
-        && location.origin === 'file://' && location.search === '' && location.hash === '';
+        && location.origin === 'null' && location.search === '' && location.hash === '';
 }, function () { return [location.href, document.URL, location.protocol, location.hostname, location.pathname, location.origin].join('|'); });
 ck('F2 the parts follow the href it was given', function () {
     location.hash = '#after';

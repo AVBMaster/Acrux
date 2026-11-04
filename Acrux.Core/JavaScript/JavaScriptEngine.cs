@@ -894,7 +894,17 @@ public class JavaScriptEngine : IDisposable
                 if (!(this instanceof URLSearchParams)) throw constructionRefusal('URLSearchParams');
                 var pairs = [];
                 function dec(s) { try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); } }
-                function enc(s) { return encodeURIComponent(String(s)); }
+                // URL §5.3, the form-urlencoded serializer: a space is written as a plus rather than
+                // an escape, and of the characters 'encodeURIComponent' leaves alone the exclamation
+                // mark, the apostrophe, the parentheses and the tilde are not in the set the standard
+                // keeps — only the letters, the digits and '*-._' are (so '*' stays and '(' goes).
+                function enc(s) {
+                    return encodeURIComponent(String(s))
+                        .replace(/%20/g, '+')
+                        .replace(/[!'()~]/g, function (c) {
+                            return '%' + c.charCodeAt(0).toString(16).toUpperCase();
+                        });
+                }
                 function find(k) { var out = []; for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === k) out.push(pairs[i][1]); return out; }
                 // A sequence of pairs initialises as the standard's sequence<sequence<USVString>>;
                 // anything else (a query string) is parsed. The argument is optional, so the
@@ -980,11 +990,33 @@ public class JavaScriptEngine : IDisposable
                     var held = urlSlot(this);
                     return held.pairs.map(function (p) { return held.encode(p[0]) + '=' + held.encode(p[1]); }).join('&');
                 };
+                // The params view a url hands out is the engine's own object: its pairs live on the
+                // host, which answers 'entries' but carries no script slot. The members the host has
+                // no answer for are written over both, so a page that walks a url's params walks the
+                // same pairs it walks on one it built itself (URL §5.1).
+                function pairsOf(receiver) {
+                    var made = [];
+                    var held = null;
+                    try { held = urlSlot(receiver); } catch (e) { held = null; }
+                    if (held) {
+                        for (var q = 0; q < held.pairs.length; q++) {
+                            made.push([held.pairs[q][0], held.pairs[q][1]]);
+                        }
+                        return made;
+                    }
+                    var it = receiver.entries();
+                    var step = it.next();
+                    while (step && !step.done) {
+                        made.push([step.value[0], step.value[1]]);
+                        step = it.next();
+                    }
+                    return made;
+                }
                 proto.forEach = function (cb, ts) {
-                    var held = urlSlot(this);
                     if (arguments.length < 1) throw argumentRefusal(iface, 'forEach', 1, arguments.length);
-                    for (var i = 0; i < held.pairs.length; i++) {
-                        cb.call(ts || null, held.pairs[i][1], held.pairs[i][0], this);
+                    var made = pairsOf(this);
+                    for (var w = 0; w < made.length; w++) {
+                        cb.call(ts || null, made[w][1], made[w][0], this);
                     }
                 };
                 proto.keys = function () {
@@ -996,7 +1028,11 @@ public class JavaScriptEngine : IDisposable
                 proto.entries = function () {
                     return listIterator(urlSlot(this).list(function (p) { return [p[0], p[1]]; }), iface);
                 };
-                proto[Symbol.iterator] = proto.entries;
+                proto[Symbol.iterator] = function () {
+                    var held = null;
+                    try { held = urlSlot(this); } catch (e) { held = null; }
+                    return held ? proto.entries.call(this) : this.entries();
+                };
                 Object.defineProperty(proto, 'size', {
                     configurable: true, enumerable: false,
                     get: function () { return urlSlot(this).pairs.length; }
@@ -1102,11 +1138,51 @@ public class JavaScriptEngine : IDisposable
             // The platform's list-shaped interfaces answer an ITERATOR from keys/values/entries — the
             // Fetch, URL and FormData specifications all say 'return a new iterator', so 'next()' has to
             // be there (measured: 'h.entries().next().value' is the pair, not an array index).
+            // Fetch §4.1, §4.4: a header name is an HTTP token and a header value carries no carriage
+            // return, no line feed and no NUL, so a pair the protocol cannot write is refused where it
+            // is written — a name that reached a request would otherwise be read as something else.
+            var HEADER_TOKEN = /[!#$%&'*+\-.^_`|~0-9A-Za-z]/;
+            function isHeaderName(text) {
+                if (text.length === 0) return false;
+                for (var i = 0; i < text.length; i++) {
+                    if (!HEADER_TOKEN.test(text.charAt(i))) return false;
+                }
+                return true;
+            }
+            function headerRefusal(method, iface, which) {
+                var opening = method === 'construct'
+                    ? 'Failed to construct ' + ifaceQuote(iface)
+                    : 'Failed to execute ' + ifaceQuote(method) + ' on ' + ifaceQuote(iface);
+                return new TypeError(opening + ': Invalid ' + which);
+            }
+            function headerNameOf(value, method, iface) {
+                var text = String(value);
+                if (!isHeaderName(text)) throw headerRefusal(method, iface, 'name');
+                return text.toLowerCase();
+            }
+            function headerValueOf(value, method, iface) {
+                var text = String(value), i;
+                for (i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    if (code === 0x0A || code === 0x0D || code === 0x00) {
+                        throw headerRefusal(method, iface, 'value');
+                    }
+                }
+                // §4.1, normalize a value: the field values around it are not part of what the name
+                // carries, so they come off before the value is kept.
+                return text.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
+            }
             function makeNameMap(init) {
                 var map = Object.create(null);
-                function push(k, v) {
-                    k = String(k).toLowerCase();
-                    if (map[k] === undefined) map[k] = [String(v)]; else map[k].push(String(v));
+                // A record whose name carries a list of values is the list appended one by one, which
+                // is why the value reads back joined the way the getter joins it (§4.5).
+                function push(k, v, method) {
+                    var name = headerNameOf(k, method || 'construct', 'Headers');
+                    var values = Array.isArray(v) ? v : [v];
+                    for (var i = 0; i < values.length; i++) {
+                        var text = headerValueOf(values[i], method || 'construct', 'Headers');
+                        if (map[name] === undefined) map[name] = [text]; else map[name].push(text);
+                    }
                 }
                 if (init) {
                     if (Array.isArray(init)) init.forEach(function (pair) { push(pair[0], pair[1]); });
@@ -1156,14 +1232,15 @@ public class JavaScriptEngine : IDisposable
                 proto.set = function (k, v) {
                     var map = headersSlot(this);
                     if (arguments.length < 2) throw argumentRefusal(iface, 'set', 2, arguments.length);
-                    map[String(k).toLowerCase()] = [String(v)];
+                    var name = headerNameOf(k, 'set', iface);
+                    map[name] = [headerValueOf(v, 'set', iface)];
                 };
                 proto.append = function (k, v) {
                     var map = headersSlot(this);
                     if (arguments.length < 2) throw argumentRefusal(iface, 'append', 2, arguments.length);
-                    var key = String(k).toLowerCase();
+                    var key = headerNameOf(k, 'append', iface);
                     if (map[key] === undefined) map[key] = [];
-                    map[key].push(String(v));
+                    map[key].push(headerValueOf(v, 'append', iface));
                 };
                 proto.delete = function (k) {
                     var map = headersSlot(this);
@@ -1551,6 +1628,45 @@ public class JavaScriptEngine : IDisposable
                 return { read: b.length, written: Math.min(b.length, buf.length) };
             };
 
+            // Encoding Standard §2.4, §3.2: the labels that name the windows-1252 index, each written
+            // the way the constructor reduces a label — lowercase and with every separator taken out.
+            // The standard gives 'latin1', 'iso-8859-1' and 'us-ascii' the same index, which is what
+            // makes a byte in the 0x80 run a euro sign rather than a control character.
+            var LATIN_LABELS = { 819: 1, ansix341968: 1, aplanlatin1: 1, cp1252: 1,
+                cp819: 1, csisolatin1: 1, ibm819: 1, iso88591: 1, l1: 1, latin1: 1, usascii: 1,
+                windows1252: 1 };
+            // The same index for the 0x80 run only: below it and above it the code point is the byte.
+            // The five zeros are the holes the standard leaves at 0x81, 0x8D, 0x8F, 0x90 and 0x9D, and
+            // a hole is an error the way every other unreadable run is.
+            var WINDOWS_1252 = [0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6,
+                0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0, 0, 0x2018, 0x2019, 0x201C, 0x201D,
+                0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178];
+            function decodeRefusal() {
+                var Q = String.fromCharCode(39);
+                return new TypeError('Failed to execute ' + Q + 'decode' + Q + ' on ' + Q
+                    + 'TextDecoder' + Q + ': The encoded data was not valid.');
+            }
+            // The two single-byte indices the engine carries (§3.2, §3.3). A byte is one code point
+            // and there is nothing to hold back, so a stream is no different from a whole run here.
+            function singleByteRun(bytes, encoding, fatal) {
+                var out = '', i, b, code;
+                for (i = 0; i < bytes.length; i++) {
+                    b = bytes[i];
+                    if (encoding === 'x-user-defined') {
+                        out += String.fromCharCode(b < 0x80 ? b : 0xF700 + b);
+                        continue;
+                    }
+                    if (b < 0x80 || b > 0x9F) { out += String.fromCharCode(b); continue; }
+                    code = WINDOWS_1252[b - 0x80];
+                    if (code === 0) {
+                        if (fatal) throw decodeRefusal();
+                        out += String.fromCharCode(0xFFFD);
+                        continue;
+                    }
+                    out += String.fromCharCode(code);
+                }
+                return out;
+            }
             // Encoding Standard §3: the label is text, and a label the specification does not give a
             // decoder for is refused when the decoder is built — not quietly treated as UTF-8
             // (measured: 'new TextDecoder' of an object refuses with a RangeError quoting the label as
@@ -1564,9 +1680,16 @@ public class JavaScriptEngine : IDisposable
                 // takes the little-endian name of them. They are not refused, so a page that builds
                 // one reads the bytes back in the order the standard says (measured: a decoder of
                 // 'utf-16le' hands over the text without a refusal).
-                if (name === 'utf16' || name === 'utf16le') name = 'utf-16le';
+                else if (name === 'utf16' || name === 'utf16le') name = 'utf-16le';
                 else if (name === 'utf16be') name = 'utf-16be';
-                if (name !== 'utf-8' && name !== 'utf-16le' && name !== 'utf-16be') {
+                // §2.4, §3.2: the labels below all name the windows-1252 index — which is why
+                // 'latin1' and 'us-ascii' are the same decoder, and why a byte in the 0x80 run is a
+                // euro sign rather than the control character its number would say.
+                else if (LATIN_LABELS[name] !== undefined || name === 'windows1252')
+                    name = 'windows-1252';
+                else if (name === 'xuserdefined') name = 'x-user-defined';
+                if (name !== 'utf-8' && name !== 'utf-16le' && name !== 'utf-16be'
+                    && name !== 'windows-1252' && name !== 'x-user-defined') {
                     // Encoding Standard §3: an unsupported label is refused when the decoder is built,
                     // with the text the conversion was given quoted back (measured).
                     var Q = String.fromCharCode(39);
@@ -1584,6 +1707,13 @@ public class JavaScriptEngine : IDisposable
                     enumerable: true, configurable: true });
                 Object.defineProperty(this, 'ignoreBOM', { value: !!init.ignoreBOM, writable: true,
                     enumerable: true, configurable: true });
+                // The stream state is the decoder's own and none of the page's: the unfinished bytes
+                // and the one byte-order mark it has already seen are written where a listing of the
+                // object cannot find them (§3.2, §3.5).
+                Object.defineProperty(this, '__pending', { value: [ ], writable: true,
+                    enumerable: false, configurable: true });
+                Object.defineProperty(this, '__bomSeen', { value: false, writable: true,
+                    enumerable: false, configurable: true });
             }
             function utf16Run(bytes, bigEndian, fatal, skipBom) {
                 // Encoding Standard §2.4 UTF-16 decoder: two bytes at a time, a surrogate pair joined,
@@ -1631,43 +1761,71 @@ public class JavaScriptEngine : IDisposable
                 return out;
             }
             TextDecoder.prototype.decode = function (input) {
-                if (input === undefined || input === null) return '';
+                var held = arguments.length > 1 && arguments[1] ? arguments[1] : { };
+                var stream = !!held.stream;
+                if (input === undefined || input === null) input = new Uint8Array(0);
                 var bytes = (input instanceof Uint8Array) ? input
                     : (input.buffer ? new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength) : input);
                 if (this.encoding === 'utf-16le' || this.encoding === 'utf-16be') {
                     return utf16Run(bytes, this.encoding === 'utf-16be', !!this.fatal, !!this.ignoreBOM);
+                }
+                if (this.encoding === 'windows-1252' || this.encoding === 'x-user-defined') {
+                    return singleByteRun(bytes, this.encoding, !!this.fatal);
                 }
                 // Encoding Standard §6.2 UTF-8 decoder: a byte sequence that is overlong, that runs
                 // past its own length, that carries a continuation byte where none belongs, that
                 // names a surrogate or a code point beyond U+10FFFF is an error — the fatal decoder
                 // refuses the whole run (measured: a TypeError whose message is the whole sentence),
                 // the non-fatal one answers one replacement character for each error run.
-                var len = bytes.length, i = 0, res = '', seen = 0;
-                if (len >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF
-                    && !this.ignoreBOM) { i = 3; }
+                // §3.2, the streaming rule: a run that simply has not arrived yet is not an error at
+                // all. The bytes of an unfinished sequence are kept and put in front of the next call,
+                // which is what lets a page decode a chunk that cuts a character in half.
+                var pending = this.__pending || [ ];
+                var tail = [ ];
+                var list = [ ];
+                var p;
+                for (p = 0; p < pending.length; p++) list.push(pending[p]);
+                for (p = 0; p < bytes.length; p++) list.push(bytes[p]);
+                this.__pending = tail;
+                var len = list.length, i = 0, res = '', seen = 0;
+                // The byte-order mark is a beginning, not a pattern: one per decoder, and only in
+                // front of the first bytes the decoder was given (§3.5).
+                if (!this.__bomSeen) {
+                    this.__bomSeen = true;
+                    if (!this.ignoreBOM && len >= 3 && list[0] === 0xEF && list[1] === 0xBB
+                        && list[2] === 0xBF) i = 3;
+                }
                 function bad() {
-                    if (this.fatal) {
-                        throw new TypeError('Failed to execute ' + String.fromCharCode(39) + 'decode'
-                            + String.fromCharCode(39) + ' on ' + String.fromCharCode(39) + 'TextDecoder'
-                            + String.fromCharCode(39) + ': The encoded data was not valid.');
-                    }
+                    if (this.fatal) throw decodeRefusal();
                     if (!seen) res += String.fromCharCode(0xFFFD);
                     seen++;
                 }
                 while (i < len) {
-                    var b0 = bytes[i], need = 0, cp = 0, low = 0;
+                    var b0 = list[i], need = 0, cp = 0, low = 0;
                     if (b0 < 0x80) { cp = b0; need = 0; low = 0x00; }
                     else if ((b0 & 0xE0) === 0xC0) { cp = b0 & 0x1F; need = 1; low = 0x80; }
                     else if ((b0 & 0xF0) === 0xE0) { cp = b0 & 0x0F; need = 2; low = 0x800; }
                     else if ((b0 & 0xF8) === 0xF0) { cp = b0 & 0x07; need = 3; low = 0x10000; }
                     else { bad.call(this); i += 1; seen = 0; continue; }
-                    var at = 0, ok = true;
+                    var at = 0, ok = true, ranShort = false;
                     for (at = 1; at <= need; at++) {
                         var next = i + at;
-                        if (next >= len || (bytes[next] & 0xC0) !== 0x80) { ok = false; break; }
-                        cp = (cp << 6) | (bytes[next] & 0x3F);
+                        if (next >= len) { ok = false; ranShort = true; break; }
+                        if ((list[next] & 0xC0) !== 0x80) { ok = false; break; }
+                        cp = (cp << 6) | (list[next] & 0x3F);
                     }
-                    if (!ok) { i += 1; while (i < len && (bytes[i] & 0xC0) === 0x80) i++; bad.call(this); seen = 0; continue; }
+                    if (!ok) {
+                        if (stream && ranShort) {
+                            for (p = i; p < len; p++) tail.push(list[p]);
+                            i = len;
+                            break;
+                        }
+                        i += 1;
+                        while (i < len && (list[i] & 0xC0) === 0x80) i++;
+                        bad.call(this);
+                        seen = 0;
+                        continue;
+                    }
                     // The value has to be worth the bytes it was written with, and it has to name a
                     // character at all: an overlong form, a surrogate and anything past the last
                     // code point are all errors the same way.
@@ -2509,6 +2667,29 @@ public class JavaScriptEngine : IDisposable
             // names are accessors on the prototype — the object itself carries nothing the page can
             // enumerate (measured: 'Object.keys(b)' is empty and 'Blob.prototype.size' is refused as an
             // illegal invocation when read away from a blob).
+            // File §2.2.1: the type of a blob is a MIME type or nothing. The text the page writes is
+            // folded to ASCII lowercase, and one that is not a MIME type at all is the empty string —
+            // a blob does not get to claim a type a reader would have to guess at.
+            var MIME_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+            function mimeOrEmpty(value) {
+                var text = String(value === undefined || value === null ? '' : value);
+                var made = '', i;
+                for (i = 0; i < text.length; i++) {
+                    var c = text.charAt(i);
+                    made += (c >= 'A' && c <= 'Z') ? c.toLowerCase() : c;
+                }
+                var halves = made.split(';');
+                var core = halves.shift();
+                var slash = core.indexOf('/');
+                if (slash <= 0 || slash !== core.lastIndexOf('/')) return '';
+                if (!MIME_TOKEN.test(core.slice(0, slash)) || !MIME_TOKEN.test(core.slice(slash + 1)))
+                    return '';
+                for (i = 0; i < halves.length; i++) {
+                    var pair = halves[i].trim().split('=');
+                    if (pair.length !== 2 || !MIME_TOKEN.test(pair[0])) return '';
+                }
+                return made;
+            }
             function Blob(blobParts, options) {
                 if (!(this instanceof Blob)) throw constructionRefusal('Blob');
                 var parts = blobParts || [];
@@ -2524,7 +2705,7 @@ public class JavaScriptEngine : IDisposable
                 Object.defineProperty(this, '__bytes', { value: bytes, configurable: true });
                 Object.defineProperty(this, '__text', { value: new TextDecoder().decode(bytes), configurable: true });
                 Object.defineProperty(this, '__type',
-                    { value: (options && options.type) ? String(options.type) : '', configurable: true });
+                    { value: mimeOrEmpty(options && options.type), configurable: true });
             }
             function blobBytesOf(host) {
                 if (!host || host.__bytes === undefined) throw new TypeError('Illegal invocation');
@@ -3255,11 +3436,29 @@ public class JavaScriptEngine : IDisposable
                 });
             }
 
+            // The status a page may write, and the statuses that carry no body whatever the page
+            // asked for (Fetch §6.5, §7.1). The error response is built inside the module and carries
+            // the marker, because the specification gives it a status no constructor would accept.
+            function isNullBodyStatus(status) {
+                return status === 101 || status === 103 || status === 204 || status === 205
+                    || status === 304;
+            }
             function Response(body, init) {
                 var options = init || { };
                 var parts = bodyParts(body);
                 var status = options.status === undefined ? 200 : Number(options.status);
-                var state = { text: parts.text, used: false, stream: parts.stream,
+                if (!options.__acruxInternal) {
+                    if (!(status >= 200 && status <= 599) || Math.floor(status) !== status) {
+                        throw new RangeError('Failed to construct ' + ifaceQuote('Response') + ': '
+                            + 'The status ' + status + ' is not in the range 200-599 inclusive.');
+                    }
+                    if (isNullBodyStatus(status) && body !== undefined && body !== null) {
+                        throw new TypeError('Failed to construct ' + ifaceQuote('Response') + ': '
+                            + 'Response with null body status ' + status + ' cannot have body.');
+                    }
+                }
+                var carried = isNullBodyStatus(status) ? { text: '', stream: null } : parts;
+                var state = { text: carried.text, used: false, stream: carried.stream,
                     headers: new Headers(options.headers || { }),
                     url: options.url === undefined ? '' : String(options.url),
                     redirected: !!options.redirected,
@@ -3272,9 +3471,20 @@ public class JavaScriptEngine : IDisposable
                 BODY_SLOTS.set(this, state);
                 RESPONSE_SLOTS.set(this, state);
             }
-            Response.error = function () { return new Response('', { status: 0, type: 'error' }); };
+            Response.error = function () {
+                return new Response(null, { status: 0, type: 'error', __acruxInternal: true });
+            };
             Response.redirect = function (url, status) {
-                var made = new Response('', { status: status === undefined ? 302 : Number(status) });
+                var chosen = status === undefined ? 302 : Number(status);
+                // §7.2: only the statuses that mean a redirect, and 306 is the number the protocol
+                // took out of use.
+                if (chosen !== 301 && chosen !== 302 && chosen !== 303 && chosen !== 307
+                    && chosen !== 308) {
+                    throw new RangeError('Failed to execute ' + ifaceQuote('redirect') + ' on '
+                        + ifaceQuote('Response') + ': The status provided (' + chosen
+                        + ') is outside the range 301-303, 307, 308.');
+                }
+                var made = new Response('', { status: chosen });
                 made.headers.set('location', String(url));
                 return made;
             };
@@ -3331,11 +3541,24 @@ public class JavaScriptEngine : IDisposable
                 var copiedState = copied ? BODY_SLOTS.get(copied) : null;
                 var body = init.body !== undefined ? init.body
                     : (copiedState ? (copiedState.stream || copiedState.text) : undefined);
+                var namedMethod = String(init.method !== undefined ? init.method
+                    : (copied ? copied.method : 'GET')).toUpperCase();
+                // Fetch §8.1: three methods a page may not ask of a Request at all, and a body only
+                // for a method that can carry one. Both are refused where they are written, which is
+                // the last point a page can still be told what it did wrong.
+                if (namedMethod === 'TRACE' || namedMethod === 'TRACK' || namedMethod === 'CONNECT') {
+                    throw new TypeError('Failed to construct ' + ifaceQuote('Request') + ': The '
+                        + 'method ' + namedMethod + ' is not allowed.');
+                }
+                if ((namedMethod === 'GET' || namedMethod === 'HEAD')
+                    && body !== undefined && body !== null) {
+                    throw new TypeError('Failed to construct ' + ifaceQuote('Request') + ': Request '
+                        + 'with a ' + namedMethod + ' method cannot have a body.');
+                }
                 var parts = bodyParts(body);
                 var state = { text: parts.text, used: false, stream: parts.stream,
                     url: target,
-                    method: String(init.method !== undefined ? init.method
-                        : (copied ? copied.method : 'GET')).toUpperCase(),
+                    method: namedMethod,
                     headers: new Headers(init.headers !== undefined ? init.headers
                         : (copied ? copied.headers : null)),
                     mode: init.mode !== undefined ? String(init.mode) : (copied ? copied.mode : 'cors'),

@@ -403,8 +403,12 @@ ck('G2 URL.parse refuses to be called with nothing', function () {
 }, function () { try { URL.parse(); } catch (e) { return e.name + '/' + e.message; } });
 ck('G3 the origin carries a port that is not the default', function () {
     var u = new URL('https://example.org:8443/p/q?s=1#h');
+    // URL §2.6 with §6.5: only the schemes that name a host and a port name an origin, and a file
+    // address names none — its origin is opaque, which the getter serialises as 'null'. Round 22
+    // found the engine answering 'file://' here, which is the platform address type talking, not
+    // the standard.
     return u.origin === 'https://example.org:8443' && /^file:\/\//.test(document.baseURI)
-        && location.origin === 'file://';
+        && location.origin === 'null';
 }, function () { var u = new URL('https://example.org:8443/p'); return u.origin + '/' + location.origin; });
 </script>
 </body>
