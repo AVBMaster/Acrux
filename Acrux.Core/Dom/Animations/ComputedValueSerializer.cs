@@ -753,7 +753,11 @@ public static class ComputedValueSerializer
             // §29.1, measured — see CssFilterValue).
             case "filter": return CssFilterValue.ComputedText(style.Filter, style);
             case "backdrop-filter": return CssFilterValue.ComputedText(style.BackdropFilter, style);
-            case "clip-path": return string.IsNullOrWhiteSpace(style.ClipPath) ? "none" : style.ClipPath!;
+            // The shape the box is clipped to, said the way the computed surface says a shape: an
+            // 'xywh()' becomes the insets it leaves (CSS Shapes 1 §4.6, measured — and the same
+            // conversion 'offset-path' and 'object-view-box' already make).
+            case "clip-path": return string.IsNullOrWhiteSpace(style.ClipPath) ? "none"
+                : Acrux.Core.Css.Resolver.EchoedProperties.OffsetPathComputed(style.ClipPath!, style);
             case "box-shadow": return BoxShadowText(style);
             case "text-shadow": return TextShadowText(style);
 

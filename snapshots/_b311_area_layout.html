@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 area layout</title>
+<style>
+  body { margin: 0; font: 12px monospace; }
+  .grid { display: grid; width: 200px; height: 60px; margin: 6px; }
+  .cell { color: #fff; }
+  #ragged { grid-template-areas: "a b" "c"; }
+  #square { grid-template-areas: "a b" "c d"; }
+  #span { grid-template-areas: "a a" "b b"; }
+  #wider { grid-template-columns: 100px 100px; grid-template-rows: 30px 30px; }
+  .a1 { grid-area: a; background: #e06060; }
+  .b1 { grid-area: b; background: #60a060; }
+  .c1 { grid-area: c; background: #6060c0; }
+  .d1 { grid-area: d; background: #c0a040; }
+</style></head>
+<body>
+<div class="grid" id="ragged"><div class="cell a1">a</div><div class="cell b1">b</div><div class="cell c1">c</div></div>
+<div class="grid" id="square"><div class="cell a1">a</div><div class="cell b1">b</div><div class="cell c1">c</div><div class="cell d1">d</div></div>
+<div class="grid" id="span"><div class="cell a1">a</div><div class="cell b1">b</div></div>
+<div class="grid" id="wider"><div class="cell a1">a</div><div class="cell b1">b</div><div class="cell c1">c</div><div class="cell d1">d</div></div>
+<script>
+// layout record: the four boxes of each grid, in the page's own coordinates
+function build() {
+  const rows = [];
+  const cells = document.querySelectorAll('.cell');
+  for (let i = 0; i < cells.length; i++) {
+    const r = cells[i].getBoundingClientRect();
+    rows.push(cells[i].parentElement.id + '/' + cells[i].className.charAt(4)
+        + '|' + Math.round(r.x) + ',' + Math.round(r.y) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+  }
+  const areas = [];
+  for (const id of ['ragged', 'square', 'span', 'wider']) {
+    const el = document.getElementById(id);
+    areas.push(id + '|comp=' + getComputedStyle(el).getPropertyValue('grid-template-areas'));
+  }
+  rows.push('AREAS');
+  document.body.insertAdjacentHTML('beforeend',
+      '<pre id="record" style="font:11px/1.3 monospace">' + rows.join('\n') + '\n' + areas.join('\n') + '</pre>');
+  console.log(rows.join('\n') + '\n' + areas.join('\n'));
+}
+build();
+</script>
+</body></html>

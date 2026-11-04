@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 try2</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b311_try2
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["position-try-fallbacks","flip-start, flip-block"],["position-try-fallbacks","left top, flip-inline"],["position-try-fallbacks","flip-inline, top left"],["position-try-fallbacks","none, center"],["position-try-fallbacks","center, center"],["position-try-fallbacks","top left, block-start inline-end"],["position-try-fallbacks","flip-start flip-inline"],["position-try-fallbacks","insert-inline, left top"],["position-try","none, top left"],["position-try","most-height left top, --t"],["position-try","flip-start, flip-block"],["position-try-fallbacks","span-top span-left"],["position-try-fallbacks","block-start span-all"],["position-try-fallbacks","self-block-start center"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

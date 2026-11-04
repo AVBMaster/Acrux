@@ -24,7 +24,21 @@ internal static class ClipPathClipper
         // Extract the shape function name and inner content, handling optional
         // geometry-box suffix (e.g. "circle(50%) border-box").
         int parenIndex = clipPath.IndexOf('(');
-        if (parenIndex < 0) { path.Dispose(); return null; }
+        if (parenIndex < 0)
+        {
+            // A geometry box named on its own is the whole clip — CSS Masking 1 §5.2 lets
+            // 'clip-path: content-box' say the rectangle without a shape (measured: all seven boxes
+            // stand, and each reads back as written), so the element is cut to that box.
+            var bare = clipPath.Trim().ToLowerInvariant();
+            if (Array.Exists(GeometryBoxes, b => b == bare))
+            {
+                path.AddRect(AdjustRectForGeometryBox(bare, box));
+                return path;
+            }
+
+            path.Dispose();
+            return null;
+        }
 
         shapeFunc = clipPath[..parenIndex].Trim();
         int endParen = FindMatchingParen(clipPath, parenIndex);
@@ -64,6 +78,9 @@ internal static class ClipPathClipper
                 break;
             case "rect":
                 ParseRect(inner, rect, path);
+                break;
+            case "xywh":
+                ParseXywh(inner, rect, path);
                 break;
             default:
                 path.Dispose();
@@ -296,6 +313,40 @@ internal static class ClipPathClipper
         if (parts.Length >= 4) float.TryParse(parts[3].Replace("px", "").Trim(), out left);
         var r = new SKRect(rect.Left + left, rect.Top + top, rect.Left + right, rect.Top + bottom);
         path.AddRect(r);
+    }
+
+    /// <summary>'xywh(x y width height)' is the box at that offset inside the reference rectangle
+    /// (CSS Shapes 1 §4.6): the position and the size each measure along their own axis, so a
+    /// percentage of the x or the width is a share of the box's width and a percentage of the y or
+    /// the height a share of its height.</summary>
+    private static void ParseXywh(string inner, SKRect rect, SKPath path)
+    {
+        var parts = inner.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4)
+        {
+            // Nothing was said about a rectangle: the box keeps all of itself rather than vanish.
+            path.AddRect(rect);
+            return;
+        }
+        float x = ShapeOffset(parts[0], rect.Width);
+        float y = ShapeOffset(parts[1], rect.Height);
+        float width = ShapeOffset(parts[2], rect.Width);
+        float height = ShapeOffset(parts[3], rect.Height);
+        path.AddRect(new SKRect(rect.Left + x, rect.Top + y, rect.Left + x + width,
+            rect.Top + y + height));
+    }
+
+    /// <summary>One argument of a shape measured along an axis of the reference box: a percentage of
+    /// that axis, or the length the page wrote.</summary>
+    private static float ShapeOffset(string token, float axis)
+    {
+        token = token.Trim();
+        if (token.EndsWith("%", StringComparison.Ordinal))
+            return float.TryParse(token[..^1].Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var percent)
+                ? percent * axis / 100f : 0f;
+        return float.TryParse(token.Replace("px", "").Trim(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var length) ? length : 0f;
     }
 
     private static void ParseCenter(string xStr, string yStr, SKRect rect, ref float cx, ref float cy)

@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 boxes</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b311_boxes
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["clip-path","margin-box"],["clip-path","border-box"],["clip-path","padding-box"],["clip-path","content-box"],["clip-path","fill-box"],["clip-path","stroke-box"],["clip-path","view-box"],["clip-path","border-box circle(50%)"],["clip-path","circle(50%) border-box"],["clip-path","margin-box inset(10px)"],["clip-path","inset(10px margin-box)"],["clip-path","border-box padding-box"],["clip-path","circle(50%) at 25% 25% border-box"],["shape-outside","margin-box"],["shape-outside","border-box"],["shape-outside","fill-box"],["shape-outside","circle(50%) border-box"],["shape-outside","border-box circle(50%)"],["offset-path","margin-box"],["offset-path","content-box"],["offset-path","padding-box circle(50%)"],["object-view-box","margin-box"],["object-view-box","fill-box"],["mask-border","url(a.png) 10 fill stretch"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

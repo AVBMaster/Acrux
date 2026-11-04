@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 boxes2</title></head>
+<body>
+<div id="host"></div>
+<script>
+// b311_boxes2
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["shape-outside","circle(50%) fill-box"],["shape-outside","fill-box circle(50%)"],["shape-outside","circle(50%) margin-box"],["shape-outside","margin-box circle(50%)"],["shape-outside","content-box"],["shape-outside","padding-box"],["shape-outside","circle(50%) padding-box"],["shape-outside","view-box"],["clip-path","circle(50%) margin-box"],["clip-path","circle(50%) fill-box"],["clip-path","margin-box circle(50%)"],["clip-path","url(a.png) border-box"],["clip-path","border-box url(a.png)"],["clip-path","polygon(0 0, 10px 10px) content-box"],["mask","circle(50%) border-box"],["shape-outside","none"],["clip-path","MARGIN-BOX"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0)
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

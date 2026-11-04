@@ -183,23 +183,24 @@ public static class EchoedProperties
             new() { Name = "overlay", Initial = "none", Normalize = Single("auto", "none"),
                 ComputedText = static (_, _) => "none" },
 
-            // CSS Anchor Positioning §5.2/§5.3/§4.2. 'position-area' names one or two sides of the
-            // anchor's containing block; the measured set so far is 'none' and the single sides,
-            // while the 'span-block start' pair is refused. 'position-visibility' says when the
-            // fallback box is hidden, and 'anchored' — the word an older draft used — is refused.
+            // CSS Anchor Positioning 1 §3.1/§3.1.3 (measured, pair by pair): 'position-area' is one
+            // or two keywords from the two slots of one production, said in that production's slot
+            // order, and its computed value says the logical tracks in their short spelling.
+            // 'position-visibility' says when the fallback box is hidden, and 'anchored' — the word
+            // an older draft used — is refused.
             new() { Name = "position-area", Initial = "none",
-                Normalize = NormalizePositionArea },
+                Normalize = NormalizePositionArea, ComputedText = PositionAreaComputed },
             new() { Name = "position-visibility", Initial = "anchors-visible",
                 Normalize = Single("anchors-visible") },
             new() { Name = "position-try", Initial = "none",
-                Normalize = NormalizePositionTry },
+                Normalize = NormalizePositionTry, ComputedText = PositionTryComputed },
 
             // CSS Transitions 2 §4.2 and CSS View Transitions 1: a comma list, one keyword per
             // transition, and the view box the replaced element is cropped to.
             new() { Name = "transition-behavior", Initial = "normal",
                 Normalize = NormalizeBehaviorList },
             new() { Name = "object-view-box", Initial = "none",
-                Normalize = NormalizeViewBox },
+                Normalize = NormalizeViewBox, ComputedText = OffsetPathComputed },
 
             // Scroll-linked Animations 1 §3/§5: the two shorthands say the name and the axis (and
             // for a view timeline the inset) the longhands carry. Measured: a lone dashed name, a
@@ -225,7 +226,8 @@ public static class EchoedProperties
             new() { Name = "font-variant-alternates", Initial = "normal",
                 Normalize = NormalizeFontVariantAlternates },
             new() { Name = "position-try-fallbacks", Initial = "none",
-                Normalize = NormalizePositionTryFallbacks },
+                Normalize = NormalizePositionTryFallbacks,
+                ComputedText = PositionTryFallbacksComputed },
             // CSS Anchor Positioning §3.2/§4.5/§4.6: an anchor name is 'none' or ONE
             // <dashed-ident>, 'anchor-scope' adds 'all', and 'position-try-order' is one of the
             // five orderings — the two physical and the two logical beside 'normal'.
@@ -478,13 +480,26 @@ public static class EchoedProperties
     private static string? NormalizeBehaviorList(string value) =>
         KeywordList(value, "normal", "allow-discrete");
 
-    /// <summary>'object-view-box' is 'none' or one inset function (CSS View Transitions 1 §4.6,
-    /// measured: 'auto' is refused and 'inset(10%)' stands as written).</summary>
+    /// <summary>'object-view-box' is 'none' or one rectangle (CSS Images 4 §6.2): the two spellings
+    /// this reference engine takes are <c>inset()</c> and <c>xywh()</c>, and a circle or an ellipse
+    /// is no view box (measured: 'circle(10px)' is dropped, and so is the draft's 'view-box'
+    /// keyword). The arguments are the shape grammar's own — four for an xywh, each a length or a
+    /// percentage, and a bare number is only the zero (measured: 'xywh(1 2 3 4)' falls while
+    /// 'xywh(0 0 10px 10px)' stands) — and the computed value says the box as the insets it leaves,
+    /// which is the same conversion <c>offset-path</c> already makes.</summary>
     private static string? NormalizeViewBox(string value)
     {
         var text = value.Trim();
         if (text.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
-        return text.StartsWith("inset(", StringComparison.OrdinalIgnoreCase) ? text : null;
+        int open = text.IndexOf('(');
+        if (open <= 0 || !text.EndsWith(")", StringComparison.Ordinal)) return null;
+        var name = text[..open].ToLowerInvariant();
+        if (name is not ("inset" or "xywh")) return null;
+        if (!IsOffsetShape(text, out var canonical) || canonical == null) return null;
+        // The shape the canonicaliser read has to be the shape the page asked for: an 'at' clause
+        // beside an inset is a position the view box has no room for.
+        return canonical.StartsWith("inset(", StringComparison.Ordinal)
+            || canonical.StartsWith("xywh(", StringComparison.Ordinal) ? canonical : null;
     }
 
     /// <summary>The timeline shorthands: 'none', a dashed name, an axis, or the name and the
@@ -599,13 +614,33 @@ public static class EchoedProperties
         return DashedList(value);
     }
 
-    /// <summary>CSS Anchor Positioning 1 §4.1: a fallback is a run of flips OR one inset area, never
-    /// both — 'flip-block flip-inline', 'left top' and a lone 'block-start' stand, while
+    /// <summary>CSS Anchor Positioning 1 §6.1: a fallback is a run of flips OR one position area,
+    /// never both — 'flip-block flip-inline', 'left top' and a lone 'block-start' stand, while
     /// 'flip-start block-start' does not (measured; 'insert-*' and 'scale size-down' are the draft's
-    /// vocabulary this engine drops, and a flip written twice says nothing twice).</summary>
+    /// vocabulary this engine drops, and a flip written twice says nothing twice). The list itself is
+    /// comma-separated and 'none' shares it with nothing (measured: 'flip-start, flip-block' reads
+    /// back as two items while 'none, center' is dropped).</summary>
     private static string? NormalizePositionTryFallbacks(string value)
     {
-        var words = Words(value);
+        var items = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ',');
+        if (items.Count == 0) return null;
+        var printed = new List<string>();
+        foreach (var item in items)
+        {
+            var one = NormalizeOnePositionTryFallback(item);
+            if (one == null) return null;
+            if (one == "none" && items.Count > 1) return null;
+            printed.Add(one);
+        }
+        return string.Join(", ", printed);
+    }
+
+    /// <summary>One item of that list: the flips it names in the order the page wrote them, or one
+    /// area in the order §3.1.3 prints an area — the same pair says the same words here as it does
+    /// on 'position-area' (measured: 'flip-inline, top left' reads 'flip-inline, left top').</summary>
+    private static string? NormalizeOnePositionTryFallback(string item)
+    {
+        var words = Words(item);
         if (words.Length == 0) return null;
         if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
             return "none";
@@ -618,32 +653,60 @@ public static class EchoedProperties
             area.Add(lower);
         }
         if (flips.Count > 0 && area.Count > 0) return null;
-        if (area.Count > 0 && !Acrux.Core.Css.CssValueGrammar.IsInsetArea(string.Join(" ", area)))
-            return null;
         if (flips.Distinct().Count() != flips.Count) return null;
-        var parts = new List<string>();
-        if (flips.Count > 0) parts.Add(string.Join(" ", flips));
-        if (area.Count > 0) parts.Add(string.Join(" ", area));
-        return string.Join(" ", parts);
+        if (flips.Count > 0) return string.Join(" ", flips);
+        return area.Count > 0
+            ? Acrux.Core.Css.CssValueGrammar.CanonicalInsetArea(string.Join(" ", area)) : null;
     }
 
-    /// <summary>§5.2: 'none' or one &lt;inset-area&gt; (measured: 'x-start y-end' and
-    /// 'left span-top' stand; 'top bottom' — two words of the same axis — does not).</summary>
+    /// <summary>§6.1: the computed value says each item the way its own grammar does — a run of flips
+    /// says itself and an area says its short logical spellings (measured: 'top left, block-start
+    /// inline-end' computes 'left top, start end').</summary>
+    public static string PositionTryFallbacksComputed(string canonical,
+        Acrux.Core.Dom.ComputedStyle? style)
+        => string.Join(", ", Acrux.Core.Css.MaskLayerParser.SplitTopLevel(canonical, ',')
+            .Select(item => Acrux.Core.Css.CssValueGrammar.InsetAreaComputed(item) ?? item));
+
+    /// <summary>§5.2: 'none' or one &lt;inset-area&gt;, in the order the grammar's productions list
+    /// their slots (measured: 'top left' reads 'left top' and 'inline-start block-end' reads
+    /// 'block-end inline-start', while 'left span-start' and 'top self-start' name no area).</summary>
     private static string? NormalizePositionArea(string value)
     {
         var words = Words(value);
         if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
             return "none";
-        return Acrux.Core.Css.CssValueGrammar.IsInsetArea(value)
-            ? string.Join(" ", words.Select(w => w.ToLowerInvariant())) : null;
+        return Acrux.Core.Css.CssValueGrammar.CanonicalInsetArea(value);
     }
 
-    /// <summary>§4: the shorthand is the order and the fallbacks in either order, or a named try
+    /// <summary>§5.3: the computed value keeps the area but says the logical tracks in their short
+    /// spelling, and names the axis a 'span-all' left unstated (measured: 'block-start center'
+    /// computes 'start center', 'span-all start' computes 'inline-start', 'left top' says itself).</summary>
+    public static string PositionAreaComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+        => Acrux.Core.Css.CssValueGrammar.InsetAreaComputed(canonical) ?? "none";
+
+    /// <summary>§6.3: the shorthand is the order and the fallbacks in either order, or a named try
     /// block, or 'none' (measured: 'most-height flip-start' and '--t' stand and enumerate the two
-    /// longhands, while 'most-height' alone and 'flip-start block-start' do not).</summary>
+    /// longhands, while 'most-height' alone and 'flip-start block-start' do not). Each item of the
+    /// list is read on its own, so a name and a fallback in one list is the two items the page wrote
+    /// (measured: 'most-height left top, --t' reads back whole).</summary>
     private static string? NormalizePositionTry(string value)
     {
-        var words = Words(value);
+        var items = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ',');
+        if (items.Count == 0) return null;
+        var printed = new List<string>();
+        foreach (var item in items)
+        {
+            var one = NormalizeOnePositionTry(item);
+            if (one == null) return null;
+            if ((one == "none" || one == "normal") && items.Count > 1) return null;
+            printed.Add(one);
+        }
+        return string.Join(", ", printed);
+    }
+
+    private static string? NormalizeOnePositionTry(string item)
+    {
+        var words = Words(item);
         if (words.Length == 0) return null;
         if (words.Length == 1)
         {
@@ -651,7 +714,7 @@ public static class EchoedProperties
             if (only.Equals("none", StringComparison.OrdinalIgnoreCase)
                 || only.Equals("normal", StringComparison.OrdinalIgnoreCase)) return only.ToLowerInvariant();
             if (only.Length > 2 && only.StartsWith("--", StringComparison.Ordinal)) return only;
-            return NormalizePositionTryFallbacks(value);
+            return NormalizePositionTryFallbacks(item);
         }
         var order = words.Where(w => w.ToLowerInvariant() is "most-width" or "most-height");
         var rest = string.Join(" ", words
@@ -659,6 +722,24 @@ public static class EchoedProperties
         var fallbacks = NormalizePositionTryFallbacks(rest);
         if (fallbacks == null) return null;
         return order.Count() > 0 ? string.Join(" ", order) + " " + fallbacks : fallbacks;
+    }
+
+    /// <summary>§6.3: the computed value keeps the order word and the name where the page wrote them
+    /// and says the fallbacks the way the longhand does (measured: 'most-width inline-start
+    /// block-end' computes 'most-width end start').</summary>
+    public static string PositionTryComputed(string canonical, Acrux.Core.Dom.ComputedStyle? style)
+    {
+        var printed = new List<string>();
+        foreach (var item in Acrux.Core.Css.MaskLayerParser.SplitTopLevel(canonical, ','))
+        {
+            var words = Words(item);
+            var order = words.Where(w => w.ToLowerInvariant() is "most-width" or "most-height");
+            var rest = string.Join(" ", words
+                .Where(w => w.ToLowerInvariant() is not ("most-width" or "most-height")));
+            var fallbacks = PositionTryFallbacksComputed(rest, style);
+            printed.Add(order.Count() > 0 ? string.Join(" ", order) + " " + fallbacks : fallbacks);
+        }
+        return string.Join(", ", printed);
     }
 
     private static string? NormalizeTimelineName(string value)
@@ -919,11 +1000,14 @@ public static class EchoedProperties
 
     /// <summary>'shape-outside' takes the same shape as 'clip-path' (CSS Shapes 1 §11) with the
     /// margin box as its default, so one reader decides both rather than a second list of shape
-    /// names drifting from the first.</summary>
+    /// names drifting from the first — but the exclusion shape only knows the four CSS boxes, where
+    /// a clip also knows the three an SVG element carries (measured: 'shape-outside: fill-box' is
+    /// dropped while 'clip-path: fill-box' stands).</summary>
     private static string? NormalizeShapeOutside(string value)
     {
         var text = value.Trim();
-        return text.Length > 0 && CssValueGrammar.IsClipPathValue(text, bareBoxAllowed: true) ? text : null;
+        return text.Length > 0 && CssValueGrammar.IsClipPathValue(text, CssValueGrammar.CssBoxWords)
+            ? text : null;
     }
 
     private static string? NormalizeShapeMargin(string value)
@@ -1429,9 +1513,12 @@ public static class EchoedProperties
 
     /// <summary>One &lt;length-percentage&gt; of a shape, printed the way the engine prints a
     /// length: a number the page wrote without a unit is the zero pixels it stands for (measured:
-    /// <c>xywh(0 0 10px 10px)</c> reads <c>xywh(0px 0px 10px 10px)</c>), and a math function is
-    /// kept whole because folding its constant parts is the same gap every other length has
-    /// (#277). Anything else — a keyword, an angle, a name — is not a length.</summary>
+    /// <c>xywh(0 0 10px 10px)</c> reads <c>xywh(0px 0px 10px 10px)</c>) and no other bare number is
+    /// one — CSS Values 4 §10.3 makes the unitless spelling the zero's own, so
+    /// <c>xywh(1 2 3 4)</c>, <c>inset(1)</c> and <c>circle(10)</c> are refused while
+    /// <c>circle(0)</c> and <c>inset(0)</c> stand (all measured). A math function is kept whole
+    /// because folding its constant parts is the same gap every other length has (#277). Anything
+    /// else — a keyword, an angle, a name — is not a length.</summary>
     private static string? ShapeLength(string token)
     {
         var trimmed = token.Trim();
@@ -1439,6 +1526,7 @@ public static class EchoedProperties
         if (IsCalc(trimmed)) return trimmed;
         if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(trimmed, out var number,
                 out var unit)) return null;
+        if (unit.Length == 0 && number != 0) return null;
         var canonical = Number(number) + (unit.Length == 0 ? "px" : unit.ToLowerInvariant());
         return CssPropertyApplier.IsLengthOrPercentageToken(canonical) ? canonical : null;
     }

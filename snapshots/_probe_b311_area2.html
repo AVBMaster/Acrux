@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 area 2</title></head>
+<body>
+<div id="host"></div>
+<script>
+// area2
+function build() {
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = [["position-area","self-x-start"],["position-area","self-y-end"],["position-area","self-block-start"],["position-area","self-inline-end"],["position-area","span-self-x-start"],["position-area","span-self-block-end"],["position-area","span-self-inline-start"],["position-area","self-block-start center"],["position-area","self-x-start top"],["position-area","left self-y-end"],["position-area","top span-all"],["position-area","span-all top"],["position-area","span-all center"],["position-area","center span-all"],["position-area","span-all span-all"],["position-area","span-all start"],["position-area","start span-all"],["position-area","span-all block-start"],["position-area","span-all inline-end"],["position-area","block-start span-all"],["position-area","left span-all"],["position-area","span-all left"],["position-area","block-start inline-start"],["position-area","block-end inline-end"],["position-area","span-block-start span-inline-end"],["position-area","span-block-start center"],["position-area","block-start span-inline-start"],["position-area","span-inline-start center"],["position-area","inline-start end"],["position-area","start self-start"],["position-area","self-start self-end"],["position-area","end start"],["position-area","self-end center"],["position-area","center center"],["position-area","span-top span-all"]];
+for (let i = 0; i < cases.length; i++) {
+const el = document.createElement('div');
+host.appendChild(el);
+  if (cases[i][1] !== '~') el.style.setProperty(cases[i][0], cases[i][1]);
+  rows.push(i + '|' + cases[i][0] + '|' + cases[i][1]
+      + '|sup=' + (cases[i][1] === '~' ? '-' : (CSS.supports(cases[i][0], cases[i][1]) ? 1 : 0))
+      + '|echo=' + el.style.getPropertyValue(cases[i][0])
+      + '|comp=' + getComputedStyle(el).getPropertyValue(cases[i][0]));
+}
+document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+    + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+host.remove();
+}
+build();
+</script>
+</body></html>

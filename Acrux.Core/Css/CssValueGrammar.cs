@@ -2499,13 +2499,20 @@ public static class CssValueGrammar
         if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
         var rows = SplitComponents(trimmed);
         if (rows.Count == 0) return false;
+        int cells = -1;
         foreach (var row in rows)
         {
             if (row.Length < 2 || (row[0] != '"' && row[0] != '\'') || row[^1] != row[0])
                 return false;
-            var cells = row[1..^1];
-            if (cells.Trim().Length == 0) return false;
-            foreach (var cell in SplitWords(cells))
+            var inside = row[1..^1];
+            if (inside.Trim().Length == 0) return false;
+            // Every row of an area list says the same number of columns: a grid has one column
+            // count, and a list that does not line up names no grid at all (measured:
+            // 'grid-template-areas: "a b" "c"' is dropped while '"a b" "c d"' stands).
+            var words = System.Linq.Enumerable.ToArray(SplitWords(inside));
+            if (cells < 0) cells = words.Length;
+            else if (words.Length != cells) return false;
+            foreach (var cell in words)
             {
                 if (cell == ".") continue;
                 if (char.IsAsciiDigit(cell[0])) return false;
@@ -2890,54 +2897,236 @@ public static class CssValueGrammar
     private static readonly string[] MixBlendModeWords =
         BlendModeWords.Append("plus-lighter").ToArray();
 
-    /// <summary>CSS Anchor Positioning 1 §4.1: the inset-area vocabulary, split by the axis each
-    /// word measures along. Two words name one area only when they take one slot each; the same
-    /// axis twice is no area (measured: 'x-start y-end' and 'left top' stand).</summary>
-    private static readonly string[] InsetAreaAlongX =
+    /// <summary>CSS Anchor Positioning 1 §3.1.2: the productions of &lt;position-area&gt;. Two
+    /// keywords must come from the two slots of one production — the physical horizontal and
+    /// vertical pair, the block and inline pair, the pair read against the box's own writing mode,
+    /// or the sets whose keywords name no axis of their own. 'center' and 'span-all' name no axis
+    /// either and so fill whichever slot the pair still needs (measured: 'x-start y-end', 'left top'
+    /// and 'block-start center' stand while 'top self-start', 'block-start top' and
+    /// 'left span-start' cross two productions and fall).</summary>
+    private static readonly string[] InsetAreaX =
     {
-        "left", "right", "x-start", "x-end", "span-left", "span-right", "span-x-start", "span-x-end",
-        "inline-start", "inline-end", "span-inline-start", "span-inline-end",
+        "left", "right", "span-left", "span-right", "x-start", "x-end",
+        "span-x-start", "span-x-end", "self-x-start", "self-x-end",
+        "span-self-x-start", "span-self-x-end",
     };
 
-    private static readonly string[] InsetAreaAlongY =
+    private static readonly string[] InsetAreaY =
     {
-        "top", "bottom", "y-start", "y-end", "span-top", "span-bottom", "span-y-start", "span-y-end",
-        "block-start", "block-end", "span-block-start", "span-block-end",
+        "top", "bottom", "span-top", "span-bottom", "y-start", "y-end",
+        "span-y-start", "span-y-end", "self-y-start", "self-y-end",
+        "span-self-y-start", "span-self-y-end",
     };
 
-    private static readonly string[] InsetAreaEitherAxis =
+    private static readonly string[] InsetAreaBlock =
+    { "block-start", "block-end", "span-block-start", "span-block-end" };
+
+    private static readonly string[] InsetAreaInline =
+    { "inline-start", "inline-end", "span-inline-start", "span-inline-end" };
+
+    private static readonly string[] InsetAreaSelfBlock =
+    { "self-block-start", "self-block-end", "span-self-block-start", "span-self-block-end" };
+
+    private static readonly string[] InsetAreaSelfInline =
+    { "self-inline-start", "self-inline-end", "span-self-inline-start", "span-self-inline-end" };
+
+    /// <summary>The set whose keywords take their axis from the other half of the pair, read against
+    /// the containing block's writing mode.</summary>
+    private static readonly string[] InsetAreaAmbiguous =
+    { "start", "end", "span-start", "span-end" };
+
+    /// <summary>The same set read against the box's own writing mode.</summary>
+    private static readonly string[] InsetAreaSelfAmbiguous =
+    { "self-start", "self-end", "span-self-start", "span-self-end" };
+
+    /// <summary>The three productions that read as a pair of named slots, in the order the grammar
+    /// lists them — which §3.1.3 makes the order a pair serializes in.</summary>
+    private static readonly (string[] First, string[] Second)[] InsetAreaSlotPairs =
     {
-        "center", "span-all", "span-x", "span-y", "self-start", "self-end", "self-center",
-        "span-self-start", "span-self-end", "span-self-center",
+        (InsetAreaX, InsetAreaY),
+        (InsetAreaBlock, InsetAreaInline),
+        (InsetAreaSelfBlock, InsetAreaSelfInline),
     };
+
+    private static bool IsInsetAreaAxisFree(string word) => word is "center" or "span-all";
+
+    private static bool InsetAreaWordIn(string[] set, string word) =>
+        System.Array.IndexOf(set, word) >= 0;
+
+    /// <summary>Whether a keyword fills one slot of a production: one of its own set, or either of
+    /// the two axis-free keywords.</summary>
+    private static bool FillsInsetAreaSlot(string[] set, string word) =>
+        InsetAreaWordIn(set, word) || IsInsetAreaAxisFree(word);
 
     private static bool IsInsetAreaWord(string word) =>
-        System.Array.IndexOf(InsetAreaAlongX, word) >= 0
-        || System.Array.IndexOf(InsetAreaAlongY, word) >= 0
-        || System.Array.IndexOf(InsetAreaEitherAxis, word) >= 0;
+        FillsInsetAreaSlot(InsetAreaX, word) || FillsInsetAreaSlot(InsetAreaY, word)
+        || FillsInsetAreaSlot(InsetAreaBlock, word) || FillsInsetAreaSlot(InsetAreaInline, word)
+        || FillsInsetAreaSlot(InsetAreaSelfBlock, word)
+        || FillsInsetAreaSlot(InsetAreaSelfInline, word)
+        || InsetAreaWordIn(InsetAreaAmbiguous, word)
+        || InsetAreaWordIn(InsetAreaSelfAmbiguous, word);
 
-    /// <summary>&lt;inset-area&gt;: one or two side keywords that do not both measure along
-    /// the same axis. The echo table reads this one too, so a sheet, the CSSOM and supports()
-    /// cannot disagree about what 'left top' names.</summary>
-    internal static bool IsInsetArea(string text)
+    /// <summary>Which production a pair came from, so the computed surface knows which half names
+    /// which axis.</summary>
+    private enum InsetAreaSource
     {
-        var words = SplitComponents(text);
-        if (words.Count == 0 || words.Count > 2) return false;
-        foreach (var word in words)
-            if (!IsInsetAreaWord(word.ToLowerInvariant())) return false;
-        if (words.Count == 1) return true;
-        string First(string w) => w.ToLowerInvariant();
-        var a = First(words[0]);
-        var b = First(words[1]);
-        bool AlongX(string w) => System.Array.IndexOf(InsetAreaAlongX, w) >= 0;
-        bool AlongY(string w) => System.Array.IndexOf(InsetAreaAlongY, w) >= 0;
-        bool Either(string w) => System.Array.IndexOf(InsetAreaEitherAxis, w) >= 0;
-        // Two words fill the two slots: one from each axis, or two that resolve per axis
-        // themselves. A single-axis word beside a both-axis word leaves the pair ambiguous and is
-        // no area (measured: 'left span-top' and 'self-start self-end' stand while
-        // 'span-block-end self-start' and 'top bottom' fall).
-        return (AlongX(a) && AlongY(b)) || (AlongY(a) && AlongX(b)) || (Either(a) && Either(b));
+        None,
+        Physical,
+        Logical,
+        SelfLogical,
+        Ambiguous,
+        SelfAmbiguous,
     }
+
+    /// <summary>&lt;inset-area&gt;: the one or two keywords §3.1.2 allows, in the order §3.1.3 says
+    /// they serialize — a pair from a slot production prints in that production's slot order, while
+    /// a pair from one of the axis-free sets keeps the order the page wrote, because there the first
+    /// keyword names the block axis and the second the inline. A 'span-all' beside a keyword that
+    /// does name its axis says nothing the lone keyword leaves out, so the pair prints as one word
+    /// (measured: 'left span-all' reads 'left', 'center span-all' reads both). The echo table reads
+    /// this, so a sheet, the CSSOM and supports() cannot disagree about what 'top left' names.</summary>
+    internal static string? CanonicalInsetArea(string text)
+        => CanonicalInsetArea(text, out _);
+
+    private static string? CanonicalInsetArea(string text, out InsetAreaSource source)
+    {
+        source = InsetAreaSource.None;
+        var words = SplitComponents(text);
+        if (words.Count == 0 || words.Count > 2) return null;
+        var a = words[0].ToLowerInvariant();
+        if (!IsInsetAreaWord(a)) return null;
+        if (words.Count == 1)
+        {
+            source = InsetAreaWordIn(InsetAreaAmbiguous, a) ? InsetAreaSource.Ambiguous
+                : InsetAreaWordIn(InsetAreaSelfAmbiguous, a) ? InsetAreaSource.SelfAmbiguous
+                : InsetAreaSource.Physical;
+            return a;
+        }
+
+        var b = words[1].ToLowerInvariant();
+        if (!IsInsetAreaWord(b)) return null;
+        foreach (var slots in InsetAreaSlotPairs)
+        {
+            if (FillsInsetAreaSlot(slots.First, a) && FillsInsetAreaSlot(slots.Second, b))
+            {
+                source = SlotsOf(slots.First);
+                return CanonicalInsetAreaPair(a, b, true);
+            }
+
+            if (FillsInsetAreaSlot(slots.First, b) && FillsInsetAreaSlot(slots.Second, a))
+            {
+                source = SlotsOf(slots.First);
+                return CanonicalInsetAreaPair(b, a, true);
+            }
+        }
+
+        // One of the sets whose keywords name no axis: 'span-all' here says the other half's axis,
+        // so it is not the repetition of a keyword and stays in the echo (measured: 'span-all start'
+        // reads itself).
+        if (FillsInsetAreaSlot(InsetAreaAmbiguous, a) && FillsInsetAreaSlot(InsetAreaAmbiguous, b))
+        {
+            source = InsetAreaSource.Ambiguous;
+            return CanonicalInsetAreaPair(a, b, false);
+        }
+
+        if (FillsInsetAreaSlot(InsetAreaSelfAmbiguous, a)
+            && FillsInsetAreaSlot(InsetAreaSelfAmbiguous, b))
+        {
+            source = InsetAreaSource.SelfAmbiguous;
+            return CanonicalInsetAreaPair(a, b, false);
+        }
+
+        return null;
+    }
+
+    private static InsetAreaSource SlotsOf(string[] slots) =>
+        ReferenceEquals(slots, InsetAreaX) ? InsetAreaSource.Physical
+        : ReferenceEquals(slots, InsetAreaBlock) ? InsetAreaSource.Logical
+        : InsetAreaSource.SelfLogical;
+
+    /// <summary>A pair's two words, in the order they serialize. In a slot production a 'span-all'
+    /// says the axis the other keyword leaves, and that axis is the one the lone keyword already
+    /// spans (CSS Anchor Positioning 1 §3.1.2: 'top' is 'top span-all'), so the pair prints one word
+    /// (measured: 'left span-all' reads 'left'). In a set whose keywords name no axis the two words
+    /// are the two axes, so 'span-all' is not a repeat and both print (measured: 'span-all start'
+    /// reads itself).</summary>
+    private static string CanonicalInsetAreaPair(string first, string second, bool spansOtherAxis)
+    {
+        if (first == second) return first;
+        if (spansOtherAxis)
+        {
+            if (first == "span-all" && !IsInsetAreaAxisFree(second)) return second;
+            if (second == "span-all" && !IsInsetAreaAxisFree(first)) return first;
+        }
+
+        return first + " " + second;
+    }
+
+    /// <summary>§3.1.3: the computed value says the same tracks in the short logical spelling, so a
+    /// logical pair reads 'start end' and one whose halves agree reads one keyword (measured:
+    /// 'block-start inline-start' computes 'start', 'span-block-start center' computes
+    /// 'span-start center', 'self-block-start center' computes 'self-start center'), while a
+    /// physical pair and a value the page wrote in the short spellings keep the echo's own words.
+    /// The one pair that grows is a 'span-all' beside a short logical keyword: the page left that
+    /// keyword's axis unstated, and the computed surface names it (measured: 'span-all start'
+    /// computes 'inline-start', 'start span-all' computes 'block-start').</summary>
+    internal static string? InsetAreaComputed(string text)
+    {
+        var canonical = CanonicalInsetArea(text, out var source);
+        if (canonical == null) return null;
+        var words = SplitComponents(canonical);
+        if (words.Count != 2) return canonical;
+        var a = words[0];
+        var b = words[1];
+        if (source is InsetAreaSource.Logical or InsetAreaSource.SelfLogical)
+        {
+            var first = InsetAreaShortKeyword(a);
+            var second = InsetAreaShortKeyword(b);
+            return first == second ? first : first + " " + second;
+        }
+
+        if (source is InsetAreaSource.Ambiguous or InsetAreaSource.SelfAmbiguous)
+        {
+            if (a == "span-all" && !IsInsetAreaAxisFree(b)) return InsetAreaLongKeyword(b, true);
+            if (b == "span-all" && !IsInsetAreaAxisFree(a)) return InsetAreaLongKeyword(a, false);
+        }
+
+        return canonical;
+    }
+
+    private static string InsetAreaShortKeyword(string word) => word switch
+    {
+        "block-start" => "start",
+        "block-end" => "end",
+        "span-block-start" => "span-start",
+        "span-block-end" => "span-end",
+        "inline-start" => "start",
+        "inline-end" => "end",
+        "span-inline-start" => "span-start",
+        "span-inline-end" => "span-end",
+        "self-block-start" => "self-start",
+        "self-block-end" => "self-end",
+        "span-self-block-start" => "span-self-start",
+        "span-self-block-end" => "span-self-end",
+        "self-inline-start" => "self-start",
+        "self-inline-end" => "self-end",
+        "span-self-inline-start" => "span-self-start",
+        "span-self-inline-end" => "span-self-end",
+        _ => word,
+    };
+
+    private static string InsetAreaLongKeyword(string word, bool inlineAxis) => word switch
+    {
+        "start" => inlineAxis ? "inline-start" : "block-start",
+        "end" => inlineAxis ? "inline-end" : "block-end",
+        "span-start" => inlineAxis ? "span-inline-start" : "span-block-start",
+        "span-end" => inlineAxis ? "span-inline-end" : "span-block-end",
+        "self-start" => inlineAxis ? "self-inline-start" : "self-block-start",
+        "self-end" => inlineAxis ? "self-inline-end" : "self-block-end",
+        "span-self-start" => inlineAxis ? "span-self-inline-start" : "span-self-block-start",
+        "span-self-end" => inlineAxis ? "span-self-inline-end" : "span-self-block-end",
+        _ => word,
+    };
 
     /// <summary>A pair of values from one set — the shape of 'text-overflow', which takes one
     /// keyword per axis and so never more than two.</summary>
@@ -3076,30 +3265,36 @@ public static class CssValueGrammar
     private static bool IsCounterStyle(string token) =>
         IsContentIdent(token) || token.StartsWith("--", StringComparison.Ordinal);
 
-    /// <summary>CSS Masking 1 §5.2: <c>clip-path</c> is <c>none</c>, a <c>&lt;clip-source&gt;</c>
-    /// url, or a basic shape with an optional <c>&lt;geometry-box&gt;</c>. The shape's own arguments
-    /// are checked (CSS Shapes 1 §4) because a stray token inside them makes the whole declaration
-    /// invalid — 'circle(50%, bogus)' is refused while 'circle(50% at 0 0)' is not. A shape this
-    /// reader does not recognise is accepted rather than dropped: the clip already drawn by the
-    /// painter must not disappear because the grammar fell short.</summary>
-    internal static bool IsClipPathValue(string text, bool bareBoxAllowed = false)
+    /// <summary>CSS Masking 1 §5.2 and CSS Shapes 1 §11: the value of <c>clip-path</c> and
+    /// <c>shape-outside</c> is a box and a shape in either order, either one alone, <c>none</c>, or a
+    /// <c>&lt;clip-source&gt;</c> url. The two properties do not share a box set: a clip names any of
+    /// the seven geometry boxes and a lone box is the rectangle it clips to (measured, all seven
+    /// stand, and 'MARGIN-BOX' reads 'margin-box'), while a float exclusion knows only the four CSS
+    /// boxes and drops 'fill-box' and 'view-box' in either end (all measured). Two boxes is no
+    /// value, and a url is the whole value with nothing beside it (measured: 'url(a.png) border-box'
+    /// is refused). The shape's own arguments are checked (CSS Shapes 1 §4) because a stray token
+    /// inside them makes the whole declaration invalid — 'circle(50%, bogus)' is refused while
+    /// 'circle(50% at 0 0)' is not. A shape this reader does not recognise is accepted rather than
+    /// dropped: the clip already drawn by the painter must not disappear because the grammar fell
+    /// short.</summary>
+    internal static bool IsClipPathValue(string text, string[]? boxes = null)
     {
         var trimmed = text.Trim();
         if (trimmed.Length == 0) return false;
         if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
         var tokens = SplitComponents(trimmed);
         if (tokens.Count == 0) return false;
+        boxes ??= GeometryBoxWords;
+        bool IsBox(string word) => boxes.Contains(word.ToLowerInvariant());
         int index = 0;
-        if (GeometryBoxWords.Contains(tokens[0].ToLowerInvariant())) index = 1;
-        // 'shape-outside' names its box on its own — a box with no shape is the rectangle of that
-        // box (CSS Shapes 1 §11, measured: 'shape-outside: margin-box' reads back 'margin-box'),
-        // where the same words alone are no clip-path value at all.
-        if (index >= tokens.Count)
-            return bareBoxAllowed && tokens.Count == 1;
+        if (IsBox(tokens[0])) index = 1;
+        // A box with no shape says the rectangle of that box, and nothing else stands alone.
+        if (index >= tokens.Count) return tokens.Count == 1 && IsBox(tokens[0]);
         var shape = tokens[index];
-        if (shape.StartsWith("url(", StringComparison.OrdinalIgnoreCase)) return true;
-        if (index + 1 < tokens.Count
-            && GeometryBoxWords.Contains(tokens[index + 1].ToLowerInvariant())) index++;
+        // A <clip-source> references a clip element; the geometry box of the spec's other arm does
+        // not travel with it (measured: refused in both orders).
+        if (shape.StartsWith("url(", StringComparison.OrdinalIgnoreCase)) return tokens.Count == 1;
+        if (index + 1 < tokens.Count && IsBox(tokens[index + 1])) index++;
         else if (index + 1 < tokens.Count) return false;
         int open = shape.IndexOf('(');
         if (open <= 0 || !shape.EndsWith(")", StringComparison.Ordinal)) return false;
@@ -3121,6 +3316,14 @@ public static class CssValueGrammar
     {
         "border-box", "padding-box", "content-box", "margin-box",
         "fill-box", "stroke-box", "view-box",
+    };
+
+    /// <summary>The <c>&lt;box&gt;</c> of CSS Shapes 1 §11: the four boxes a float's exclusion shape
+    /// can be measured from. The three an SVG element carries ('fill-box', 'stroke-box', 'view-box')
+    /// are not <c>shape-outside</c> values at all (measured: both are dropped).</summary>
+    internal static readonly string[] CssBoxWords =
+    {
+        "border-box", "padding-box", "content-box", "margin-box",
     };
 
     private static string[] ShapeWords(string text) => text.Split((char[]?)null,

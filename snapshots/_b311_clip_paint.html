@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b311 clip paint</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 12px monospace; }
+  .box { position: absolute; width: 40px; height: 40px; padding: 10px; border: 10px solid #ff0000;
+         background: #00ff00; }
+  #content { left: 10px; top: 10px; clip-path: content-box; }
+  #padding { left: 100px; top: 10px; clip-path: padding-box; }
+  #xywh    { left: 190px; top: 10px; clip-path: xywh(0 0 30px 30px); }
+  #xywhpct { left: 280px; top: 10px; clip-path: xywh(0 0 50% 50%); }
+  #plain   { left: 370px; top: 10px; }
+  #margin  { left: 460px; top: 10px; clip-path: margin-box; }
+</style></head>
+<body>
+<div class="box" id="content"></div>
+<div class="box" id="padding"></div>
+<div class="box" id="xywh"></div>
+<div class="box" id="xywhpct"></div>
+<div class="box" id="plain"></div>
+<div class="box" id="margin"></div>
+<script>
+// record
+function build() {
+  const rows = [];
+  for (const id of ['content', 'padding', 'xywh', 'xywhpct', 'plain', 'margin']) {
+    const el = document.getElementById(id);
+    const r = el.getBoundingClientRect();
+    rows.push(id + '|rect=' + Math.round(r.x) + ',' + Math.round(r.y) + ' '
+        + Math.round(r.width) + 'x' + Math.round(r.height)
+        + '|comp=' + getComputedStyle(el).getPropertyValue('clip-path'));
+  }
+  // A clipped-away region answers the body, not the box: elementFromPoint says which side of the
+  // clip the point fell on (CSS Masking 1 §5.3 says a clipped region is not hit).
+  const pts = [[15, 15], [30, 30], [105, 15], [115, 25], [195, 15], [245, 65],
+               [380, 15], [285, 15], [325, 55], [465, 15], [545, 95]];
+  for (const p of pts) {
+    const hit = document.elementFromPoint(p[0], p[1]);
+    rows.push('hit ' + p[0] + ',' + p[1] + '=' + (hit && hit.id ? hit.id : hit ? hit.tagName : 'null'));
+  }
+  document.body.insertAdjacentHTML('beforeend',
+      '<pre id="record" style="position:absolute;left:10px;top:110px;font:11px/1.3 monospace">'
+      + rows.join('\n') + '</pre>');
+  console.log(rows.join('\n'));
+}
+build();
+</script>
+</body></html>
