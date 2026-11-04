@@ -162,14 +162,14 @@ public class Document : Node
     public HtmlCollection Forms => new(GetElementsByTagName("form").Cast<Element>().ToList());
     public HtmlCollection Scripts => new(GetElementsByTagName("script").Cast<Element>().ToList());
 
-    /// <summary>CSSOM Views §3.5: the point test walks the laid-out tree in paint order — a later
-    /// sibling lies above an earlier one and a child above its parent — so the first box that holds
-    /// the point is the element a click reaches, and the answer is that element followed by the
-    /// ancestors it is drawn through. An element the page tells the pointer to pass through
-    /// ('pointer-events: none', 'visibility: hidden') is not reached, but its children still are,
-    /// and an element the engine gave no box holds no point of its own while the boxes below it may.
-    /// A shadow tree is not walked from here: the host is the element the document shows at the
-    /// point, which is what the reference answers too.</summary>
+    /// <summary>CSSOM Views §3.5: the point test walks the laid-out tree in paint order — a box
+    /// painted above another lies under the pointer before it does — and answers every element whose
+    /// box holds the point in that order. Two siblings that overlap are therefore both in the list,
+    /// which is the whole difference between this and 'ElementFromPoint'. An element the page tells
+    /// the pointer to pass through ('pointer-events: none', 'visibility: hidden') is not reached
+    /// itself, but its children still are, and an element the engine gave no box holds no point of
+    /// its own while the boxes below it may. A shadow tree is not walked from here: the host is the
+    /// element the document shows at the point, which is what the reference answers too.</summary>
     public Element? ElementFromPoint(double x, double y)
     {
         var chain = ElementsFromPoint(x, y);
@@ -179,19 +179,39 @@ public class Document : Node
     public List<Element> ElementsFromPoint(double x, double y)
     {
         var chain = new List<Element>();
-        Element? top = null;
         void Walk(Element element)
         {
-            if (top != null) return;
-            var reached = Reachable(element) && HoldsPoint(element, x, y);
-            var children = element.Children;
-            for (var i = children.Count - 1; i >= 0 && top == null; i--)
-                if (children[i] is Element child) Walk(child);
-            if (top == null && reached) top = element;
+            var above = PaintOrder(element.Children);
+            for (var i = above.Count - 1; i >= 0; i--) Walk(above[i]);
+            if (Reachable(element) && HoldsPoint(element, x, y)) chain.Add(element);
         }
         if (DocumentElement != null) Walk(DocumentElement);
-        for (var e = top; e != null; e = e.ParentElement) chain.Add(e);
         return chain;
+    }
+
+    /// <summary>CSS 2.1 appendix E, as far as an element's own boxes go: the elements a page put
+    /// behind with a negative z-index, then the ones that flow, then the positioned ones in the
+    /// order the document writes them, then the ones raised by a z-index. Reading the list back
+    /// front-to-last is what the pointer sees.</summary>
+    private static List<Element> PaintOrder(List<Node> children)
+    {
+        var made = new List<(Element element, int tier, int z, int order)>();
+        var order = 0;
+        foreach (var node in children)
+        {
+            if (node is not Element element) continue;
+            var style = element.ComputedStyle;
+            var positioned = style is not null && style.Position != PositionType.Static;
+            var z = positioned ? style!.ZIndex ?? 0 : 0;
+            var tier = z < 0 ? 0 : positioned && z == 0 ? 2 : z > 0 ? 3 : 1;
+            made.Add((element, tier, z, order++));
+        }
+        return made
+            .OrderBy(item => item.tier)
+            .ThenBy(item => item.z)
+            .ThenBy(item => item.order)
+            .Select(item => item.element)
+            .ToList();
     }
 
     private static bool HoldsPoint(Element element, double x, double y)

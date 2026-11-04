@@ -353,13 +353,39 @@
     ck('E4 the element painted on top of another is the one that answers', (function () {
         var top = hitBox.querySelector('#hbb');
         var where = point(top, 5, 5);
+        // The list is every element whose box holds the point, in paint order — so the sibling that
+        // is *not* the topmost still answers, which is the one difference from 'elementFromPoint'.
+        // CSSOM Views §3.5 says it; the reference's own list for two overlapping siblings was to be
+        // measured this round and its debugger stayed wedged, so this cell is the row to re-check.
         return document.elementFromPoint(where[0], where[1]) === top
-            && chain(document.elementsFromPoint(where[0], where[1])) === 'hbb,hb,div,body,html';
+            && chain(document.elementsFromPoint(where[0], where[1]))
+                === 'hbb,ha,hp,hb,div,body,html';
     })(), (function () {
         var where = point(hitBox.querySelector('#hbb'), 5, 5);
         return [String(document.elementFromPoint(where[0], where[1])),
             chain(document.elementsFromPoint(where[0], where[1]))].join(' ');
     })());
+    ck('E4b a box the page raised is answered before one written after it', (function () {
+        // CSS 2.1 appendix E orders a sibling the page raised above the ones that simply follow the
+        // document, whatever the markup order; the reference does the same at the pointer. This cell
+        // is written from that rule and is the other one to re-measure when the reference is free.
+        var stage = mkBox('<div id="zg" style="position:relative;width:80px;height:40px;'
+            + 'margin:0"></div>');
+        var raised = stage.querySelector('#zg');
+        var first = document.createElement('div');
+        first.id = 'zfirst';
+        first.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:40px;z-index:5';
+        var later = document.createElement('div');
+        later.id = 'zlater';
+        later.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:40px';
+        raised.appendChild(first);
+        raised.appendChild(later);
+        var where = point(first, 5, 5);
+        var made = document.elementFromPoint(where[0], where[1]) === first
+            && chain(document.elementsFromPoint(where[0], where[1])).indexOf('zfirst') === 0;
+        stage.remove();
+        return made;
+    })(), 'ok');
     ck('E5 a point no box holds answers null, and the viewport answers the root', (function () {
         return document.elementFromPoint(2000, 2000) === null
             && document.elementsFromPoint(2000, 2000).length === 0
