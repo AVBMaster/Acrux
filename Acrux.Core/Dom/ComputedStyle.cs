@@ -968,6 +968,16 @@ public class ComputedStyle
     /// </summary>
     public bool VerticalAlignIsAuthored { get; set; }
     public WhiteSpaceMode WhiteSpace { get; set; } = WhiteSpaceMode.Normal;
+    /// <summary>'white-space' as the reference engine prints it (CSS Text 4 §1): the one word the two
+    /// axes say together, and for the two pairs no single word holds, those two words in the order
+    /// the longhands are named (measured: 'nowrap preserve-breaks' reads 'preserve-breaks nowrap',
+    /// 'collapse wrap' reads 'normal'). Kept here so getComputedStyle, the cascade's own dump and the
+    /// shorthand fold cannot print it three ways.</summary>
+    public string WhiteSpaceCssText =>
+        Acrux.Core.Css.ShorthandReparse.Fold(
+            CssEnumFormatter.CssKeywordFromEnum(WhiteSpaceCollapse.ToString()),
+            CssEnumFormatter.CssKeywordFromEnum(TextWrapMode.ToString()))
+        ?? CssEnumFormatter.CssKeywordFromEnum(WhiteSpace.ToString());
     /// <summary>The modular pieces 'white-space' and 'text-wrap' are shorthands of
     /// (CSS Text 4 §1). <see cref="WhiteSpace"/> above stays the value layout consumes,
     /// and is always kept in sync with this triple by <c>CssPropertyApplier</c> —

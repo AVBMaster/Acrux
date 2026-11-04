@@ -643,7 +643,10 @@ public static class ComputedValueSerializer
                         case "mask-origin": return MaskLayerList(style, style.MaskOriginLayers, style.MaskOrigin, "border-box", null);
                         case "mask-mode": return MaskLayerList(style, style.MaskModeLayers, style.MaskMode, "match-source", null);
                         case "mask-composite": return MaskLayerList(style, style.MaskCompositeLayers, style.MaskComposite, "add", null);
-            case "cursor": return style.Cursor ?? "auto";
+            // The four prefixed spellings the reference engine still reads keep their own spelling in
+            // the style attribute and answer the modern keyword on the computed surface (measured:
+            // 'cursor: -webkit-grab' echoes '-webkit-grab' and computes 'grab').
+            case "cursor": return Css.CssCursorValue.LegacyFold(style.Cursor) ?? style.Cursor ?? "auto";
             case "resize": return style.Resize switch
             {
                 ResizeType.Both => "both",
@@ -840,6 +843,10 @@ public static class ComputedValueSerializer
             // a real field, so a script asking for it gets the value the engine actually
             // uses rather than the empty string.
             case "text-transform": return style.TextTransform;
+            // CSS Text 4 §1: the shorthand answers the word its two axes say together, and the two
+            // pairs no single word holds answer those two words — 'pre' is not the computed value of
+            // 'white-space: nowrap preserve-breaks', which reads 'preserve-breaks nowrap' (measured).
+            case "white-space": return style.WhiteSpaceCssText;
             case "text-align-last": return CssEnumFormatter.CssKeywordFromEnum(style.TextAlignLast.ToString());
             case "vertical-align":
                 // A length resolves at computed-value time, a percentage stays a percentage

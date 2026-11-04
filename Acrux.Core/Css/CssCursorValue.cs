@@ -26,10 +26,33 @@ public static class CssCursorValue
         "vertical-text", "wait", "w-resize", "zoom-in", "zoom-out",
     };
 
+    /// <summary>The four legacy spellings this reference engine still reads — and the word each one
+    /// is on the computed surface (measured: 'cursor: -webkit-grab' echoes itself and computes
+    /// 'grab'). They stand only as the whole value: '-webkit-grab, -webkit-grabbing' is no cursor,
+    /// because the item that closes a list has to be a keyword the platform knows without a prefix
+    /// (measured). The other '-webkit-' cursor names the drafts spelled — 'auto', 'alias', 'resize',
+    /// 'text', 'help', 'none', 'ew-resize' — are not among them (measured, each refused).</summary>
+    private static readonly Dictionary<string, string> LegacyCursorKeywords =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["-webkit-grab"] = "grab",
+            ["-webkit-grabbing"] = "grabbing",
+            ["-webkit-zoom-in"] = "zoom-in",
+            ["-webkit-zoom-out"] = "zoom-out",
+        };
+
+    /// <summary>The word a legacy cursor spelling computes to, or null when the text is no legacy
+    /// spelling at all.</summary>
+    public static string? LegacyFold(string? text) =>
+        text != null && LegacyCursorKeywords.TryGetValue(text.Trim(), out var folded) ? folded : null;
+
     public static bool IsValid(string text)
     {
         var items = SplitCommas(text);
         if (items.Count == 0) return false;
+        // A prefixed spelling is only a cursor on its own; in a list the closing keyword has to be
+        // one the platform knows by its modern name.
+        if (items.Count == 1 && LegacyCursorKeywords.ContainsKey(items[0].Trim())) return true;
 
         for (int i = 0; i < items.Count; i++)
         {

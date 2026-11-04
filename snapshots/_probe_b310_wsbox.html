@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b310 white-space boxes</title>
+<style>
+  body { font: 16px/1.4 monospace; margin: 8px; }
+  div { border: 1px solid rgb(255, 128, 128); margin-bottom: 6px; }
+  span { background: rgb(200, 200, 255); }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+// wsbox: the width each white-space spelling gives the same text, so a difference in space
+// collapsing or wrapping shows as a number rather than as a claim.
+const SPELLINGS = ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces',
+  'collapse', 'preserve', 'preserve-breaks', 'collapse nowrap', 'preserve nowrap',
+  'preserve-breaks nowrap', 'break-spaces nowrap', 'wrap'];
+const TEXT = 'AA  BB\nCC  DD';
+const rows = [];
+const host = document.getElementById('host');
+for (const s of SPELLINGS) {
+  const box = document.createElement('div');
+  box.style.width = '60px';
+  box.style.whiteSpace = s;
+  const inner = document.createElement('span');
+  inner.textContent = TEXT;
+  box.appendChild(inner);
+  host.appendChild(box);
+  const r = inner.getBoundingClientRect();
+  rows.push(s + '|w=' + r.width.toFixed(2) + '|h=' + r.height.toFixed(2)
+    + '|box=' + box.getBoundingClientRect().width.toFixed(2)
+    + '/' + box.getBoundingClientRect().height.toFixed(2));
+}
+document.body.insertAdjacentHTML('beforeend',
+  '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">'
+  + rows.join('\n') + '</pre>');
+console.log(rows.join('\n'));
+</script>
+</body></html>

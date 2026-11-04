@@ -1909,49 +1909,22 @@ public static class CssPropertyApplier
     /// consumes; a longhand writes its own field and re-derives the mode.</summary>
     private static void ApplyWhiteSpaceShorthand(ComputedStyle style, string value)
     {
-        string v = value.Trim().ToLowerInvariant();
-        string head = v.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "normal";
-        switch (head)
+        // CSS Text 4 §1: the shorthand says the two axes the longhands hold, whichever way they were
+        // written — 'nowrap preserve' is 'pre' and not a collapsing 'nowrap' — and a text the grammar
+        // has refused leaves the property standing as it was.
+        if (Css.CssValueGrammar.WhiteSpaceParts(value) is not { } parts) return;
+        style.WhiteSpaceCollapse = parts.Collapse switch
         {
-            case "nowrap":
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Collapse;
-                style.TextWrapMode = TextWrapModeType.NoWrap;
-                style.WhiteSpace = WhiteSpaceMode.Nowrap;
-                break;
-            case "pre":
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Preserve;
-                style.TextWrapMode = TextWrapModeType.NoWrap;
-                style.WhiteSpace = WhiteSpaceMode.Pre;
-                break;
-            case "pre-wrap":
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Preserve;
-                style.TextWrapMode = TextWrapModeType.Wrap;
-                style.WhiteSpace = WhiteSpaceMode.PreWrap;
-                break;
-            case "pre-line":
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.PreserveBreaks;
-                style.TextWrapMode = TextWrapModeType.Wrap;
-                style.WhiteSpace = WhiteSpaceMode.PreLine;
-                break;
-            case "break-spaces":
-                // Modelled as its own collapse value (see WhiteSpaceCollapseType): with
-                // plain 'preserve' it would be indistinguishable from 'pre-wrap'.
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.BreakSpaces;
-                style.TextWrapMode = TextWrapModeType.Wrap;
-                style.WhiteSpace = WhiteSpaceMode.BreakSpaces;
-                break;
-            default: // 'normal'
-                style.WhiteSpaceCollapse = WhiteSpaceCollapseType.Collapse;
-                style.TextWrapMode = TextWrapModeType.Wrap;
-                style.WhiteSpace = WhiteSpaceMode.Normal;
-                break;
-        }
-        // 'white-space' also accepts the wrapping-style keywords of 'text-wrap'.
-        if (v.Contains("balance")) style.TextWrapStyle = TextWrapStyleType.Balanced;
-        else if (v.Contains("stable")) style.TextWrapStyle = TextWrapStyleType.Stable;
-        else if (v.Contains("pretty")) style.TextWrapStyle = TextWrapStyleType.Pretty;
-        else style.TextWrapStyle = TextWrapStyleType.Auto;
-        SyncTextWrapString(style);
+            "preserve" => WhiteSpaceCollapseType.Preserve,
+            "preserve-breaks" => WhiteSpaceCollapseType.PreserveBreaks,
+            "break-spaces" => WhiteSpaceCollapseType.BreakSpaces,
+            _ => WhiteSpaceCollapseType.Collapse,
+        };
+        style.TextWrapMode = parts.Mode == "nowrap"
+            ? TextWrapModeType.NoWrap : TextWrapModeType.Wrap;
+        // The mode the layout reads is derived from the pair, never written beside it: that is the
+        // one way 'white-space' and the two longhands cannot disagree about what the box does.
+        RecomputeEffectiveWhiteSpace(style);
     }
 
     /// <summary>Re-derive the effective 'white-space' mode from the triple after a
@@ -1968,7 +1941,11 @@ public static class CssPropertyApplier
             (WhiteSpaceCollapseType.Preserve, _) => WhiteSpaceMode.PreWrap,
             (WhiteSpaceCollapseType.BreakSpaces, TextWrapModeType.NoWrap) => WhiteSpaceMode.Pre,
             (WhiteSpaceCollapseType.BreakSpaces, _) => WhiteSpaceMode.BreakSpaces,
-            (WhiteSpaceCollapseType.PreserveBreaks, TextWrapModeType.NoWrap) => WhiteSpaceMode.Pre,
+            // 'pre-line' is the collapsing half of this pair, and the wrapping half is said by
+            // 'TextWrapMode' itself — the layout asks both, so no third mode is needed for a pair
+            // no single word holds (measured: 'white-space: nowrap preserve-breaks' collapses the
+            // double space to one and still keeps the newline).
+            (WhiteSpaceCollapseType.PreserveBreaks, TextWrapModeType.NoWrap) => WhiteSpaceMode.PreLine,
             (WhiteSpaceCollapseType.PreserveBreaks, _) => WhiteSpaceMode.PreLine,
             (WhiteSpaceCollapseType.Discard, TextWrapModeType.NoWrap) => WhiteSpaceMode.Nowrap,
             _ => WhiteSpaceMode.Normal,

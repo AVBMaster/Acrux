@@ -256,22 +256,30 @@ public static class ShorthandReparse
     /// a 'text-wrap-style' beside them stays its own declaration, because 'white-space' has no slot
     /// for it (measured: collapse + wrap reads 'normal', preserve + nowrap 'pre', preserve-breaks +
     /// wrap 'pre-line', and with a balance style the block reads
-    /// 'white-space: normal; text-wrap-style: balance').</summary>
-    private static string? WhiteSpaceText(Dictionary<string, string> byName)
+    /// 'white-space: normal; text-wrap-style: balance').
+    /// <para>
+    /// Two pairs have no single word to say them, and the reference engine then prints the two
+    /// component words in their own order — the collapsing half first (measured:
+    /// 'white-space: nowrap preserve-breaks' reads back 'preserve-breaks nowrap', and
+    /// 'break-spaces nowrap' says itself) — which is why this returns the text rather than a
+    /// <see cref="WhiteSpaceMode"/>: no mode of the layout's enum holds either pair.
+    /// </para></summary>
+    public static string? Fold(string collapse, string mode) => (collapse, mode) switch
     {
-        var collapse = byName.GetValueOrDefault("white-space-collapse", "");
-        var mode = byName.GetValueOrDefault("text-wrap-mode", "");
-        return (collapse, mode) switch
-        {
-            ("collapse", "wrap") => "normal",
-            ("collapse", "nowrap") => "nowrap",
-            ("preserve", "nowrap") => "pre",
-            ("preserve", "wrap") => "pre-wrap",
-            ("preserve-breaks", "wrap") => "pre-line",
-            ("break-spaces", "wrap") => "break-spaces",
-            _ => null,
-        };
-    }
+        ("collapse", "wrap") => "normal",
+        ("collapse", "nowrap") => "nowrap",
+        ("preserve", "nowrap") => "pre",
+        ("preserve", "wrap") => "pre-wrap",
+        ("preserve-breaks", "wrap") => "pre-line",
+        ("preserve-breaks", "nowrap") => "preserve-breaks nowrap",
+        ("break-spaces", "wrap") => "break-spaces",
+        ("break-spaces", "nowrap") => "break-spaces nowrap",
+        _ => null,
+    };
+
+    private static string? WhiteSpaceText(Dictionary<string, string> byName)
+        => Fold(byName.GetValueOrDefault("white-space-collapse", ""),
+                byName.GetValueOrDefault("text-wrap-mode", ""));
 
     /// <summary>The seventeen parts as the one <c>border</c> the reference engine prints them in —
     /// but only when they say a single border. Four different widths are not one value, and a

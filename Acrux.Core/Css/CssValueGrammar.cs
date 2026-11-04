@@ -500,10 +500,6 @@ public static class CssValueGrammar
         return parts.Count == 1 && IsOneOf(parts[0], words);
     }
 
-    /// <summary>One word of a closed set — a second word is no value even when it is itself a
-    /// member ('word-break: normal break-word', 'user-select: none auto', both measured).</summary>
-    /// <summary>One or two words of a closed set, printed once when both agree (the pair
-    /// shorthands of CSS Overscroll Behavior 1 §3, measured: 'auto auto' reads 'auto').</summary>
     /// <summary>For 'object-position': a value with two side keywords and exactly one length is
     /// no position (measured). Every other shape the background grammar takes, this one takes too.</summary>
     private static bool SaysBothOrNeither(string text)
@@ -518,6 +514,8 @@ public static class CssValueGrammar
         return !(sides == 2 && lengths == 1);
     }
 
+    /// <summary>One or two words of a closed set, printed once when both agree (the pair
+    /// shorthands of CSS Overscroll Behavior 1 §3, measured: 'auto auto' reads 'auto').</summary>
     private static bool IsOneOrTwoKeywords(string text, params string[] allowed)
     {
         var words = SplitComponents(text);
@@ -914,12 +912,14 @@ public static class CssValueGrammar
                 new[] { "match-source", "luminance", "alpha" }));
         },
         CssPropertyId.TextWrap => IsTextWrapValue,
-        // CSS Text 4 §1: ONE of the six words. The two-value form the current draft adds
-        // ('white-space: pre nowrap') and the 'stable' keyword are not values this engine's
-        // reference takes (measured: 'normal nowrap', 'pre normal', 'break-spaces normal' and
-        // 'stable' are each dropped, with the property left at its 'normal').
-        CssPropertyId.WhiteSpace => static text => IsOneWordOnly(text,
-            "normal", "pre", "nowrap", "pre-wrap", "pre-line", "break-spaces"),
+        // CSS Text 4 §1: either one of the six words the shorthand has always had, or the two
+        // longhands it is now made of — at most one of each, in either order. The two-value form is
+        // what this round measured ('white-space: pre nowrap' and 'normal nowrap' are each dropped,
+        // 'stable' with it, while 'preserve nowrap', 'collapse wrap' and 'WRAP' all read back the
+        // word the pair says), and 'discard' is a value of the longhand only — no shorthand word
+        // spells it here (measured: 'white-space: discard' and 'white-space-collapse: discard'
+        // answer sup=0 and sup=0 alike).
+        CssPropertyId.WhiteSpace => static text => WhiteSpaceParts(text) != null,
         // CSS Cascades 4 §4.6: 'all' takes nothing but the keywords that stand for a whole value.
         // 'none' and 'normal' are not among them (measured: both read back empty).
         CssPropertyId.All => static text => IsOneWordOnly(text,
@@ -1655,9 +1655,11 @@ public static class CssValueGrammar
             });
         },
         // CSS Text 3 §5.3: the four. 'full-width' and 'full-size-kana' are §5.4's feature, which the
-        // reference engine does not answer here (measured: both dropped).
+        // reference engine does not answer here (measured: both dropped). 'math-auto' is CSS Text 4
+        // §5.5's fifth word and this engine DOES take it, alone — 'math' is not a value and the word
+        // may not stand beside another (measured, both).
         CssPropertyId.TextTransform => static text => IsOneWordOnly(text,
-            "none", "capitalize", "uppercase", "lowercase"),
+            "none", "capitalize", "uppercase", "lowercase", "math-auto"),
         // CSS Ruby 1 §4.1: 'over' and 'under' only. The vertical writing modes' 'left'/'right', the
         // draft's 'alternate' and the two-word form are each dropped (measured).
         CssPropertyId.RubyPosition => static text => IsOneWordOnly(text, "over", "under"),
@@ -3801,16 +3803,6 @@ public static class CssValueGrammar
         return unit.Length == 0 && number >= 0;
     }
 
-    /// <summary>A &lt;length-percentage&gt; that is not negative. A negative basis measures less than
-    /// nothing, so <c>flex-basis: -5px</c> is no value at all — and the same negative written the other
-    /// way round in the shorthand falls with it (measured, both).</summary>
-    /// <summary>A &lt;length&gt; that says what it is measured in — with one exception CSS 2.1 made
-    /// and the reference engine still keeps: a bare <c>0</c> is such a length, while a bare
-    /// <c>1</c> is not. Measured on each of the properties that take one: 'border-spacing: 0' and
-    /// 'perspective: 0' are values, 'letter-spacing: 1', 'perspective: 10',
-    /// 'text-decoration-thickness: 1' and 'text-underline-offset: 1' are not. 'overflow-clip-margin'
-    /// is the one that does not even take the bare zero (measured: '0' falls, '0px' stands), so it
-    /// asks for <see cref="IsDimensionedLength"/> instead.</summary>
     /// <summary>The metric, asked of the text a declaration carries — the same question the grammar
     /// arm asks, and the applier's only route to it.</summary>
     public static bool IsFontSizeAdjustMetricText(string word) => IsFontSizeAdjustMetric(word);
@@ -3844,6 +3836,13 @@ public static class CssValueGrammar
     /// applier asks before it stores the metric beside it.</summary>
     public static bool IsFontSizeAdjustRatioText(string word) => IsFontSizeAdjustRatio(word);
 
+    /// <summary>A &lt;length&gt; that says what it is measured in — with one exception CSS 2.1 made
+    /// and the reference engine still keeps: a bare <c>0</c> is such a length, while a bare
+    /// <c>1</c> is not. Measured on each of the properties that take one: 'border-spacing: 0' and
+    /// 'perspective: 0' are values, 'letter-spacing: 1', 'perspective: 10',
+    /// 'text-decoration-thickness: 1' and 'text-underline-offset: 1' are not. 'overflow-clip-margin'
+    /// is the one that does not even take the bare zero (measured: '0' falls, '0px' stands), so it
+    /// asks for <see cref="IsDimensionedLength"/> instead.</summary>
     private static bool IsDimensionedLengthOrZero(string token) =>
         IsDimensionedLength(token) || IsBareZero(token);
 
@@ -3869,7 +3868,9 @@ public static class CssValueGrammar
         IsDimensionedLengthOrZero(token) || IsPercentage(token);
 
     /// <summary>A &lt;length-percentage&gt; of the box family that is not negative — the shape the
-    /// paddings, the gaps, a flex basis and a corner radius are written in.</summary>
+    /// paddings, the gaps, a flex basis and a corner radius are written in. A negative basis measures
+    /// less than nothing, so <c>flex-basis: -5px</c> is no value at all, and the same negative written
+    /// the other way round in the shorthand falls with it (measured, both).</summary>
     private static bool IsNonNegativeBoxLength(string token) =>
         IsBoxLength(token) && !IsNegativeValue(token);
 
@@ -3884,6 +3885,55 @@ public static class CssValueGrammar
         IsDimensionedLengthOrZero(token)
         || (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
             && unit == "%");
+
+    /// <summary>CSS Text 4 §1: the two axes a 'white-space' value says, in their longhand words, or
+    /// null when the text is no value of the property. One word is either a whole legacy spelling
+    /// ('pre' is preserve + nowrap) or one axis named on its own, and an axis left out keeps the
+    /// initial the longhand has: collapsing for the first, wrapping for the second (measured:
+    /// 'collapse' and 'wrap' each read 'normal', 'preserve' reads 'pre-wrap' and 'preserve-breaks'
+    /// reads 'pre-line'). Two words must be one of each kind — 'collapse preserve' says the same
+    /// axis twice and is no value, and neither is a legacy word standing beside an axis
+    /// (measured: 'normal nowrap' and 'pre wrap' are each dropped).</summary>
+    public static (string Collapse, string Mode)? WhiteSpaceParts(string text)
+    {
+        var words = SplitComponents(text);
+        if (words.Count is 0 or > 2) return null;
+        string collapse = "", mode = "";
+        foreach (var raw in words)
+        {
+            var word = raw.ToLowerInvariant();
+            // A whole legacy spelling stands alone and says both axes at once.
+            if (words.Count == 1 && LegacyWhiteSpace.TryGetValue(word, out var pair)) return pair;
+            if (WhiteSpaceCollapseWords.Contains(word))
+            {
+                if (collapse.Length > 0) return null;
+                collapse = word;
+                continue;
+            }
+            if (word is "wrap" or "nowrap")
+            {
+                if (mode.Length > 0) return null;
+                mode = word;
+                continue;
+            }
+            return null;
+        }
+        return (collapse.Length == 0 ? "collapse" : collapse, mode.Length == 0 ? "wrap" : mode);
+    }
+
+    private static readonly HashSet<string> WhiteSpaceCollapseWords =
+        new(StringComparer.OrdinalIgnoreCase) { "collapse", "preserve", "preserve-breaks", "break-spaces" };
+
+    private static readonly Dictionary<string, (string Collapse, string Mode)> LegacyWhiteSpace =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["normal"] = ("collapse", "wrap"),
+            ["nowrap"] = ("collapse", "nowrap"),
+            ["pre"] = ("preserve", "nowrap"),
+            ["pre-wrap"] = ("preserve", "wrap"),
+            ["pre-line"] = ("preserve-breaks", "wrap"),
+            ["break-spaces"] = ("break-spaces", "wrap"),
+        };
 
     /// <summary>The same length with nothing negative about it — the range 'border-spacing' and
     /// 'perspective' are defined on (measured: 'border-spacing: 1px -1px' and 'perspective: -10px'

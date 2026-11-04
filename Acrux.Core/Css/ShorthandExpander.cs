@@ -322,25 +322,34 @@ public static class ShorthandExpander
 
     private static void ExpandWhiteSpace(Dictionary<string, string> result, string value)
     {
-        string v = value.Trim().ToLowerInvariant();
-        string head = v.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "normal";
-        string collapse = head switch
+        string v = (value ?? string.Empty).Trim();
+        if (v.Equals("initial", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("unset", StringComparison.OrdinalIgnoreCase))
         {
-            "pre" => "preserve",
-            "pre-wrap" => "preserve",
-            "pre-line" => "preserve-breaks",
-            "break-spaces" => "break-spaces",
-            "nowrap" => "collapse",
-            _ => "collapse",
-        };
-        string mode = head == "pre" || head == "nowrap" ? "nowrap" : "wrap";
+            // 'initial' and 'unset' still name all three longhands, each at its own initial (the
+            // same shape 'flex: initial' has — see <see cref="ExpandFlex"/>). Leaving them out would
+            // let the parent's value survive a page that asked for nothing (measured: a span inside
+            // a 'white-space: pre' parent reads 'normal' from 'white-space: initial').
+            // 'inherit' and 'revert' are NOT answered here: the cascade resolves those before any
+            // longhand of this shorthand is read, and writing the initials for them would turn an
+            // inherited 'pre' into 'normal' (measured, both).
+            result["white-space-collapse"] = "collapse";
+            result["text-wrap-mode"] = "wrap";
+            result["text-wrap-style"] = "auto";
+            return;
+        }
+        // CSS Text 4 §1: the shorthand says the two axes, whether they were spelled as one legacy
+        // word or as the axis words themselves — and 'nowrap preserve-breaks' is the second axis
+        // before the first, which a reader of the head word alone turns into a plain 'normal'.
+        // One rule serves the grammar, the print and this expansion (CssValueGrammar.WhiteSpaceParts).
+        if (Css.CssValueGrammar.WhiteSpaceParts(v) is not { } parts) return;
         // The style is emitted in the spelling the property itself takes: 'balance', not the
         // 'balanced' of an older draft (measured: 'text-wrap-style: balanced' is dropped).
         string style = v.Contains("balance") ? "balance"
             : v.Contains("stable") ? "stable"
             : v.Contains("pretty") ? "pretty" : "auto";
-        result["white-space-collapse"] = collapse;
-        result["text-wrap-mode"] = mode;
+        result["white-space-collapse"] = parts.Collapse;
+        result["text-wrap-mode"] = parts.Mode;
         result["text-wrap-style"] = style;
     }
 

@@ -522,7 +522,13 @@ public static class WhiteSpaceStyle
     public static bool HangsTrailingSpaces(ComputedStyle style) =>
         style.WhiteSpace == WhiteSpaceMode.PreWrap;
 
-    public static bool ShouldWrapLine(ComputedStyle style) => style.WhiteSpace is WhiteSpaceMode.Normal or WhiteSpaceMode.PreWrap or WhiteSpaceMode.PreLine or WhiteSpaceMode.BreakSpaces;
+    /// <summary>Which modes wrap a line — and the wrapping axis answers for the pairs no mode word
+    /// holds, so 'preserve-breaks nowrap' keeps its newlines without ever breaking a line
+    /// (measured against the reference engine's own box widths).</summary>
+    public static bool ShouldWrapLine(ComputedStyle style) =>
+        (style.WhiteSpace is WhiteSpaceMode.Normal or WhiteSpaceMode.PreWrap
+            or WhiteSpaceMode.PreLine or WhiteSpaceMode.BreakSpaces)
+        && style.TextWrapMode != TextWrapModeType.NoWrap;
 
     public static bool ShouldBreakOnlyAfterWhiteSpace(ComputedStyle style) => style.WhiteSpace == WhiteSpaceMode.PreLine;
 

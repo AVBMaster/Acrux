@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b310 white-space from a sheet</title>
+<style>
+  body { font: 16px/1.4 monospace; margin: 8px; }
+  .s-normal { white-space: normal; }
+  .s-pre { white-space: pre; }
+  .s-nowrap { white-space: nowrap; }
+  .s-preline { white-space: pre-line; }
+  .s-collapse { white-space: collapse; }
+  .s-preserve { white-space: preserve; }
+  .s-preserve-nowrap { white-space: preserve nowrap; }
+  .s-nowrap-preservebreaks { white-space: nowrap preserve-breaks; }
+  .s-breakspaces-nowrap { white-space: break-spaces nowrap; }
+  .s-wrap { white-space: wrap; }
+  .s-inherit { white-space: inherit; }
+  .s-initial { white-space: initial; }
+  .s-revert { white-space: revert; }
+  .s-bad { white-space: collapse collapse; }
+  .s-bad2 { white-space: pre nowrap; }
+  /* The parent of the three keyword rows: an authored value for 'inherit' and 'revert' to land on. */
+  #parent { white-space: pre; width: 120px; }
+</style>
+</head>
+<body>
+<div id="parent">
+  <span class="s-normal" id="r0">AA  BB</span>
+  <span class="s-pre" id="r1">AA  BB</span>
+  <span class="s-nowrap" id="r2">AA  BB</span>
+  <span class="s-preline" id="r3">AA  BB</span>
+  <span class="s-collapse" id="r4">AA  BB</span>
+  <span class="s-preserve" id="r5">AA  BB</span>
+  <span class="s-preserve-nowrap" id="r6">AA  BB</span>
+  <span class="s-nowrap-preservebreaks" id="r7">AA  BB</span>
+  <span class="s-breakspaces-nowrap" id="r8">AA  BB</span>
+  <span class="s-wrap" id="r9">AA  BB</span>
+  <span class="s-inherit" id="r10">AA  BB</span>
+  <span class="s-initial" id="r11">AA  BB</span>
+  <span class="s-revert" id="r12">AA  BB</span>
+  <span class="s-bad" id="r13">AA  BB</span>
+  <span class="s-bad2" id="r14">AA  BB</span>
+</div>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap">NOTRUN</pre>
+<script>
+const rows = [];
+for (let i = 0; i <= 14; i++) {
+  const el = document.getElementById('r' + i);
+  const cs = getComputedStyle(el);
+  rows.push('r' + i + '|' + el.className + '|ws=' + cs.getPropertyValue('white-space')
+    + '|collapse=' + cs.getPropertyValue('white-space-collapse')
+    + '|mode=' + cs.getPropertyValue('text-wrap-mode')
+    + '|w=' + el.getBoundingClientRect().width.toFixed(2));
+}
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+</script>
+</body></html>

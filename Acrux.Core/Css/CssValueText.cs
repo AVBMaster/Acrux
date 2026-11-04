@@ -79,6 +79,14 @@ public static class CssValueText
             value = Acrux.Core.Css.Resolver.CssPropertyApplier.CanonicalFontSizeAdjust(value).Text
                     ?? value;
 
+        // CSS Text 4 §1: 'white-space' says its two axes, and the print says the word the pair
+        // stands for — 'preserve nowrap' reads 'pre' and 'collapse' reads 'normal' — except for the
+        // two pairs no single word holds, which print their two component words in the order the
+        // longhands are named (measured: 'nowrap preserve-breaks' reads 'preserve-breaks nowrap').
+        if (property != null && property.Equals("white-space", StringComparison.OrdinalIgnoreCase)
+            && CssValueGrammar.WhiteSpaceParts(value) is { } space)
+            value = ShorthandReparse.Fold(space.Collapse, space.Mode) ?? value;
+
         // Whether a bare 0 in this value is a length. Known by the property, not by the text:
         // 'columns: 0' is a width and prints '0px', 'scale: 0' is a factor and prints '0'.
         bool lengths = property != null && Resolver.CssPropertyTraits.TakesLength(property);
@@ -2050,13 +2058,11 @@ public static class CssValueText
         return Acrux.Core.Dom.Animations.CssValueTokenizer.Num(number / 100f);
     }
 
-    /// <summary>'border-spacing' is the pair of table axes and prints the shortest spelling that
-    /// says the same thing: '0 0' is '0px' and '1px 1px' is '1px', while two different axes keep both
-    /// words (measured). The same rule the four-side shorthands follow, on two sides.</summary>
-    /// <summary>A two-sided property that prints one side when both say the same thing
-    /// (CSS Tables 1 §4.2 for 'border-spacing', CSS Gap 1 §3 for 'gap' and its legacy name —
-    /// measured: 'gap: 10px 10px' reads '10px' and 'gap: normal normal' reads 'normal', while
-    /// 'normal 10px' says both).</summary>
+    /// <summary>A two-sided property prints one side when both say the same thing:
+    /// 'border-spacing' (CSS Tables 1 §4.2) with '1px 1px' reads '1px', and so does the gap pair
+    /// (CSS Gap 1 §3) — 'gap: 10px 10px' reads '10px' and 'gap: normal normal' reads 'normal', while
+    /// two different axes keep both words ('normal 10px' says both). The same rule the four-side
+    /// shorthands follow, on two sides (measured for each property named above).</summary>
     private static string CanonicalizeBorderSpacing(string text, string property)
     {
         if (!property.Equals("border-spacing", StringComparison.OrdinalIgnoreCase)

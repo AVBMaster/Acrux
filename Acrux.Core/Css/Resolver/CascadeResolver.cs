@@ -581,7 +581,7 @@ public class CascadeResolver
         AddLengthProp(props, style.PaddingBottom, "padding-bottom", def.PaddingBottom);
         AddLengthProp(props, style.PaddingLeft, "padding-left", def.PaddingLeft);
         AddLengthProp(props, style.PaddingRight, "padding-right", def.PaddingRight);
-        if (style.WhiteSpace != def.WhiteSpace) props["white-space"] = style.WhiteSpace.ToString().ToLowerInvariant();
+        if (style.WhiteSpace != def.WhiteSpace) props["white-space"] = style.WhiteSpaceCssText;
         if (style.ListStyleType != def.ListStyleType) props["list-style-type"] = style.ListStyleType.ToString().ToLowerInvariant();
         if (style.BorderCollapse != def.BorderCollapse) props["border-collapse"] = style.BorderCollapse ? "collapse" : "separate";
         if (style.BackgroundImage is { Count: > 0 }) props["background-image"] = string.Join(", ", style.BackgroundImage);
@@ -608,7 +608,9 @@ public class CascadeResolver
         if (style.Float != def.Float) props["float"] = style.Float.ToString().ToLowerInvariant();
         if (style.Clear != def.Clear) props["clear"] = style.Clear.ToString().ToLowerInvariant();
         if (style.BoxSizing != def.BoxSizing) props["box-sizing"] = style.BoxSizing == BoxSizingType.BorderBox ? "border-box" : "content-box";
-        if (style.Cursor != def.Cursor) props["cursor"] = style.Cursor ?? "auto";
+        if (style.Cursor != def.Cursor)
+            props["cursor"] = Acrux.Core.Css.CssCursorValue.LegacyFold(style.Cursor)
+                ?? style.Cursor ?? "auto";
         if (style.Resize != def.Resize) props["resize"] = style.Resize == ResizeType.None ? "none" : style.Resize.ToString().ToLowerInvariant();
 
         AddLengthProp(props, style.Width, "width", def.Width);
