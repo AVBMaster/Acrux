@@ -1,0 +1,174 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the bytes a body carries and the bodies that are refused (Fetch §5.1, §5.3, §6.1, XHR §2.6.4, §2.6.7)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 27, frozen from DOMTest/probes/probe129.html (the same 10 rows as a measurement). A body is
+// BYTES, and three answers depended on that once the bytes were carried through: a buffer read back
+// through arrayBuffer()/bytes() (§6.1), a binary part inside a multipart body and a field value decoded
+// as the UTF-8 it was written as (§5.3), and the type a body brings with it when the page wrote no
+// Content-Type — which a buffer does not have at all (§2.6.4, §5.1). The refusals are one rule seen from
+// two doors: fetch takes neither a document of either type nor a fragment, XHR refuses an HTML document
+// and serialises an XML one. Two rows were wrong on the reading side first: the boundary a part's line
+// carries is two dashes PLUS the type's parameter, and a null header value disappears from a joined
+// string unless it is asked for by name.
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 34); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function later(label, build, expected) {
+        var made = 'pending';
+        try {
+            Promise.resolve(build()).then(function (v) { made = v; },
+                function (e) { made = 'REJECTED:' + String(e && e.name); });
+        } catch (e) { made = 'THREW:' + String(e && e.name); }
+        setTimeout(function () {
+            window.__T(label, String(made) === String(expected),
+                'got=[' + String(made) + '] want=[' + String(expected) + ']');
+        }, 40);
+    }
+    function codes(text) {
+        var made = [];
+        for (var i = 0; i < text.length; i++) made.push(text.charCodeAt(i));
+        return made;
+    }
+    function join() {
+        var made = [];
+        for (var a = 0; a < arguments.length; a++) {
+            var part = arguments[a];
+            for (var i = 0; i < part.length; i++) made.push(part[i] | 0);
+        }
+        return made;
+    }
+
+    // ── A. the bytes a body holds (Fetch §6.1) ────────────────────────────────
+    later('A1 a buffer body reads back the bytes it was given', function () {
+        return new Response(new Uint8Array([255, 0, 128, 65])).arrayBuffer().then(function (buf) {
+            var view = new Uint8Array(buf);
+            return [view.length, view[0], view[1], view[2], view[3]].join(',');
+        });
+    }, '4,255,0,128,65');
+
+    later('A2 the same through the bytes reader, and through a blob of one', function () {
+        var body = new Uint8Array([10, 200, 250]);
+        return new Response(body).bytes().then(function (run) {
+            return new Blob([body], { type: 'image/png' }).arrayBuffer().then(function (buf) {
+                var view = new Uint8Array(buf);
+                return [run.length, run[2], view.length, view[1]].join(',');
+            });
+        });
+    }, '3,250,3,200');
+
+    later('A3 a request keeps the view it was handed', function () {
+        var req = new Request('https://x.test/', { method: 'POST',
+            body: new Uint8Array([1, 2, 3, 254]) });
+        return req.bytes().then(function (run) {
+            return [run.length, run[3], String(req.headers.get('content-type'))].join(',');
+        });
+    }, '4,254,null');
+
+    later('A4 a string body names plain text and a typed blob names its own type', function () {
+        return Promise.all([
+            new Response('hi').headers.get('content-type'),
+            new Blob(['hi'], { type: 'image/gif' }).type,
+            String(new Request('https://x.test/', { method: 'POST', body: 'hi' })
+                .headers.get('content-type'))]).then(function (made) {
+            return made.join('|');
+        });
+    }, 'text/plain;charset=UTF-8|image/gif|null');
+
+    // ── B. a multipart body over bytes (§5.3) ──────────────────────────────────
+    later('B1 a binary part survives the read that a text body could not', function () {
+        var head = codes('----B\r\nContent-Disposition: form-data; name="f"; filename="x.bin"' // delimiter = '--' + boundary
+            + '\r\nContent-Type: image/png\r\n\r\n');
+        var tail = codes('\r\n----B--\r\n');
+        var body = new Uint8Array(join(head, [255, 254, 253], tail));
+        return new Response(body, {
+            headers: { 'content-type': 'multipart/form-data; boundary=--B' }
+        }).formData().then(function (fd) {
+            var file = fd.get('f');
+            return file.arrayBuffer().then(function (buf) {
+                var view = new Uint8Array(buf);
+                return [file.name, file.type, file.size, view[0], view[2]].join(',');
+            });
+        });
+    }, 'x.bin,image/png,3,255,253');
+
+    later('B2 a field value is the UTF-8 it was written as, not the bytes of it', function () {
+        // The delimiter that opens a part is two dashes plus the boundary the type named.
+        var head = codes('----C\r\nContent-Disposition: form-data; name="greeting"\r\n\r\n');
+        var tail = codes('\r\n----C--\r\n');
+        var body = new Uint8Array(join(head, [195, 169], tail));
+        return new Response(body, {
+            headers: { 'content-type': 'multipart/form-data; boundary=--C' }
+        }).formData().then(function (fd) { return fd.get('greeting'); });
+    }, 'é');
+
+    later('B3 the serialization and the parse keep a binary file as it was', function () {
+        var fd = new FormData();
+        fd.append('f', new File([new Uint8Array([0, 255, 7])], 'b.bin',
+            { type: 'application/octet-stream' }));
+        var req = new Request('https://x.test/', { method: 'POST', body: fd });
+        return req.formData().then(function (back) {
+            var file = back.get('f');
+            return file.arrayBuffer().then(function (buf) {
+                var view = new Uint8Array(buf);
+                return [file.name, file.size, view[0], view[1], view[2]].join(',');
+            });
+        });
+    }, 'b.bin,3,0,255,7');
+
+    // ── C. the bodies the two doors will not take (Fetch §5.1, XHR §2.6.4) ────
+    // §5.1 refuses a document of EITHER type and a fragment with it — the contrast with the other door
+    // is that XHR takes an XML document and refuses only the HTML one (C2), so the two questions are
+    // asked of the same value by two interfaces with two answers.
+    eq('C1 a document or a fragment is not a body a response or a request takes', safe(function () {
+        var frag = document.createDocumentFragment();
+        var foreign = new DOMParser().parseFromString('<r>one</r>', 'text/xml');
+        return [name(function () { return new Response(document); }),
+            name(function () { return new Response(frag); }),
+            name(function () { return new Request('https://x.test/',
+                { method: 'POST', body: document }); }),
+            name(function () { return new Response(foreign); })].join(',');
+    }), 'ok:TypeError,TypeError,TypeError,TypeError');
+
+    eq('C2 an HTML document is the body XHR refuses and an XML one the body it takes', safe(function () {
+        var html = new DOMParser().parseFromString('<p>one</p>', 'text/html');
+        var xml = new DOMParser().parseFromString('<r>one</r>', 'text/xml');
+        function sendWith(body) {
+            var x = new XMLHttpRequest();
+            x.open('POST', 'http://127.0.0.1:1/x', false);
+            try { x.send(body); } catch (e) { return String(e.name); }
+            return 'no-throw';
+        }
+        function sendParam() {
+            // The body type this interface names is a union with USVString in it, so a value that is not
+            // one of the others is taken as the text of it rather than refused (§2.6.4).
+            var y = new XMLHttpRequest();
+            y.open('POST', 'http://127.0.0.1:1/x', false);
+            try { y.send(new URLSearchParams('a=1')); } catch (e) { return String(e.name); }
+            return 'no-throw';
+        }
+        return [sendWith(html), sendWith(xml), sendWith(new Blob(['a'])),
+            sendWith(new FormData()), sendParam()].join(',');
+    }), 'ok:InvalidStateError,no-throw,no-throw,no-throw,no-throw');
+
+    eq('C3 a document body the XML door takes still arrives as a body', safe(function () {
+        // The serialization of the document is the body; the type the interface names for it is the
+        // one a document carries (§2.6.4).
+        var xml = new DOMParser().parseFromString('<r>one</r>', 'text/xml');
+        var x = new XMLHttpRequest();
+        x.open('POST', 'http://127.0.0.1:1/x', false);
+        var made = name(function () { x.send(xml); });
+        return [made, x.readyState >= 2].join(',');
+    }), 'ok:no-throw,true');
+})();
+</script>
+<div>the bytes a body carries</div></body></html>

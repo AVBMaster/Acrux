@@ -1583,6 +1583,24 @@ public class JavaScriptEngine : IDisposable
                 var cut = rest.indexOf(';');
                 return cut < 0 ? rest : rest.slice(0, cut);
             }
+            // A body of bytes is parsed as BYTES. A part may hold an image rather than a sentence, and a
+            // parse that read the decoded text would have replaced every byte it could not read before
+            // the algorithm ever saw it. The string below keeps one character per byte so the boundary
+            // arithmetic is the byte arithmetic the standard describes, and each end is turned back into
+            // bytes or into UTF-8 text by the kind of value the part makes (§5.3).
+            function byteString(run) {
+                var made = [];
+                for (var i = 0; i < run.length; i++) made.push(String.fromCharCode(run[i] & 0xFF));
+                return made.join('');
+            }
+            function bytesOfByteString(text) {
+                var made = new Uint8Array(text.length);
+                for (var i = 0; i < text.length; i++) made[i] = text.charCodeAt(i) & 0xFF;
+                return made;
+            }
+            function bodyByteString(state) {
+                return byteString(state.bytes ? state.bytes : textBytes(state.text));
+            }
             function multipartParse(text, boundary) {
                 var entries = [];
                 var close = '--' + boundary;
@@ -1620,8 +1638,9 @@ public class JavaScriptEngine : IDisposable
                         var name = formLastAttribute(disposition, 'name');
                         if (name !== null) {
                             var filename = formLastAttribute(disposition, 'filename');
-                            if (filename === null) entries.push([name, data]);
-                            else entries.push([name, new File([data], filename,
+                            if (filename === null)
+                                entries.push([name, bytesText(bytesOfByteString(data))]);
+                            else entries.push([name, new File([bytesOfByteString(data)], filename,
                                 { type: mime || 'application/octet-stream' })]);
                         }
                     }
@@ -1631,6 +1650,15 @@ public class JavaScriptEngine : IDisposable
             }
             // §5.3: the type decides the extraction, and a body that is neither of the two form types is
             // the TypeError rather than an empty list — the read has to say it cannot answer.
+            // The one sentence the read gives when the type is neither of the two it can carry. It is the
+            // engine's own wording — the reference's has not been read — and task #38 carries it with the
+            // other un-measured answers.
+            function formRefusal() {
+                return new TypeError('Failed to execute ' + formDataQuote('formData') + ' on '
+                    + formDataQuote('Body') + ': The body is neither of the form types this reads: '
+                    + formDataQuote('application/x-www-form-urlencoded') + ' or '
+                    + formDataQuote('multipart/form-data') + '.');
+            }
             function extractFormData(state) {
                 var type = state.headers ? String(state.headers.get('content-type') || '') : '';
                 var lower = type.toLowerCase();
@@ -1642,7 +1670,7 @@ public class JavaScriptEngine : IDisposable
                     var boundary = raw;
                     if (!boundary) return null;
                     var made = new FormData();
-                    var parts = multipartParse(state.text, boundary);
+                    var parts = multipartParse(bodyByteString(state), boundary);
                     for (var i = 0; i < parts.length; i++) made.append(parts[i][0], parts[i][1]);
                     return made;
                 }
@@ -3569,6 +3597,62 @@ public class JavaScriptEngine : IDisposable
                 }
                 return { text: String(body), stream: null, bytes: null, type: '' };
             }
+            // XHR §2.6.4 takes the body kinds fetch refuses, and the host that writes the request cannot
+            // read a script value back into bytes — the two questions it has are asked here, where the
+            // body is still the value the page handed over. The bytes cross as base64 because that is the
+            // one shape that survives the boundary without a structure to walk.
+            function xhrBodyRun(body) {
+                if (body === undefined || body === null) return null;
+                if (typeof body === 'string') return textBytes(body);
+                if (typeof FormData === 'function' && body instanceof FormData)
+                    return multipartSerialize(formEntries(body), formBoundary());
+                var kind = body.nodeType;
+                if (kind === 9 || kind === 11)
+                    return textBytes(new XMLSerializer().serializeToString(body));
+                return partBytes(body);
+            }
+            window.__acruxBodyBytes = function (body) {
+                var run = xhrBodyRun(body);
+                if (run === null) return '';
+                var view = new Uint8Array(run);
+                var text = '';
+                for (var i = 0; i < view.length; i += 1024) {
+                    text += String.fromCharCode.apply(null,
+                        Array.prototype.slice.call(view.subarray(i, i + 1024)));
+                }
+                try { return btoa(text); } catch (e) { return ''; }
+            };
+            // The type the body carries, which the interface puts on the request when the page wrote no
+            // Content-Type of its own (§2.6.4 with XHR §2.6.7). A buffer and a view of one carry NOTHING
+            // — the extraction gives no type for them — and a blob with no type is the same answer, so an
+            // empty string here means 'leave the header off' rather than a guess at plain text.
+            window.__acruxBodyType = function (body) {
+                if (body === undefined || body === null) return '';
+                if (typeof body === 'string') return 'text/plain;charset=UTF-8';
+                if (typeof FormData === 'function' && body instanceof FormData)
+                    return 'multipart/form-data; boundary=' + formBoundary();
+                var kind = body.nodeType;
+                if (kind === 9 || kind === 11) return 'application/xml';
+                if (formIsBlob(body)) return String(body.type === undefined ? '' : body.type);
+                return '';
+            };
+            // The body kinds this interface will not carry at all, asked before the request is written:
+            // §2.6.4 refuses an HTML document and takes an XML one as its serialization.
+            window.__acruxBodyRefused = function (body) {
+                if (body === undefined || body === null || typeof body !== 'object') return false;
+                return body.nodeType === 9 && String(body.contentType || '') === 'text/html';
+            };
+            // Fetch §5.1: a Document and a DocumentFragment are bodies this interface does not take —
+            // the other door (XHR §2.6.4) serialises a document, so the refusal belongs to the two
+            // constructors that read the fetch body rules rather than to the extraction itself.
+            function refuseFetchBody(body, iface) {
+                if (body === undefined || body === null || typeof body !== 'object') return;
+                var kind = body.nodeType;
+                if (kind !== 9 && kind !== 11) return;
+                // The sentence is the engine's own; task #38 carries the reference's wording.
+                throw new TypeError('Failed to construct ' + ifaceQuote(iface) + ': A Document or a '
+                    + 'DocumentFragment cannot be a body of a fetch request or response.');
+            }
             // Fetch §5.1: a body that carries a type puts it on the headers when the page did not write
             // one — the serialization names the type and the interface keeps them together.
             function typeFromBody(state, parts) {
@@ -3654,18 +3738,18 @@ public class JavaScriptEngine : IDisposable
                     readBody(state);
                     // Fetch §5.3: the type is asked first, and a body that is neither of the form types
                     // is the refusal — an empty list would say the body carried no fields, which is a
-                    // different answer from 'this is not a form'.
-                    var made = extractFormData(state);
-                    if (made === null) {
-                        // The sentence is the engine's own: the reference's wording for this refusal has
-                        // not been read (the interface names the two types it can read, which is what the
-                        // message says), so task #38 carries it with the other un-measured answers.
-                        return Promise.reject(new TypeError('Failed to execute ' + formDataQuote('formData')
-                            + ' on ' + formDataQuote('Body') + ': The body is neither of the form types '
-                            + 'this reads: ' + formDataQuote('application/x-www-form-urlencoded') + ' or '
-                            + formDataQuote('multipart/form-data') + '.'));
+                    // different answer from 'this is not a form'. A body the interface holds as a stream
+                    // has to be read into bytes before either question can be asked of it.
+                    function answered() {
+                        var made = extractFormData(state);
+                        return made === null ? Promise.reject(formRefusal()) : Promise.resolve(made);
                     }
-                    return Promise.resolve(made);
+                    if (!state.stream) return answered();
+                    return drainBodyStream(state).then(function (bytes) {
+                        state.bytes = bytes;
+                        state.text = bytesText(bytes);
+                        return answered();
+                    });
                 }
             };
             function installBodyMembers(proto) {
@@ -3721,6 +3805,7 @@ public class JavaScriptEngine : IDisposable
             }
             function Response(body, init) {
                 var options = init || { };
+                refuseFetchBody(body, 'Response');
                 var parts = bodyParts(body);
                 var status = options.status === undefined ? 200 : Number(options.status);
                 if (!options.__acruxInternal) {
@@ -3742,8 +3827,10 @@ public class JavaScriptEngine : IDisposable
                             + 'type provided: ' + ifaceQuote('error') + ' is invalid.');
                     }
                 }
-                var carried = isNullBodyStatus(status) ? { text: '', stream: null } : parts;
-                var state = { text: carried.text, used: false, stream: carried.stream,
+                var carried = isNullBodyStatus(status)
+                    ? { text: '', stream: null, bytes: null } : parts;
+                var state = { text: carried.text, bytes: carried.bytes, used: false,
+                    stream: carried.stream,
                     headers: new Headers(options.headers || { }),
                     url: options.url === undefined ? '' : String(options.url),
                     redirected: !!options.redirected,
@@ -3916,8 +4003,10 @@ public class JavaScriptEngine : IDisposable
                     throw new TypeError('Failed to construct ' + ifaceQuote('Request') + ': Request '
                         + 'with a ' + namedMethod + ' method cannot have a body.');
                 }
+                refuseFetchBody(body, 'Request');
                 var parts = bodyParts(body);
-                var state = { text: parts.text, used: false, stream: parts.stream,
+                var state = { text: parts.text, bytes: parts.bytes, used: false,
+                    stream: parts.stream,
                     url: target,
                     method: namedMethod,
                     headers: new Headers(init.headers !== undefined ? init.headers

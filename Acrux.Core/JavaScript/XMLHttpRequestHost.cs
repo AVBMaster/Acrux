@@ -152,6 +152,56 @@ public class XMLHttpRequestHost : IDomPrototypeHost
     // An IDL 'DOMString' argument is the value converted to text and an 'optional boolean' is the value
     // made true or false, so a page that hands either as a number or an object still gets the reading
     // the conversion gives.
+    /// <summary>§2.6.4: the script side is where a body still knows what it is, so the two questions the
+    /// host cannot ask a script value — is this a body this interface refuses, and what are its bytes —
+    /// are asked there. The bytes cross as base64 for the same reason the rest of the engine's answers
+    /// do: it is the one shape that survives the boundary without a structure to walk.</summary>
+    private bool RefusesBody(object? body)
+    {
+        if (body is null or string) return false;
+        var made = _engine.IntegrationService?.CallGlobal("__acruxBodyRefused", body);
+        return made switch
+        {
+            bool flag => flag,
+            string text => text == "true",
+            double number => number != 0,
+            _ => false,
+        };
+    }
+
+    private HttpContent WireContent(object? body)
+    {
+        if (body is string text)
+            return new StringContent(text, System.Text.Encoding.UTF8, "text/plain;charset=UTF-8");
+        string? encoded = null;
+        try
+        {
+            encoded = _engine.IntegrationService?.CallGlobal("__acruxBodyBytes", body) as string;
+        }
+        catch
+        {
+            encoded = null;
+        }
+        byte[] run;
+        try { run = Convert.FromBase64String(encoded ?? ""); }
+        catch { run = System.Text.Encoding.UTF8.GetBytes(ToText(body)); }
+        var content = new ByteArrayContent(run);
+        var type = _engine.IntegrationService?.CallGlobal("__acruxBodyType", body) as string;
+        // The type the body carries goes on the request only when the page did not write its own
+        // Content-Type (§2.6.4 with §2.6.7), and a type that is not a header value is left off rather
+        // than thrown in.
+        if (string.IsNullOrEmpty(type) || _requestHeaders.ContainsKey("Content-Type")) return content;
+        try
+        {
+            content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(type!);
+        }
+        catch
+        {
+            content.Headers.Remove("content-type");
+        }
+        return content;
+    }
+
     private static string ToText(object? value) => value switch
     {
         null => "null",
@@ -194,6 +244,12 @@ public class XMLHttpRequestHost : IDomPrototypeHost
     public void send(object? body = null)
     {
         if (_readyState != 1 || _sending) throw MustBeOpened("send");
+        // §2.6.4: an HTML document is a body this interface will not carry — the XML one it will, as its
+        // serialization — and the question is asked before the request leaves the OPENED state, so a page
+        // that got this wrong is told so rather than finding an empty body on the wire.
+        if (RefusesBody(body))
+            throw new DOMException("Failed to execute 'send' on 'XMLHttpRequest': Sending a document "
+                + "whose type is html is not supported.", "InvalidStateError");
 
         _readyState = 2;
         _sending = true;
@@ -242,7 +298,7 @@ public class XMLHttpRequestHost : IDomPrototypeHost
             foreach (var header in _requestHeaders)
                 request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             if (body != null && method is "POST" or "PUT" or "PATCH")
-                request.Content = new StringContent(ToText(body));
+                request.Content = WireContent(body);
 
             var response = await _httpClient.SendAsync(request, token);
             foreach (var header in response.Headers)
