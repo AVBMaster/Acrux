@@ -1281,7 +1281,7 @@ public class JavaScriptEngine : IDisposable
                 var value = el.getAttribute ? el.getAttribute(name) : null;
                 return value === null || value === undefined ? null : String(value);
             }
-            function collectFormEntries(form, entries) {
+            function collectFormEntries(form, entries, submitter) {
                 var controls = form.elements;
                 if (!controls) return;
                 var count = typeof controls.length === 'number' ? controls.length : 0;
@@ -1294,6 +1294,9 @@ public class JavaScriptEngine : IDisposable
                     var tag = String(el.tagName || '').toUpperCase();
                     var type = (String(el.type || 'text') || 'text').toLowerCase();
                     if (tag === 'INPUT') {
+                        // A submit button carries an entry only when it IS the submitter the call named,
+                        // and that entry is appended at the end of the list rather than left where the
+                        // button sits (§17.10.4, §4.10.13).
                         if (type === 'submit' || type === 'reset' || type === 'button' || type === 'image')
                             continue;
                         if (type === 'checkbox' || type === 'radio') {
@@ -1302,10 +1305,20 @@ public class JavaScriptEngine : IDisposable
                             continue;
                         }
                         if (type === 'file') {
-                            var held = el.files && el.files.length ? el.files.item(0) : null;
-                            // The file an empty control contributes has no name and no bytes; its type
-                            // is the default the platform gives a file rather than a named blob (§17.10.4).
-                            entries.push([name, held || new File([], '', { type: 'application/octet-stream' })]);
+                            // Every file the control holds is an entry of its own — a multiple control
+                            // does not contribute only the first (§17.4.11.1).
+                            var held = el.files;
+                            var total = held && typeof held.length === 'number' ? held.length : 0;
+                            if (!total) {
+                                // The file an empty control contributes has no name and no bytes; its type
+                                // is the default the platform gives a file rather than a named blob.
+                                entries.push([name, new File([], '',
+                                    { type: 'application/octet-stream' })]);
+                            }
+                            for (var f = 0; f < total; f++) {
+                                var one = held.item ? held.item(f) : held[f];
+                                if (one) entries.push([name, one]);
+                            }
                             continue;
                         }
                         entries.push([name, String(el.value === null || el.value === undefined ? '' : el.value)]);
@@ -1319,20 +1332,41 @@ public class JavaScriptEngine : IDisposable
                         var options = el.options || [];
                         var picked = [];
                         for (var j = 0; j < options.length; j++) {
-                            if (options[j] && options[j].selected === true)
-                                picked.push(String(options[j].value));
+                            // A disabled option is not a candidate for being selected, so it contributes
+                            // nothing however the page left its selectedness (§17.4.11.6).
+                            var option = options[j];
+                            if (!option || option.disabled === true) continue;
+                            if (option.selected === true) picked.push(String(option.value));
                         }
-                        if (!picked.length && el.multiple !== true && options.length)
-                            picked.push(String(options[0] && options[0].value || ''));
+                        // A single-line select with nothing selected is read as if its first selectable
+                        // option were — and a select whose every option is disabled carries no entry at
+                        // all rather than a disabled one (§17.4.11.6).
+                        if (!picked.length && el.multiple !== true) {
+                            for (var q = 0; q < options.length; q++) {
+                                if (options[q] && options[q].disabled !== true) {
+                                    picked.push(String(options[q].value));
+                                    break;
+                                }
+                            }
+                        }
                         for (var k = 0; k < picked.length; k++) entries.push([name, picked[k]]);
                         continue;
                     }
-                    // Output, progress and meter carry no entry of their own; a button never does.
+                    // Output, progress and meter carry no entry of their own.
+                }
+                // The submitter the call named is the one control that joins the list from outside its
+                // place in it: the entry it carries is the last of the list, whatever the button holds.
+                if (submitter) {
+                    var subName = formAttributeValue(submitter, 'name');
+                    if (subName !== null && subName !== '')
+                        entries.push([subName, String(submitter.value === undefined
+                            || submitter.value === null ? '' : submitter.value)]);
                 }
             }
             function FormData() {
                 if (!(this instanceof FormData)) throw constructionRefusal('FormData');
                 var form = arguments.length > 0 ? arguments[0] : null;
+                var submitter = arguments.length > 1 ? arguments[1] : null;
                 var entries = [];
                 FORM_SLOTS.set(this, entries);
                 if (form === undefined || form === null) return;
@@ -1341,14 +1375,32 @@ public class JavaScriptEngine : IDisposable
                     throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': parameter 1 '
                         + 'is not of type ' + formDataQuote('HTMLFormElement') + '.');
                 }
-                collectFormEntries(form, entries);
+                // §17.10.4: the second argument is asked whether it is a submit button, and one that is
+                // not is the refusal rather than a list built as if it had not been given.
+                if (submitter !== undefined && submitter !== null) {
+                    var subTag = String(submitter.tagName || '').toUpperCase();
+                    var subType = String(submitter.type || '').toLowerCase();
+                    if (!(subTag === 'BUTTON' && (subType === '' || subType === 'submit'))
+                        && !(subTag === 'INPUT' && (subType === 'submit' || subType === 'image'))) {
+                        throw new TypeError('Failed to construct ' + formDataQuote('FormData') + ': '
+                            + 'parameter 1 is not of type ' + formDataQuote('HTMLElement') + '.');
+                    }
+                }
+                collectFormEntries(form, entries, submitter);
             }
-            function formDataEntryValue(value) {
-                // A blob that is not a file is given a file name, which is what the entry the receiver
-                // reads back needs (X §4.2).
+            function formDataEntryValue(value, filename) {
+                // XHR §4.2: a blob that is not a file becomes one, and it keeps the type the blob
+                // carried — the name is either the one the page wrote or the default the interface gives.
                 if (value && typeof Blob !== 'undefined' && value instanceof Blob
                     && !(typeof File === 'function' && value instanceof File)) {
-                    return new File([value], 'blob');
+                    return new File([blobBytes(value)],
+                        filename !== undefined ? String(filename) : 'blob',
+                        { type: String(value.type === undefined ? '' : value.type) });
+                }
+                if (filename !== undefined && formIsFile(value)) {
+                    // A file given a new name keeps its bytes and its type with it (§4.2).
+                    return new File([blobBytes(value)], String(filename),
+                        { type: String(value.type === undefined ? '' : value.type) });
                 }
                 return value;
             }
@@ -1364,9 +1416,7 @@ public class JavaScriptEngine : IDisposable
                         + formDataQuote('FormData') + ': 2 arguments required, but only '
                         + arguments.length + ' present.');
                 }
-                var entry = formDataEntryValue(value);
-                formEntries(this).push([String(name), filename !== undefined
-                    ? new File([entry], String(filename)) : entry]);
+                formEntries(this).push([String(name), formDataEntryValue(value, filename)]);
             };
             FormData.prototype.set = function (name, value, filename) {
                 if (arguments.length < 2) {
@@ -1376,8 +1426,7 @@ public class JavaScriptEngine : IDisposable
                 }
                 var entries = formEntries(this);
                 var key = String(name);
-                var entry = filename !== undefined ? new File([formDataEntryValue(value)], String(filename))
-                    : formDataEntryValue(value);
+                var entry = formDataEntryValue(value, filename);
                 var found = -1;
                 for (var i = 0; i < entries.length; i++) {
                     if (entries[i][0] !== key) continue;
@@ -1441,6 +1490,171 @@ public class JavaScriptEngine : IDisposable
             FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
             Object.defineProperty(FormData.prototype, Symbol.toStringTag,
                 { value: 'FormData', configurable: true });
+
+            // ── The multipart/form-data serialization and its parser (XHR §4.2, Fetch §5.3) ──
+            // The engine had neither, so a FormData written into a body arrived as the text of the
+            // object and a body of that type read back as nothing. The two halves are written together
+            // here because they are one rule seen from either side: what the serialization lays down is
+            // the shape the parse algorithm expects to find.
+            function formIsBlob(value) {
+                return !!value && typeof Blob !== 'undefined' && value instanceof Blob;
+            }
+            function formIsFile(value) {
+                return formIsBlob(value) && typeof File === 'function' && value instanceof File;
+            }
+            // §4.2: the five characters a name or a file name may not carry are written as their escape,
+            // and the percent is escaped first so the escapes it makes are not escaped again.
+            function escapeFormText(value) {
+                // The double quote is written by its code as everywhere else in this script that needs
+                // one; the percent goes first so the escapes it makes are not escaped again.
+                var DQ = String.fromCharCode(34);
+                return String(value).split('%').join('%25').split(DQ).join('%22')
+                    .split('\n').join('%0a').split('\r').join('%0d').split('\t').join('%09');
+            }
+            function formBoundary() {
+                // The serialization's own boundary: 1 to 70 bytes of the set the standard allows, long
+                // enough that a body written by hand does not meet it by accident.
+                var SET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                var made = '----AcruxFormBoundary';
+                for (var i = made.length; i < 40; i++)
+                    made += SET.charAt(Math.floor(Math.random() * SET.length));
+                return made;
+            }
+            function formPartType(value) {
+                // A file's type that is not a valid MIME type becomes the default the serialization names.
+                var type = String(value.type === undefined ? '' : value.type);
+                return /^[a-zA-Z0-9!#$%&'*+.^_`|~-]+\/[a-zA-Z0-9!#$%&'*+.^_`|~-]+$/.test(type)
+                    ? type : 'application/octet-stream';
+            }
+            // §4.2: every entry becomes a part — a file carries its name and type, anything else is the
+            // text it is — and the boundary that closes the body is the one that opened it, with the two
+            // dashes that mean the last part.
+            function multipartSerialize(entries, boundary) {
+                var bytes = [];
+                function write(text) {
+                    var run = new TextEncoder().encode(text);
+                    for (var i = 0; i < run.length; i++) bytes.push(run[i]);
+                }
+                for (var e = 0; e < entries.length; e++) {
+                    var name = entries[e][0], value = entries[e][1];
+                    var DQ = String.fromCharCode(34);
+                    write('--' + boundary + '\r\n');
+                    write('Content-Disposition: form-data; name=' + DQ + escapeFormText(name) + DQ);
+                    if (formIsBlob(value)) {
+                        write('; filename=' + DQ + escapeFormText(value.name === undefined
+                            ? 'blob' : value.name) + DQ + '\r\n');
+                        write('Content-Type: ' + formPartType(value) + '\r\n');
+                    } else {
+                        // The disposition line ends where the headers do; a file adds its two parameters
+                        // before that, so its own CRLF is already written above.
+                        write('\r\n');
+                    }
+                    // The empty line between the headers and the value is what tells the parser the
+                    // headers are done (§5.3), and it is not the line that ends them.
+                    write('\r\n');
+                    var run = formIsBlob(value) ? blobBytes(value) : new TextEncoder().encode(String(value));
+                    for (var b = 0; b < run.length; b++) bytes.push(run[b]);
+                    write('\r\n');
+                }
+                write('--' + boundary + '--\r\n');
+                return new Uint8Array(bytes);
+            }
+            // §5.3: a part is what sits between two boundary lines; its headers are the lines before the
+            // empty one and its value is the rest, with the single leading and trailing CRLF taken off.
+            // A part with no Content-Disposition, or none with a name, is discarded as the algorithm says;
+            // a file name that arrives in the extended form is the percent-escaped one the other half wrote.
+            function formLastAttribute(line, key) {
+                var star = line.indexOf(key + '*=');
+                if (star >= 0) {
+                    var at = line.indexOf('\'', star + key.length + 2);
+                    var value = line.slice(at < 0 ? star + key.length + 2 : at + 1);
+                    var semi = value.indexOf(';');
+                    if (semi >= 0) value = value.slice(0, semi);
+                    try { return decodeURIComponent(value); } catch (err) { return value; }
+                }
+                var plain = line.indexOf(key + '=');
+                if (plain < 0) return null;
+                var rest = line.slice(plain + key.length + 1);
+                var DQ = String.fromCharCode(34);
+                if (rest.charAt(0) === DQ) {
+                    var closing = rest.indexOf(DQ, 1);
+                    return closing < 0 ? rest.slice(1) : rest.slice(1, closing);
+                }
+                var cut = rest.indexOf(';');
+                return cut < 0 ? rest : rest.slice(0, cut);
+            }
+            function multipartParse(text, boundary) {
+                var entries = [];
+                var close = '--' + boundary;
+                var at = text.indexOf(close);
+                if (at < 0) return entries;
+                while (at >= 0) {
+                    var start = at + close.length;
+                    // The boundary that carries the two dashes after it closes the body.
+                    if (text.slice(start, start + 2) === '--') break;
+                    var lineEnd = text.indexOf('\n', start);
+                    if (lineEnd < 0) break;
+                    var next = text.indexOf(close, lineEnd);
+                    if (next < 0) break;
+                    var block = text.slice(lineEnd + 1, next);
+                    var headCut = block.indexOf('\r\n\r\n');
+                    var crlf = headCut >= 0;
+                    if (!crlf) headCut = block.indexOf('\n\n');
+                    var headerText = headCut < 0 ? block : block.slice(0, headCut);
+                    // The empty line that ends the headers is not part of the value: four characters go
+                    // over with a CRLF pair, two with a bare newline (§5.3).
+                    var data = headCut < 0 ? '' : block.slice(headCut + (crlf ? 4 : 2));
+                    // One CRLF before the next boundary delimits it and is not part of the value; a part
+                    // whose own text ends in a newline keeps the one it wrote (§5.3).
+                    if (data.slice(-2) === '\r\n') data = data.slice(0, -2);
+                    else if (data.slice(-1) === '\n') data = data.slice(0, -1);
+                    var disposition = null, mime = null;
+                    var lines = headerText.split(/\r?\n/);
+                    for (var l = 0; l < lines.length; l++) {
+                        var lower = lines[l].toLowerCase();
+                        if (lower.indexOf('content-disposition:') === 0) disposition = lines[l].slice(20);
+                        else if (lower.indexOf('content-type:') === 0)
+                            mime = lines[l].slice(13).replace(/^ +| +$/g, '');
+                    }
+                    if (disposition !== null) {
+                        var name = formLastAttribute(disposition, 'name');
+                        if (name !== null) {
+                            var filename = formLastAttribute(disposition, 'filename');
+                            if (filename === null) entries.push([name, data]);
+                            else entries.push([name, new File([data], filename,
+                                { type: mime || 'application/octet-stream' })]);
+                        }
+                    }
+                    at = next;
+                }
+                return entries;
+            }
+            // §5.3: the type decides the extraction, and a body that is neither of the two form types is
+            // the TypeError rather than an empty list — the read has to say it cannot answer.
+            function extractFormData(state) {
+                var type = state.headers ? String(state.headers.get('content-type') || '') : '';
+                var lower = type.toLowerCase();
+                if (lower.indexOf('multipart/form-data') === 0) {
+                    var at = lower.indexOf('boundary=');
+                    var raw = at < 0 ? '' : type.slice(at + 9);
+                    var DQ = String.fromCharCode(34);
+                    if (raw.charAt(0) === DQ && raw.slice(-1) === DQ) raw = raw.slice(1, -1);
+                    var boundary = raw;
+                    if (!boundary) return null;
+                    var made = new FormData();
+                    var parts = multipartParse(state.text, boundary);
+                    for (var i = 0; i < parts.length; i++) made.append(parts[i][0], parts[i][1]);
+                    return made;
+                }
+                if (lower.indexOf('application/x-www-form-urlencoded') === 0) {
+                    var plain = new FormData();
+                    new URLSearchParams(state.text).forEach(function (value, key) {
+                        plain.append(key, value);
+                    });
+                    return plain;
+                }
+                return null;
+            }
 
             // ── AbortController / AbortSignal (DOM §4.6) ────────────────────────
             // The signal is an EventTarget once the controller aborts it — the engine's event bridge
@@ -3322,29 +3536,47 @@ public class JavaScriptEngine : IDisposable
                 for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
                 return out;
             }
-            function bodyParts(body) {
-                if (body === undefined || body === null) return { text: '', stream: null, bytes: null };
-                if (typeof body === 'string') return { text: body, stream: null, bytes: null };
-                if (streamQueueOf(body)) return { text: '', stream: body, bytes: null };
+            function bodyParts(body) {                if (body === undefined || body === null)
+                    return { text: '', stream: null, bytes: null, type: '' };
+                if (typeof body === 'string') return { text: body, stream: null, bytes: null, type: '' };
+                if (streamQueueOf(body))
+                    return { text: '', stream: body, bytes: null, type: '' };
+                // Fetch §5.1: a FormData body is the multipart serialization of its entry list, and the
+                // type that serialization names goes onto the request with it — the body the interface
+                // writes is the body its own read parses back.
+                if (typeof FormData === 'function' && body instanceof FormData) {
+                    var boundary = formBoundary();
+                    var run = multipartSerialize(formEntries(body), boundary);
+                    return { text: bytesText(run), stream: null, bytes: run,
+                        type: 'multipart/form-data; boundary=' + boundary };
+                }
                 if (typeof body === 'object') {
                     // A blob, a buffer or a view of one is taken as the bytes they are: the text is
                     // what those bytes decode to, and the reads that answer bytes hand the run back
                     // rather than a re-encoding of the text (§6.1).
                     if (body instanceof Blob || (typeof ArrayBuffer === 'function' && body instanceof ArrayBuffer)
                         || body.buffer instanceof ArrayBuffer) {
-                        var run = partBytes(body);
-                        return { text: bytesText(run), stream: null, bytes: run };
+                        var part = partBytes(body);
+                        return { text: bytesText(part), stream: null, bytes: part, type: '' };
                     }
-                    if (typeof body.__text === 'string') return { text: body.__text, stream: null, bytes: null };
+                    if (typeof body.__text === 'string')
+                        return { text: body.__text, stream: null, bytes: null, type: '' };
                     if (typeof body.toString === 'function') {
                         var made = body.toString();
-                        if (made !== '[object Object]') return { text: String(made), stream: null, bytes: null };
+                        if (made !== '[object Object]')
+                            return { text: String(made), stream: null, bytes: null, type: '' };
                     }
                 }
-                return { text: String(body), stream: null, bytes: null };
+                return { text: String(body), stream: null, bytes: null, type: '' };
             }
-            function drainBodyStream(state) {
-                var iterator = streamAsyncIterator(state.stream);
+            // Fetch §5.1: a body that carries a type puts it on the headers when the page did not write
+            // one — the serialization names the type and the interface keeps them together.
+            function typeFromBody(state, parts) {
+                if (parts && parts.type && !state.headers.has('content-type'))
+                    state.headers.set('content-type', parts.type);
+                return state;
+            }
+            function drainBodyStream(state) {                var iterator = streamAsyncIterator(state.stream);
                 var chunks = [];
                 function step() {
                     return iterator.next().then(function (result) {
@@ -3420,14 +3652,18 @@ public class JavaScriptEngine : IDisposable
                 formData: function () {
                     var state = bodyOf(this, 'formData');
                     readBody(state);
-                    var made = new FormData();
-                    var type = state.headers ? String(state.headers.get('content-type') || '') : '';
-                    var text = state.text;
-                    // A url-encoded body is the pair list the form interface would have handed over;
-                    // anything else is the empty set, because this engine has no multipart reader yet.
-                    if (type.indexOf('urlencoded') >= 0 || type === '') {
-                        var pairs = new URLSearchParams(text);
-                        pairs.forEach(function (value, key) { made.append(key, value); });
+                    // Fetch §5.3: the type is asked first, and a body that is neither of the form types
+                    // is the refusal — an empty list would say the body carried no fields, which is a
+                    // different answer from 'this is not a form'.
+                    var made = extractFormData(state);
+                    if (made === null) {
+                        // The sentence is the engine's own: the reference's wording for this refusal has
+                        // not been read (the interface names the two types it can read, which is what the
+                        // message says), so task #38 carries it with the other un-measured answers.
+                        return Promise.reject(new TypeError('Failed to execute ' + formDataQuote('formData')
+                            + ' on ' + formDataQuote('Body') + ': The body is neither of the form types '
+                            + 'this reads: ' + formDataQuote('application/x-www-form-urlencoded') + ' or '
+                            + formDataQuote('multipart/form-data') + '.'));
                     }
                     return Promise.resolve(made);
                 }
@@ -3517,6 +3753,9 @@ public class JavaScriptEngine : IDisposable
                     statusText: options.statusText === undefined ? ''
                         : statusTextMember(options.statusText),
                     trailer: new Headers(options.trailer || { }) };
+                // The body's own type goes on first, so a serialization that names one keeps it and the
+                // text default below only reaches a body that named nothing.
+                typeFromBody(state, parts);
                 if (state.text.length && !state.headers.has('content-type'))
                     state.headers.set('content-type', 'text/plain;charset=UTF-8');
                 BODY_SLOTS.set(this, state);
@@ -3702,6 +3941,9 @@ public class JavaScriptEngine : IDisposable
                     isHistoryDownload: false, isReloaded: false, isClientNavigate: false,
                     signal: (init.signal !== undefined && init.signal !== null)
                         ? init.signal : signalMake() };
+                // A body that names its own type — a FormData's serialization does — writes it on the
+                // headers the request carries (Fetch §5.1).
+                typeFromBody(state, parts);
                 BODY_SLOTS.set(this, state);
                 REQUEST_SLOTS.set(this, state);
             }

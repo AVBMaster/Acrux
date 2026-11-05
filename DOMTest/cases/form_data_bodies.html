@@ -1,0 +1,217 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the form data a body carries and the list a form hands (Fetch §5.1, §5.3, XHR §4.2, HTML §17.10.4, §17.4.11.6)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 26, frozen from DOMTest/probes/probe127.html (the same 14 rows as a measurement). The engine had
+// no multipart serializer and no multipart parser, so a FormData written into a body arrived as the text
+// of the object and a body of that type read back as nothing; a body of a type the read cannot handle now
+// answers the TypeError rather than an empty list, which are different answers. The entry list a form
+// hands the constructor gained the submitter the second argument names, the disabled option that is not a
+// candidate for being selected, and the fallback that looks for the first SELECTABLE option. Three rows
+// were wrong on the reading side first: the empty value a named button without one still carries, the
+// select whose only option is disabled and so contributes nothing, and the blank line that separates a
+// part's headers from its value — which is what this serializer had been leaving out.
+(function () {
+    var root = document.getElementById('root');
+    // The promise answers on its own task and the report rides a timer after that, which is how the
+    // pump in DOMTest/Program.cs reaches it.
+    function later(label, build, expected) {
+        var made = 'pending';
+        try {
+            Promise.resolve(build()).then(function (v) { made = v; },
+                function (e) { made = 'REJECTED:' + String(e && e.name); });
+        } catch (e) { made = 'THREW:' + String(e && e.name); }
+        setTimeout(function () {
+            window.__T(label, String(made) === String(expected),
+                'got=[' + String(made) + '] want=[' + String(expected) + ']');
+        }, 40);
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function list(fd) {
+        var out = [];
+        fd.forEach(function (value, key) {
+            out.push(key + '=' + (value && typeof value === 'object' && typeof value.size === 'number'
+                ? '{' + value.name + ',' + value.type + ',' + value.size + '}' : String(value)));
+        });
+        return out.join(' ');
+    }
+
+    // ── A. what a body reads back as (Fetch §5.3) ──────────────────────────────
+    later('A1 a urlencoded body is the pair list the form would have handed over', function () {
+        var r = new Response('a=1&b=2&b=3&c=', {
+            headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' } });
+        return r.formData().then(list);
+        }, 'a=1 b=2 b=3 c=');
+
+    later('A2 the plus is a space and an escape is the character it names', function () {
+        var r = new Response('greeting=hello+world&one=%C3%A9', {
+            headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+        return r.formData().then(list);
+        }, 'greeting=hello world one=é');
+
+    later('A3 a body that is not a form type is refused', function () {
+        var plain = new Response('a=1', { headers: { 'content-type': 'text/plain' } });
+        var bare = new Response('a=1');
+        var json = new Response('{"a":1}', { headers: { 'content-type': 'application/json' } });
+        function refused(p) {
+            return p.then(function () { return 'no-throw';     }, function (e) { return String(e.name); });
+        }
+        return Promise.all([refused(plain.formData()), refused(bare.formData()),
+            refused(json.formData())]).then(function (made) { return made.join(','); });
+    }, 'TypeError,TypeError,TypeError');
+
+    later('A4 a multipart body gives its fields, its files and the names they carry', function () {
+        // §5.3: a part is the boundary line, its headers, the empty line that ends them and its value;
+        // the CRLF before the next boundary belongs to the boundary, not to the value.
+        var body = ['----Q',
+            'Content-Disposition: form-data; name="field"', '',
+            'value one',
+            '----Q',
+            'Content-Disposition: form-data; name="note"; filename="a.txt"',
+            'Content-Type: text/plain', '',
+            'line1', 'line2',
+            '----Q',
+            'Content-Disposition: form-data; name="bare"; filename=""',
+            'Content-Type: text/plain', '',
+            'empty name',
+            '----Q--'].join('\r\n');
+        var r = new Response(body, {
+            headers: { 'content-type': 'multipart/form-data; boundary=--Q' } });
+        return r.formData().then(list);
+    }, 'field=value one note={a.txt,text/plain,12} bare={,text/plain,10}');
+
+    later('A5 the second read of a body that was used is refused', function () {
+        var r = new Response('a=1', { headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+        return r.formData().then(function () { return r.formData(); },
+            function () { return 'first-throw'; }).then(function () { return 'second-ok'; },
+            function (e) { return 'second:' + String(e.name); });
+        }, 'second:TypeError');
+
+    // ── B. a FormData written as a body (Fetch §5.1, XHR §4.2) ─────────────────
+    later('B1 the request takes the multipart type with a boundary of its own', function () {
+        var fd = new FormData();
+        fd.append('a', '1');
+        var req = new Request('https://x.test/', { method: 'POST', body: fd });
+        var type = req.headers.get('content-type') || '';
+        return Promise.resolve([type.indexOf('multipart/form-data') === 0,
+            /boundary=/.test(type), String(req.bodyUsed)].join(','));
+        }, 'true,true,false');
+
+    later('B2 what the body writes the same interface reads back', function () {
+        var fd = new FormData();
+        fd.append('a', '1');
+        fd.append('b', new Blob(['xyz'], { type: 'text/plain' }));
+        fd.append('a', '4');
+        var req = new Request('https://x.test/', { method: 'POST', body: fd });
+        return req.formData().then(list);
+        }, 'a=1 b={blob,text/plain,3} a=4');
+
+    later('B3 a response built the same way round-trips too', function () {
+        var fd = new FormData();
+        fd.append('name', 'value');
+        fd.append('file', new File(['12'], 'n.txt', { type: 'text/plain' }));
+        return new Response(fd).formData().then(list);
+        }, 'name=value file={n.txt,text/plain,2}');
+
+    // ── C. the entry list a form hands (HTML §17.10.4) ─────────────────────────
+    function fresh(markup) {
+        var holder = document.createElement('div');
+        holder.innerHTML = markup || '';
+        root.appendChild(holder);
+        return holder;
+    }
+    // §17.4.11.6: a disabled option is never a candidate for being selected, so a single-line select
+    // whose only option is disabled carries NO entry, and one whose first option is disabled but whose
+    // second is not takes the second's value — the fallback looks for the first selectable option, not
+    // simply the first one.
+    eq('C1 the controls that answer are the ones the standard names', safe(function () {
+        var holder = fresh('<form id="c1f">'
+            + '<input name="t" value="v"><input name="e" value="">'
+            + '<input name="cb" type="checkbox" checked><input name="cb2" type="checkbox">'
+            + '<input name="r1" type="radio" value="a"><input name="r2" type="radio" value="b" checked>'
+            + '<input name="hid" type="hidden" value="h"><input name="btn" type="submit" value="go">'
+            + '<textarea name="ta">line</textarea>'
+            + '<select name="sel"><option value="o1">1</option><option value="o2" selected>2</option></select>'
+            + '<select name="multi" multiple><option value="m1" selected>1</option>'
+            + '<option value="m2" selected>2</option><option value="m3">3</option></select>'
+            + '<input name="dis" value="no" disabled>'
+            + '<select name="dopt"><option value="d1" selected disabled>d</option></select>'
+            + '<select name="fall"><option value="f1" disabled>a</option>'
+            + '<option value="f2">b</option></select>'
+            + '</form>');
+        var made = list(new FormData(holder.querySelector('#c1f')));
+        holder.remove();
+        return made;
+    }), 'ok:t=v e= cb=on r2=b hid=h ta=line sel=o2 multi=m1 multi=m2 fall=f2');
+
+    eq('C2 a named submit button is the entry the click adds', safe(function () {
+        var holder = fresh('<form id="c2f"><input name="a" value="1">'
+            + '<button type="submit" name="go" value="yes">g</button>'
+            + '<button type="submit" name="plain">p</button></form>');
+        var form = holder.querySelector('#c2f');
+        var buttons = form.querySelectorAll('button');
+        var withNamed = list(new FormData(form, buttons[0]));
+        var withUnnamed = list(new FormData(form, buttons[1]));
+        var without = list(new FormData(form));
+        holder.remove();
+        return [withNamed, withUnnamed, without].join(' / ');
+    }), 'ok:a=1 go=yes / a=1 plain= / a=1');
+
+    eq('C3 a submitter that is not a submit button is refused, as is anything but a form', safe(function () {
+        // §17.10.4 asks the second argument whether it is a submit button, and a node that is not one is
+        // the TypeError rather than an entry list built without it; the IDL's first argument is a form,
+        // so a div is refused before any entry is looked for.
+        function asked(fn) { try { fn(); return 'no-throw'; } catch (e) { return String(e.name); } }
+        var holder = fresh('<form id="c3f"><input name="a" value="1"></form><div id="c3d"></div>');
+        var form = holder.querySelector('#c3f');
+        var made = [asked(function () { return new FormData(form, holder.querySelector('#c3d')); }),
+            asked(function () { return new FormData(document.createElement('div')); }),
+            asked(function () { return new FormData(form); }),
+            asked(function () { return new FormData(); })].join(',');
+        holder.remove();
+        return made;
+    }), 'ok:TypeError,TypeError,no-throw,no-throw');
+
+    eq('C4 a blob appended as a file keeps the type it was given', safe(function () {
+        var fd = new FormData();
+        fd.append('f', new Blob(['ab'], { type: 'text/plain' }), 'x.txt');
+        var held = fd.get('f');
+        var noName = new FormData();
+        noName.append('g', new Blob(['cd']));
+        var plain = new FormData();
+        plain.append('h', new File(['ef'], 'keep.txt', { type: 'image/png' }));
+        return [held.name, held.type, held.size, noName.get('g').name,
+            plain.get('h').name, plain.get('h').type].join(',');
+    }), 'ok:x.txt,text/plain,2,blob,keep.txt,image/png');
+
+    eq('C5 set replaces the first entry and takes the rest away', safe(function () {
+        var fd = new FormData();
+        fd.append('a', '1');
+        fd.append('b', '2');
+        fd.append('a', '3');
+        fd.set('a', 'x');
+        return [list(fd), String(fd.getAll('a').length), String(fd.get('b'))].join(' | ');
+    }), 'ok:a=x b=2 | 1 | 2');
+
+    later('C6 the entries an interface names walk in the order they were put down', function () {
+        var fd = new FormData();
+        fd.append('z', '1');
+        fd.append('a', '2');
+        fd.set('m', '3');
+        var keys = [];
+        for (var k of fd.keys()) keys.push(k);
+        var pairs = [];
+        for (var e of fd.entries()) pairs.push(e[0] + e[1]);
+        var values = [];
+        for (var v of fd.values()) values.push(v);
+        return Promise.resolve([keys.join(','), pairs.join(','), values.join(',')].join(' / '));
+        }, 'z,a,m / z1,a2,m3 / 1,2,3');
+})();
+</script>
+<div>form data in a body, a list from a form</div></body></html>

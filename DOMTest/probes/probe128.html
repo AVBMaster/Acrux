@@ -1,0 +1,270 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe128 — what a selection answers and when it refuses</title></head>
+<body><div id="root"></div>
+<script>
+// Round 26, the second slice: the Selection interface (DOM §2.3, §2.4) asked about the state it keeps
+// rather than the members it has. The empty selection is 'None' with nothing at all for its nodes; a
+// range handed to addRange comes back as a copy rather than the object given; anchor and extent are the
+// two ends the page set and base and focus are those two ordered by where they fall in the document;
+// and the offsets the interface is handed are refused by name when they run past the node they count.
+(function () {
+    var root = document.getElementById('root');
+    function fresh(markup) {
+        var holder = document.createElement('div');
+        holder.innerHTML = markup || '';
+        root.appendChild(holder);
+        return holder;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 34); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function reset() {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        return sel;
+    }
+    function ends(sel) {
+        return [sel.anchorNode && sel.anchorNode.nodeType, sel.anchorOffset,
+            sel.focusNode && sel.focusNode.nodeType, sel.focusOffset,
+            sel.baseNode && sel.baseNode.nodeType, sel.baseOffset,
+            sel.focusNode === sel.baseNode ? 'same' : 'diff'].join(',');
+    }
+
+    // ── A. the empty selection ─────────────────────────────────────────────────
+    eq('A1 nothing selected answers the empty state the interface names', safe(function () {
+        var sel = reset();
+        return [sel.rangeCount, sel.isCollapsed, sel.type, String(sel.anchorNode),
+            sel.anchorOffset, String(sel.focusNode), sel.focusOffset,
+            String(sel.baseNode), sel.toString(), String(sel.containsNode(document.body)),
+            sel.direction, name(function () { return sel.getRangeAt(0); })].join(',');
+    }), 'ok:0,true,None,null,0,null,0,null,,false,none,IndexSizeError');
+
+    eq('A2 the stringifier is the selected text read the same way', safe(function () {
+        var holder = fresh('<p id="a2p">abcdef</p>');
+        var text = holder.querySelector('#a2p').firstChild;
+        var sel = reset();
+        var range = document.createRange();
+        range.setStart(text, 1);
+        range.setEnd(text, 4);
+        sel.addRange(range);
+        var made = [String(sel), sel.toString(), '' + sel].join('|');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:bcd|bcd|bcd');
+
+    // ── B. a range handed in comes back as a copy ──────────────────────────────
+    // §2.4 keeps the LIST of ranges the page handed over, and 'getRangeAt' answers the member itself —
+    // live, so moving its boundaries moves the selection (measured in an earlier round and pinned by
+    // range_selection.html; the object the page added is the object the selection reports).
+    eq('B1 addRange holds the range the page gave it, not a copy of it', safe(function () {
+        var holder = fresh('<p id="b1p">hello</p>');
+        var text = holder.querySelector('#b1p').firstChild;
+        var sel = reset();
+        var range = document.createRange();
+        range.setStart(text, 0);
+        range.setEnd(text, 5);
+        sel.addRange(range);
+        var held = sel.getRangeAt(0);
+        var made = [sel.rangeCount, held === range, held.startContainer === text,
+            held.startOffset === 0 && held.endOffset === 5, sel.type,
+            sel.isCollapsed, sel.direction].join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:1,true,true,true,Range,false,forward');
+
+    eq('B2 a collapsed range reads as a caret and answers the type for it', safe(function () {
+        var holder = fresh('<p id="b2p">hi</p>');
+        var text = holder.querySelector('#b2p').firstChild;
+        var sel = reset();
+        var range = document.createRange();
+        range.setStart(text, 1);
+        range.collapse(true);
+        sel.addRange(range);
+        var made = [sel.rangeCount, sel.type, sel.isCollapsed, ends(sel)].join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:1,Caret,true,3,1,3,1,3,1,same');
+
+    // A range from another document is left out by this engine (the same answer a detached subtree
+    // gets, pinned by range_selection.html F10); whether the reference refuses it with an
+    // InvalidStateError is on task #38 — this row records the answer the engine gives today rather than
+    // pinning a sentence nobody has read.
+    eq('B3 a range from another document is not added to the selection', safe(function () {
+        var other = new DOMParser().parseFromString('<p id="q">x</p>', 'text/html');
+        var foreign = other.createRange();
+        foreign.selectNode(other.getElementById('q'));
+        var sel = reset();
+        var made = [name(function () { return sel.addRange(foreign); }), sel.rangeCount];
+        return made.join(',');
+    }), 'ok:no-throw,0');
+
+    // The reference ignores a second range while the first is still there (measured, and pinned by
+    // range_selection.html F2) — the spec's list of ranges is a generalisation no engine in the
+    // reference's line implements for a document selection. This row keeps that answer where it can be
+    // seen, because the same question is the first thing a page asks after adding two.
+    eq('B4 a second range is not added while the first is there', safe(function () {
+        var holder = fresh('<p id="b4a">one</p><p id="b4b">two</p>');
+        var sel = reset();
+        var first = document.createRange();
+        first.selectNodeContents(holder.querySelector('#b4a'));
+        var second = document.createRange();
+        second.selectNodeContents(holder.querySelector('#b4b'));
+        sel.addRange(first);
+        sel.addRange(second);
+        var held = [sel.rangeCount, sel.getRangeAt(0) === first, sel.toString(),
+            sel.anchorNode.nodeType, sel.anchorOffset, sel.focusOffset].join(',');
+        reset();
+        holder.remove();
+        return held;
+    }), 'ok:1,true,one,1,0,1');
+
+    eq('B5 removeRange asks for a range the selection holds', safe(function () {
+        var holder = fresh('<p id="b5p">one</p>');
+        var sel = reset();
+        var held = document.createRange();
+        held.selectNodeContents(holder.querySelector('#b5p'));
+        sel.addRange(held);
+        var other = document.createRange();
+        other.selectNodeContents(holder.querySelector('#b5p'));
+        var refused = name(function () { return sel.removeRange(other); });
+        var afterCount = sel.rangeCount;
+        var taken = name(function () { return sel.removeRange(sel.getRangeAt(0)); });
+        var made = [refused, afterCount, taken, sel.rangeCount, sel.type];
+        reset();
+        holder.remove();
+        return made.join(',');
+    }), 'ok:NotFoundError,1,no-throw,0,None');
+
+    eq('B6 the index that is not there refuses and the one that is answers the range', safe(function () {
+        var holder = fresh('<p id="b6p">one</p>');
+        var sel = reset();
+        var range = document.createRange();
+        range.selectNodeContents(holder.querySelector('#b6p'));
+        sel.addRange(range);
+        var made = [name(function () { return sel.getRangeAt(1); }),
+            name(function () { return sel.getRangeAt(-1); }),
+            sel.getRangeAt(0) === range, name(function () { return sel.getRangeAt(); })]
+            .join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:IndexSizeError,IndexSizeError,true,TypeError');
+
+    // ── C. setting the ends ────────────────────────────────────────────────────
+    eq('C1 collapse puts both ends where the page said and null empties the selection', safe(function () {
+        var holder = fresh('<p id="c1p">abcdef</p>');
+        var text = holder.querySelector('#c1p').firstChild;
+        var sel = reset();
+        sel.collapse(text, 2);
+        var at = [sel.rangeCount, sel.type, sel.isCollapsed, ends(sel)].join(',');
+        sel.collapse(null);
+        var cleared = [sel.rangeCount, sel.type, String(sel.anchorNode)].join(',');
+        holder.remove();
+        return [at, cleared].join(' / ');
+    }), 'ok:1,Caret,true,3,2,3,2,3,2,same / 0,None,null');
+
+    eq('C2 an offset past the node the selection counts is refused by name', safe(function () {
+        var holder = fresh('<p id="c2p">abc</p>');
+        var text = holder.querySelector('#c2p').firstChild;
+        var sel = reset();
+        var made = [name(function () { return sel.collapse(text, 9); }),
+            name(function () { return sel.setBaseAndExtent(text, 0, text, 9); }),
+            name(function () { return sel.setBaseAndExtent(text, 9, text, 0); }),
+            sel.rangeCount].join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:IndexSizeError,IndexSizeError,IndexSizeError,0');
+
+    eq('C3 backward ends still read base and focus in the order the document holds', safe(function () {
+        var holder = fresh('<p id="c3p">abcdef</p><p id="c3q">ghi</p>');
+        var first = holder.querySelector('#c3p').firstChild;
+        var second = holder.querySelector('#c3q').firstChild;
+        var sel = reset();
+        sel.setBaseAndExtent(second, 1, first, 2);
+        // The spec's own walk gives the base as the later point when the direction is backward — which
+        // is the anchor here, so the older names answer the same two points in this order too.
+        var made = [sel.direction, sel.type, sel.isCollapsed,
+            sel.anchorNode === second, sel.anchorOffset, sel.focusNode === first, sel.focusOffset,
+            sel.baseNode === second, sel.baseOffset].join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:backward,Range,false,true,1,true,2,true,1');
+
+    eq('C4 extend moves the far end and leaves the anchor where it was', safe(function () {
+        var holder = fresh('<p id="c4p">abcdef</p>');
+        var text = holder.querySelector('#c4p').firstChild;
+        var sel = reset();
+        sel.collapse(text, 1);
+        sel.extend(text, 4);
+        var made = [sel.type, sel.isCollapsed, sel.anchorOffset, sel.focusOffset,
+            sel.toString(), sel.direction];
+        sel.extend(text, 2);
+        made.push(sel.anchorOffset, sel.focusOffset, sel.toString());
+        reset();
+        holder.remove();
+        return made.join(',');
+    }), 'ok:Range,false,1,4,bcd,forward,1,2,b');
+
+    eq('C5 selectAllChildren spans what the node holds and the two collapses follow it', safe(function () {
+        var holder = fresh('<div id="c5d">a<b>c</b></div>');
+        var box = holder.querySelector('#c5d');
+        var sel = reset();
+        sel.selectAllChildren(box);
+        var made = [sel.rangeCount, sel.anchorOffset, sel.focusOffset, sel.type,
+            sel.isCollapsed, sel.containsNode(box, false),
+            sel.containsNode(box, true)];
+        sel.collapseToStart();
+        made.push(sel.anchorOffset, sel.focusOffset, sel.isCollapsed, sel.type);
+        sel.selectAllChildren(box);
+        sel.collapseToEnd();
+        made.push(sel.anchorOffset, sel.isCollapsed);
+        reset();
+        holder.remove();
+        return made.join(',');
+    }), 'ok:1,0,2,Range,false,false,true,0,0,true,Caret,2,true');
+
+    // Whether the three setters refuse a shadow host by name (InvalidCharacterError) or simply place
+    // the caret where it was asked for is a reading of §2.4 nobody has measured here; the row records
+    // what the engine answers today and the question is on task #38.
+    eq('D1 a shadow host is a place the engine lets a selection be put', safe(function () {
+        var holder = fresh('<div id="d1h"></div>');
+        var host = holder.querySelector('#d1h');
+        host.attachShadow({ mode: 'open' });
+        var sel = reset();
+        var made = [name(function () { return sel.collapse(host, 0); }),
+            name(function () { return sel.selectAllChildren(host); }),
+            name(function () { return sel.setBaseAndExtent(host, 0, host, 0); })].join(',');
+        reset();
+        holder.remove();
+        return made;
+    }), 'ok:no-throw,no-throw,no-throw');
+
+    eq('D2 a selection with nothing in it deletes nothing and one with text cuts it out', safe(function () {
+        var holder = fresh('<p id="d2p">abcdef</p>');
+        var text = holder.querySelector('#d2p').firstChild;
+        var sel = reset();
+        var quiet = name(function () { return sel.deleteFromDocument(); });
+        var keptBefore = holder.querySelector('#d2p').textContent;
+        sel.selectAllChildren(holder.querySelector('#d2p'));
+        var cut = name(function () { return sel.deleteFromDocument(); });
+        var after = holder.querySelector('#d2p').textContent;
+        reset();
+        holder.remove();
+        return [quiet, keptBefore, cut, after, sel.rangeCount].join(',');
+    }), 'ok:no-throw,abcdef,no-throw,,0');
+})();
+</script>
+<div>the state a selection keeps</div></body></html>
