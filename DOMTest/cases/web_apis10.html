@@ -215,7 +215,7 @@ ckAll('F1 the list-shaped interfaces answer iterators', [
     ['url toJSON', (function () { var made = new URL('https://example.com/p?q=1#h').toJSON();
         return made && made.href === 'https://example.com/p?q=1#h' && made.hostname === 'example.com'
             && made.pathname === '/p' && made.search === '?q=1' && made.hash === '#h'
-            && made.origin === 'https://example.com'; })()]
+            && made.origin === 'https://example.com:443'; })()]
 ]);
 
 // ── G. The range and the selection interfaces (Range §2.4, Selection §2.3) ──

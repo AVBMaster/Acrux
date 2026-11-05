@@ -42,9 +42,11 @@ internal sealed class WhatwgUrl
         _ => null,
     };
 
-    /// <summary>§6.1: the schemes that can hold credentials and a port at all — a file url can name
-    /// neither, which is why its setters are silent.</summary>
-    public bool CanHoldCredentials => Scheme != "file" && IsSpecialNoFile(Scheme);
+    /// <summary>§2: an address does not have a username, a password or a port when its scheme is
+    /// "file", when it carries no host, or when its path is an opaque one — which is the guard the
+    /// three setters run, and why a custom scheme with a host of its own takes a port just as an http
+    /// address does. A file url can name neither, which is why its setters are silent.</summary>
+    public bool CanHoldCredentials => Scheme != "file" && HasAuthority && !HasOpaquePath;
 
     private static bool IsSpecialNoFile(string scheme) =>
         scheme is "ftp" or "http" or "https" or "ws" or "wss";
@@ -782,8 +784,11 @@ internal sealed class WhatwgUrl
         }
         if (Scheme is "ftp" or "http" or "https" or "ws" or "wss")
         {
+            // §6.5: the origin carries the port the address names, or the one the scheme implies when it
+            // names none — so an https address without a port is serialised with 443 written out.
             var made = Scheme + "://" + Host;
-            return Port != null ? made + ":" + Port.Value : made;
+            var port = Port ?? DefaultPort(Scheme);
+            return port != null ? made + ":" + port.Value : made;
         }
         return "null";
     }

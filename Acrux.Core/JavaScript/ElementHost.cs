@@ -3377,6 +3377,10 @@ public class ScriptEvent : IDomPrototypeHost, IDomEnumerableHost
 
     // Keyboard event properties
     public string? key { get; set; }
+    /// <summary>UI Events §4.6.1: 'code' is the physical key the event came from, spelled the way the
+    /// KeyboardEvent interface names it; it is a member of the event rather than something derived from
+    /// 'key', because the same character arrives from a different key on a different layout.</summary>
+    public string? code { get; set; }
     public bool ctrlKey { get; set; }
     public bool shiftKey { get; set; }
     public bool altKey { get; set; }

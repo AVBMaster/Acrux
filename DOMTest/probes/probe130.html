@@ -1,0 +1,309 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe130 — what a message carries and what a storage holds</title></head>
+<body><div id="root"></div>
+<script>
+// Round 28. The three doors a page sends a message through, and the store it writes keys into. A message
+// is a COPY of what was handed over (§2.9.4.14), the ports it transfers are the only values that cross as
+// themselves and arrive in the event's 'ports' (§8.6.8.4), a port that was not handed over is refused
+// rather than quietly dropped, and the window's door asks the origin the page named before it queues
+// anything (§7.2.4). The storage rows ask which key order the reads agree on and what a value that is
+// not a string is written as (§4 of Web Storage).
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    // The pump runs the timers a message task needs; a row that reads a delivered event schedules its
+    // own report and answers after the queue has run.
+    function later(label, build, expected) {
+        var made = 'pending';
+        try {
+            Promise.resolve(build()).then(function (v) { made = v; },
+                function (e) { made = 'REJECTED:' + String(e && e.name); });
+        } catch (e) { made = 'THREW:' + String(e && e.name); }
+        setTimeout(function () {
+            window.__T(label, String(made) === String(expected),
+                'got=[' + String(made) + '] want=[' + String(expected) + ']');
+        }, 45);
+    }
+    function askPort(port) {
+        return new Promise(function (resolve) {
+            port.onmessage = function (e) { resolve(e); };
+            port.start();
+        });
+    }
+
+    // ── A. a message is a copy, and a port is a transferable ──────────────────
+    later('A1 what arrives is a copy of what was handed over, not the object', function () {
+        var ch = new MessageChannel();
+        var original = { deep: { list: [1, 2] } };
+        var asked = askPort(ch.port1);
+        ch.port2.postMessage(original);
+        original.deep.list.push(3);
+        return asked.then(function (e) {
+            return [e.data !== original, e.data.deep !== original.deep,
+                e.data.deep.list.length, e.data.deep.list[0]].join(',');
+        });
+    }, 'true,true,2,1');
+
+    later('A2 the event a port brings names its sender and carries no ports unasked', function () {
+        var ch = new MessageChannel();
+        var asked = askPort(ch.port1);
+        ch.port2.postMessage('hi');
+        return asked.then(function (e) {
+            return [e.type, e.source === ch.port2, e.ports.length, e.data,
+                    e.lastEventId, String(e.origin)].join(',');
+        });
+    }, 'message,true,0,hi,,' + location.origin);
+
+    eq('A3 a value the serializer cannot write is refused by the post itself', safe(function () {
+        var ch = new MessageChannel();
+        return [name(function () { ch.port2.postMessage(function () { }); }),
+            name(function () { ch.port2.postMessage(Symbol('x')); }),
+            name(function () { window.postMessage(function () { }); }),
+            name(function () { new BroadcastChannel('a3').postMessage(function () { }); })].join(',');
+    }), 'ok:DataCloneError,DataCloneError,DataCloneError,DataCloneError');
+
+    later('A4 the ports named in the transfer list arrive in the event', function () {
+        var outer = new MessageChannel();
+        var inner = new MessageChannel();
+        var asked = askPort(outer.port1);
+        // The canonical crossing: the port sits in the message AND is named in the list, so the data
+        // and the event's 'ports' hand back the same end (§8.6.8.4, MessageEvent §4.5.6).
+        outer.port2.postMessage({ carried: inner.port1 }, { transfer: [inner.port1] });
+        return asked.then(function (e) {
+            return [e.ports.length, e.ports[0] === inner.port1, e.data.carried === e.ports[0],
+                e.ports[0] instanceof MessagePort, typeof e.ports[0].postMessage].join(',');
+        });
+    }, '1,true,true,true,function');
+
+    eq('A5 a port in the message that was not transferred is refused', safe(function () {
+        var outer = new MessageChannel();
+        var inner = new MessageChannel();
+        return [name(function () { outer.port2.postMessage({ p: inner.port1 }); }),
+            name(function () { outer.port2.postMessage([inner.port1], { transfer: [inner.port1] }); }),
+            name(function () { outer.port2.postMessage(inner.port1, { transfer: [] }); })].join(',');
+    }), 'ok:DataCloneError,no-throw,DataCloneError');
+
+    later('A6 a transferred buffer crosses as its bytes and leaves the original detached', function () {
+        var ch = new MessageChannel();
+        var buf = new ArrayBuffer(3);
+        new Uint8Array(buf).set([7, 8, 9]);
+        var asked = askPort(ch.port1);
+        ch.port2.postMessage(buf, { transfer: [buf] });
+        return asked.then(function (e) {
+            var view = new Uint8Array(e.data);
+            return [buf.byteLength, view.length, view[0], view[2]].join(',');
+        });
+    }, '0,3,7,9');
+
+    later('A7 a broadcast message is a copy too, and its event names no source', function () {
+        var a = new BroadcastChannel('r28-a7'), b = new BroadcastChannel('r28-a7');
+        var original = { k: 1 };
+        var got = new Promise(function (resolve) { b.onmessage = resolve; });
+        a.postMessage(original);
+        original.k = 2;
+        return got.then(function (e) {
+            return [e.data !== original, e.data.k, String(e.source), e.ports.length, a.name].join(',');
+        });
+    }, 'true,1,null,0,r28-a7');
+
+    later('A8 a bare sequence as the second argument is the transfer list it names', function () {
+        var ch = new MessageChannel();
+        var asked = askPort(ch.port1);
+        var buf = new ArrayBuffer(2);
+        ch.port2.postMessage({ b: buf }, [buf]);
+        return asked.then(function (e) {
+            return [buf.byteLength, e.data.b.byteLength].join(',');
+        });
+    }, '0,2');
+
+    eq('A9 the event the interface builds keeps the fields the dictionary filled', safe(function () {
+        var ch = new MessageChannel();
+        var evt = new MessageEvent('message', { data: { k: 1 }, origin: 'https://x.test',
+            lastEventId: '7', ports: [ch.port1], source: window });
+        return [evt.type, evt.data.k, evt.origin, evt.lastEventId, evt.ports.length,
+            evt.source === window, evt.bubbles, evt.cancelable, evt.composed,
+            typeof evt.composedPath, Object.prototype.toString.call(evt)].join(',');
+    }), 'ok:message,1,https://x.test,7,1,true,false,false,false,function,[object MessageEvent]');
+
+    // ── B. when a port is ready to hear ───────────────────────────────────────
+    later('B1 a port with only a listener keeps its queue until it is started', function () {
+        var ch = new MessageChannel();
+        var heard = [];
+        ch.port1.addEventListener('message', function (e) { heard.push(e.data); });
+        ch.port2.postMessage('one');
+        ch.port2.postMessage('two');
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                // Both tasks have run their drain by now and heard nothing, because the end only had a
+                // listener; starting it empties the queue it held, in the order the messages came.
+                var before = heard.length;
+                ch.port1.start();
+                resolve([before, heard.join(',')].join('|'));
+            }, 15);
+        });
+    }, '0|one,two');
+
+    later('B2 installing the handler is itself a start, and close empties what was queued', function () {
+        var ch = new MessageChannel();
+        var heard = [];
+        ch.port1.onmessage = function (e) { heard.push(e.data); };
+        ch.port2.postMessage('live');
+        var other = new MessageChannel();
+        var late = [];
+        other.port1.onmessage = function (e) { late.push(e.data); };
+        other.port1.close();
+        other.port2.postMessage('after-close');
+        return new Promise(function (resolve) {
+            setTimeout(function () { resolve([heard.join(','), late.length].join('|')); }, 15);
+        });
+    }, 'live|0');
+
+    later('B3 a message posted to a closed port and a port with no other end are both silence', function () {
+        var ch = new MessageChannel();
+        var heard = 0;
+        ch.port1.onmessage = function () { heard++; };
+        ch.port1.close();
+        ch.port2.postMessage('to-closed');
+        var alone = new MessagePort();
+        var mine = 0;
+        alone.onmessage = function () { mine++; };
+        alone.postMessage('nowhere');
+        return new Promise(function (resolve) {
+            setTimeout(function () { resolve([heard, mine].join(',')); }, 15);
+        });
+    }, '0,0');
+
+    // ── C. the window's door asks the origin first ────────────────────────────
+    later('C1 a star delivers to this window with the source the interface names', function () {
+        var seen = null;
+        var on = function (e) { if (e.data === 'r28-c1') seen = e; };
+        window.addEventListener('message', on);
+        window.postMessage('r28-c1', '*');
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                window.removeEventListener('message', on);
+                resolve(seen === null ? 'none' : [seen.source === window,
+                    String(seen.origin), seen.ports.length].join(','));
+            }, 15);
+        });
+    }, 'true,' + location.origin + ',0');
+
+    later('C2 an origin that is not this window is dropped without a word', function () {
+        var seen = 0;
+        var on = function (e) { if (e.data === 'r28-c2') seen++; };
+        window.addEventListener('message', on);
+        window.postMessage('r28-c2', 'https://elsewhere.test');
+        return new Promise(function (resolve) {
+            setTimeout(function () { window.removeEventListener('message', on); resolve(seen); }, 15);
+        });
+    }, '0');
+
+    later('C3 the dictionary form carries the origin and the transfer together', function () {
+        var seen = null;
+        var on = function (e) { if (e.data && e.data.tag === 'r28-c3') seen = e; };
+        window.addEventListener('message', on);
+        var ch = new MessageChannel();
+        window.postMessage({ tag: 'r28-c3', port: ch.port2 }, { targetOrigin: '*', transfer: [ch.port2] });
+        window.postMessage('r28-c3-own', { targetOrigin: 'https://elsewhere.test' });
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                window.removeEventListener('message', on);
+                resolve(seen === null ? 'none' : [seen.ports.length, seen.ports[0] === ch.port2,
+                    seen.data.port === ch.port2].join(','));
+            }, 20);
+        });
+    }, '1,true,true');
+
+    later('C5 the older three-argument form transfers, and the handler attribute hears', function () {
+        var ch = new MessageChannel();
+        var seen = null;
+        var previous = window.onmessage;
+        window.onmessage = function (e) { if (e.data && e.data.tag === 'r28-c5') seen = e; };
+        window.postMessage({ tag: 'r28-c5', port: ch.port2 }, '*', [ch.port2]);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                window.onmessage = previous;
+                resolve(seen === null ? 'none' : [seen.ports.length, seen.ports[0] === ch.port2,
+                    String(window.onmessage)].join(','));
+            }, 20);
+        });
+    }, '1,true,null');
+
+    eq('C4 the two doors name the arguments they declare', safe(function () {
+        return [window.postMessage.length, MessagePort.prototype.postMessage.length,
+            BroadcastChannel.prototype.postMessage.length, typeof window.postMessage,
+            typeof MessagePort.prototype.start, typeof MessagePort.prototype.close].join(',');
+    }), 'ok:1,1,1,function,function,function');
+
+    // ── D. the store a page writes keys into ──────────────────────────────────
+    later('D5 a write announces itself to the other documents, never to the one that wrote', function () {
+        var heard = [];
+        var on = function (e) { if (e.key === 'r28-d5') heard.push(String(e.newValue)); };
+        window.addEventListener('storage', on);
+        localStorage.setItem('r28-d5', 'one');
+        localStorage.removeItem('r28-d5');
+        localStorage.clear();
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                window.removeEventListener('storage', on);
+                resolve(heard.length);
+            }, 15);
+        });
+    }, '0');
+
+    eq('D1 the value written is the string of what was given and the two reads agree', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('a', 1);
+        localStorage.setItem('b', undefined);
+        localStorage.setItem(2, 'x');
+        localStorage.b = 'two';
+        var order = [localStorage.length, localStorage.key(0), localStorage.key(1),
+            localStorage.key(2), localStorage.item ? 'has' : 'none',
+            localStorage.getItem('a'), localStorage.getItem('b'), localStorage.getItem('2'),
+            localStorage.a, localStorage.b].join(',');
+        localStorage.clear();
+        return [order, localStorage.length, String(localStorage.key(0))].join('|');
+    }), 'ok:3,a,b,2,none,1,two,x,1,two|0|null');
+
+    eq('D2 an index off the end and a missing key answer the empties they name', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('only', '1');
+        var made = [String(localStorage.key(9)), String(localStorage.getItem('missing')),
+            name(function () { localStorage.removeItem('missing'); }), localStorage.length,
+            String(localStorage.only), String(localStorage.nothing)];
+        localStorage.clear();
+        return made.join(',');
+    }), 'ok:null,null,no-throw,1,1,undefined');
+
+    eq('D3 a store is not an array and its own keys are the items the page wrote', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('k1', 'v1');
+        localStorage.k2 = 'v2';
+        var keys = Object.keys(localStorage).sort().join(',');
+        var tag = Object.prototype.toString.call(localStorage);
+        var named = typeof localStorage.getItem === 'function' && typeof localStorage.key === 'function';
+        localStorage.clear();
+        return [keys, tag, named, localStorage.length].join('|');
+    }), 'ok:k1,k2|[object Storage]|true|0');
+
+    eq('D4 the session store is the same interface with its own room', safe(function () {
+        sessionStorage.clear();
+        localStorage.clear();
+        sessionStorage.setItem('shared', 'in-session');
+        var made = [String(sessionStorage.getItem('shared')), String(localStorage.getItem('shared')),
+            sessionStorage.length, localStorage.length, sessionStorage === localStorage];
+        sessionStorage.clear();
+        return made.join(',');
+    }), 'ok:in-session,null,1,0,false');
+})();
+</script>
+<div>what a message carries</div></body></html>

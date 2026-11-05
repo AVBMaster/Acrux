@@ -42,9 +42,10 @@
             u.hash, u.href, u.origin].join('|');
     }
     eq('A1 a scheme and a host fold', safe(function () { return parts('HTTP://WWW.Example.COM/Path'); }),
-        'ok:http:|||www.example.com||/Path|||http://www.example.com/Path|http://www.example.com');
-    eq('A2 the default port is dropped', safe(function () { return parts('https://example.com:443/a'); }),
-        'ok:https:|||example.com||/a|||https://example.com/a|https://example.com');
+        'ok:http:|||www.example.com||/Path|||http://www.example.com/Path|http://www.example.com:80');
+    eq('A2 the default port is dropped from the port and named by the origin',
+        safe(function () { return parts('https://example.com:443/a'); }),
+        'ok:https:|||example.com||/a|||https://example.com/a|https://example.com:443');
     eq('A3 a port that is not the default is kept',
         safe(function () { return parts('http://example.com:8080/x?q=1#h'); }),
         'ok:http:|||example.com|8080|/x|?q=1|#h|http://example.com:8080/x?q=1#h|http://example.com:8080');

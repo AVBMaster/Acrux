@@ -323,7 +323,7 @@ ck('U1 a url that does not parse is refused, not replaced', function () {
         && b.indexOf('TypeError') === 0 && /Invalid base URL/.test(b)
         && c === 'TypeError'
         && new URL('/x', 'http://a/b').href === 'http://a/x'
-        && new URL('http://a/b/c').origin === 'http://a'
+        && new URL('http://a/b/c').origin === 'http://a:80'
         && p.toString() === 'a=1&b=2&b=3'
         && typeof URL.canParse === 'function' && typeof URL.parse === 'function'
         && URL.canParse('nope', 'http://a/b') === true

@@ -4475,7 +4475,9 @@ public class JavaScriptEngine : IDisposable
             // cannot cross is refused with DataCloneError naming the value (measured: a function
             // answers 'function(){} could not be cloned.'), and undefined in, undefined out.
             function cloneUncloneable(value) {
-                var label = typeof value === 'symbol' ? String(value) : String(value);
+                // String() is the spelling that works on both: a symbol refuses the implicit conversion
+                // an addition or a template would try, and the message names the value either way.
+                var label = String(value);
                 return new DOMException('Failed to execute ' + String.fromCharCode(39)
                     + 'structuredClone' + String.fromCharCode(39) + ' on ' + String.fromCharCode(39)
                     + 'Window' + String.fromCharCode(39) + ': ' + label + ' could not be cloned.',
@@ -4527,6 +4529,17 @@ public class JavaScriptEngine : IDisposable
                     seen.set(value, made);
                     value.forEach(function (v) { made.add(cloneInto(v, seen, transfer)); });
                     return copyKeys(value, made, seen, transfer);
+                }
+                // A MessagePort is a transferable, not a graph: it crosses only when the call named it in
+                // the transfer list, and then it crosses as the port itself, which the message's 'ports'
+                // reads (§2.9.4.14, §8.6.8.4). Left out of the list it is the refusal this algorithm gives
+                // for anything it cannot write out.
+                if (value.__acruxPort === true) {
+                    if (!transfer || !transfer.has(value)) throw cloneUncloneable(value);
+                    // The port is remembered as its own copy: a graph that reaches the same end twice
+                    // hands over one port, not one per visit (§2.9.4.14).
+                    if (window.__acruxPortSink) window.__acruxPortSink.push(value);
+                    return copyInto(value, seen, value);
                 }
                 // A blob is a value the page already holds bytes for, so the copy is the same object
                 // the reference hands back for a kind its serializer knows (§2.9.4.16).
@@ -4599,6 +4612,12 @@ public class JavaScriptEngine : IDisposable
                     }
                     for (var q = 0; q < list.length; q++) {
                         var item = list[q];
+                        // A transferable is a MessagePort or a buffer of bytes (§2.9.4.14); anything else
+                        // in the list is the refusal the algorithm gives for a value it cannot write out.
+                        if (item && item.__acruxPort === true) {
+                            transfer.add(item);
+                            continue;
+                        }
                         if (typeof ArrayBuffer === 'undefined' || !(item instanceof ArrayBuffer)) {
                             throw cloneUncloneable(item);
                         }
@@ -11000,6 +11019,50 @@ public class JavaScriptEngine : IDisposable
                     try { Object.setPrototypeOf(object, level); } catch (e) { }
                 }
 
+                // HTML §5.2.5 read with Web IDL §3.7.2: every member of the Location is unforgeable, and
+                // an unforgeable member is an own, enumerable, non-configurable property of the object the
+                // page holds rather than one it inherits from the interface. The host answers the address
+                // members that way already; the four operations are reported by it as own but not
+                // enumerable, and the ancestors list is not there at all, so both are put right here.
+                var locationObject = window.location;
+                if (locationObject && typeof locationObject === 'object') {
+                    var ownOnLocation = function (name, value) {
+                        // The host answers the operations as own properties the page cannot enumerate, so
+                        // the fix is the descriptor and not the value: the function the host gives out
+                        // stays in place — a page that prints it reads the same spelling it reads for any
+                        // method of the engine (measured: 'function assign() { [native code] }') — and
+                        // only what the descriptor reports changes. An own property that is already
+                        // enumerable is left alone, which is also what makes the block safe to run twice
+                        // for one document, which it does.
+                        var held = Object.getOwnPropertyDescriptor(locationObject, name);
+                        if (held && held.enumerable) return;
+                        try {
+                            Object.defineProperty(locationObject, name, { value: held ? held.value : value,
+                                writable: false, enumerable: true, configurable: false });
+                        } catch (e) { }
+                    };
+                    ownOnLocation('ancestorOrigins',
+                        typeof DOMStringList === 'function' ? new DOMStringList([]) : []);
+                    ownOnLocation('assign');
+                    ownOnLocation('replace');
+                    ownOnLocation('reload');
+                    ownOnLocation('toString');
+                    // Web IDL §4.7.6: the window's 'location' carries [PutForwards=href], so the write a
+                    // page makes to the location itself is the write to the address it holds. Without the
+                    // forwarding the assignment replaces the location with the string and the page loses
+                    // the object it was reading through — the most common redirect idiom on the web.
+                    try {
+                        Object.defineProperty(window, 'location', {
+                            configurable: true, enumerable: true,
+                            get: function () { return locationObject; },
+                            set: function (value) {
+                                if (value === locationObject) return;
+                                locationObject.href = String(value);
+                            }
+                        });
+                    } catch (e) { }
+                }
+
                 // ── Geometry Interfaces §3, §4, §5 ─────────────────────────────
                 // A matrix is the 4x4 column list the interface names, held as sixteen numbers, with
                 // the 2D view the page reads most (a,b,c,d,e,f) beside it. The operations are the
@@ -12124,18 +12187,57 @@ public class JavaScriptEngine : IDisposable
                         enumerable: false, configurable: true });
                 }
                 function MessagePort() {
+                    // The brand the serializer looks for: a port is a transferable rather than a graph
+                    // the page owns, so it crosses only when the call named it (§2.9.4.14).
+                    hide(this, '__acruxPort', true);
                     hide(this, '_queue', []);
                     hide(this, '_listeners', {});
                     hide(this, '_other', null);
                     hide(this, '_started', false);
                     hide(this, '_closed', false);
                 }
+                // What a message carries is a COPY of the value the page handed over, and the only things
+                // that cross as themselves are the ports the transfer list named — which the far side
+                // reads from the event's 'ports' (§2.9.4.14, §8.6.8.4, §8.6.10). One helper asks it of
+                // all three doors, because they clone the same way; only the window door also reads the
+                // origin the page named, and only two of them take a transfer list at all. The list can
+                // arrive as the dictionary's member, as a bare sequence handed over second, or — for the
+                // older window form — as the third argument, and all three name the same ports.
+                function sendClone(data, options, withTransfer, legacyList) {
+                    var list = null;
+                    var targetOrigin = null;
+                    if (options !== undefined && options !== null) {
+                        if (typeof options === 'string') targetOrigin = options;
+                        else if (Array.isArray(options)) list = options;
+                        else if (typeof options === 'object') {
+                            if (options.targetOrigin !== undefined && options.targetOrigin !== null)
+                                targetOrigin = String(options.targetOrigin);
+                            list = options.transfer;
+                        }
+                    }
+                    if (!withTransfer) list = null;
+                    else if (list === null && legacyList !== undefined && legacyList !== null)
+                        list = legacyList;
+                    var ports = [];
+                    window.__acruxPortSink = ports;
+                    try {
+                        return { data: window.structuredClone(data,
+                                list === null || list === undefined ? undefined : { transfer: list }),
+                            ports: ports, targetOrigin: targetOrigin };
+                    } finally {
+                        window.__acruxPortSink = null;
+                    }
+                }
                 makeTarget(MessagePort.prototype);
                 MessagePort.prototype.postMessage = function (data) {
+                    // The value is written out first: a page that hands over something the serializer
+                    // refuses is told so, whether or not there is another end to read it (§8.6.8.4). The
+                    // options dictionary is optional, so the declaration names one argument.
+                    var made = sendClone(data, arguments.length > 1 ? arguments[1] : undefined, true);
                     if (this._closed) return;
                     var other = this._other;
-                    if (!other) return;
-                    other._queue.push(data);
+                    if (!other || other._closed) return;
+                    other._queue.push({ data: made.data, ports: made.ports, source: this });
                     var port = other;
                     setTimeout(function () { port._drain(); }, 0);
                 };
@@ -12154,8 +12256,12 @@ public class JavaScriptEngine : IDisposable
                     if (this._closed) return;
                     if (!this._started && typeof this.onmessage !== 'function') return;
                     while (this._queue.length) {
-                        var data = this._queue.shift();
-                        fireEvent(this, this._listeners.message, 'onmessage', scriptMessageEvent('message', { data: data }));
+                        var held = this._queue.shift();
+                        // The event a port brings names the port that sent it, and carries the ports the
+                        // message transferred (§8.6.8.4, MessageEvent §4.5.6).
+                        fireEvent(this, this._listeners.message, 'onmessage',
+                            scriptMessageEvent('message', { data: held.data, ports: held.ports,
+                                source: held.source, origin: location.origin }));
                     }
                 };
 
@@ -12194,6 +12300,9 @@ public class JavaScriptEngine : IDisposable
                 }
                 makeTarget(BroadcastChannel.prototype);
                 BroadcastChannel.prototype.postMessage = function (data) {
+                    // The operation takes one argument: no port can be transferred through a broadcast
+                    // channel, so a message that names one is the refusal rather than a silent loss.
+                    var made = sendClone(data, null, false);
                     if (this._closed) return;
                     var list = CHANNEL_NAMED[this.name] || [];
                     for (var i = 0; i < list.length; i++) {
@@ -12205,7 +12314,8 @@ public class JavaScriptEngine : IDisposable
                             setTimeout(function () {
                                 if (target._closed) return;
                                 fireEvent(target, target._listeners.message, 'onmessage',
-                                    scriptMessageEvent('message', { data: data, origin: location.origin }));
+                                    scriptMessageEvent('message', { data: made.data,
+                                        origin: location.origin }));
                             }, 0);
                         })(channel);
                     }
@@ -12236,9 +12346,21 @@ public class JavaScriptEngine : IDisposable
                 // listeners live on the window (see window.addEventListener). The interface's length is
                 // one: the origin and the transfer list are optional arguments (measured).
                 window.postMessage = function (message) {
+                    // The current form takes the dictionary second; the older one takes the origin second
+                    // and the transfer list third (§7.2.4). Both are answered from the same helper.
+                    var made = sendClone(message, arguments.length > 1 ? arguments[1] : undefined, true,
+                        arguments[2]);
+                    // §7.2.4: the origin the page named is asked of the window's own before anything is
+                    // queued. '*' — and the empty name and the '/' the older form allowed — mean any
+                    // origin; anything else that is not this window's origin drops the message without a
+                    // word, which is the answer rather than an error.
+                    var asked = made.targetOrigin;
+                    if (asked !== null && asked !== '*' && asked !== '' && asked !== '/'
+                        && asked !== location.origin) return;
                     setTimeout(function () {
                         fireEvent(window, window.__winMessage || [], 'onmessage',
-                            scriptMessageEvent('message', { data: message, origin: location.origin, source: window }));
+                            scriptMessageEvent('message', { data: made.data, ports: made.ports,
+                                origin: location.origin, source: window }));
                     }, 0);
                 };
             })();
@@ -20918,10 +21040,22 @@ public class LocationHost : IDomPrototypeHost, IDomEnumerableHost
     // that read the URL back after setting a part saw a value it had never asked for.
     private string _href = "acrux://local/";
 
+    /// <summary>URL §2.2, HTML §5.2.5: the address written to 'href' is parsed with the address already
+    /// there as its base, so a relative spelling lands where the base puts it instead of being kept as
+    /// the fragment of a sentence the page meant as an address. An input the parser refuses is the
+    /// SyntaxError the setter names, and the location keeps the address it had.</summary>
     public string href
     {
         get => _href;
-        set { _href = string.IsNullOrEmpty(value) ? "about:blank" : value; OnNavigate?.Invoke(_href); }
+        set
+        {
+            var made = Resolve(value ?? "");
+            if (made == null)
+                throw new Acrux.Core.Dom.DOMException("Failed to set the 'href' property on 'Location': "
+                    + "the URL could not be parsed.", "SyntaxError");
+            _href = made.href;
+            OnNavigate?.Invoke(_href);
+        }
     }
 
     private URLHost? Parts()
@@ -20929,14 +21063,33 @@ public class LocationHost : IDomPrototypeHost, IDomEnumerableHost
         try { return new URLHost(_href); } catch { return null; }
     }
 
-    public string protocol { get { var p = Parts()?.protocol ?? ""; return p; } set { _href = Rebuild(value, _href, scheme: true); } }
-    public string hostname { get { var u = Parts(); return u?.hostname ?? ""; } set { var u = Parts(); _href = Rebuild(u == null ? _href : u.hostname, value, hostPart: true); } }
-    public string port { get { var u = Parts(); return u?.port ?? ""; } set { } }
-    public string host { get { var u = Parts(); return u?.host ?? ""; } set { hostname = value; } }
-    public string pathname { get { var u = Parts(); return u?.pathname ?? "/"; } set { _href = RebuildTail(value, Search, Hash); } }
-    public string search { get { var u = Parts(); return u?.search ?? ""; } set { _href = RebuildTail(Pathname, value, Hash); } }
-    public string hash { get { var u = Parts(); return u?.hash ?? ""; } set { _href = RebuildTail(Pathname, Search, value); } }
-    public string origin { get { var u = Parts(); return u?.origin ?? ""; } }
+    private static URLHost? Resolve(string value, string baseUrl)
+    {
+        try { return new URLHost(value, baseUrl); } catch { return null; }
+    }
+
+    private URLHost? Resolve(string value) => Resolve(value, _href);
+
+    /// <summary>The part setters hand the value to the URL Standard's own rule for that component and
+    /// take the whole address back: the port a scheme already implies is not kept, an empty query or
+    /// fragment takes the mark off, a scheme the address may not change is dropped without a word, and
+    /// a host that cannot be read leaves the location where it was (§7.3-§7.7, HTML §5.2.5).</summary>
+    private void SetPart(Action<URLHost> apply)
+    {
+        var url = Parts();
+        if (url == null) return;
+        apply(url);
+        _href = url.href;
+    }
+
+    public string protocol { get => Parts()?.protocol ?? ""; set => SetPart(u => u.protocol = value); }
+    public string hostname { get => Parts()?.hostname ?? ""; set => SetPart(u => u.hostname = value); }
+    public string port { get => Parts()?.port ?? ""; set => SetPart(u => u.port = value); }
+    public string host { get => Parts()?.host ?? ""; set => SetPart(u => u.host = value); }
+    public string pathname { get => Parts()?.pathname ?? "/"; set => SetPart(u => u.pathname = value); }
+    public string search { get => Parts()?.search ?? ""; set => SetPart(u => u.search = value); }
+    public string hash { get => Parts()?.hash ?? ""; set => SetPart(u => u.hash = value); }
+    public string origin { get => Parts()?.origin ?? ""; }
 
     /// <summary>HTML §5.2.5: the document's own URL is the address the browsing context is at, so a
     /// page reads the same URL through 'location' that the document carries. Setting it here does not
@@ -20955,36 +21108,6 @@ public class LocationHost : IDomPrototypeHost, IDomEnumerableHost
     {
         if (string.IsNullOrEmpty(url)) return;
         _href = new URLHost(url!, _href).href;
-    }
-
-
-    private string Hash { get { var u = Parts(); return u?.hash ?? ""; } }
-    private string Search { get { var u = Parts(); return u?.search ?? ""; } }
-    private string Pathname { get { var u = Parts(); return u?.pathname ?? "/"; } }
-
-    // Compose scheme://host + path + ?search + #hash out of the pieces a caller has updated.
-    private string Rebuild(string current, string replacement, bool scheme = false, bool hostPart = false)
-    {
-        var u = Parts();
-        string proto = u?.protocol ?? "acrux:";
-        string hostv = u?.host ?? "";
-        string path = u?.pathname ?? "/";
-        string search = u?.search ?? "";
-        string hash = u?.hash ?? "";
-        if (scheme) proto = replacement.EndsWith(":") ? replacement : replacement + ":";
-        if (hostPart) hostv = replacement;
-        return proto + "//" + hostv + path + search + hash;
-    }
-
-    private string RebuildTail(string path, string search = "", string hash = "")
-    {
-        var u = Parts();
-        string proto = u?.protocol ?? "acrux:";
-        string hostv = u?.host ?? "";
-        if (!path.StartsWith("/")) path = "/" + path;
-        if (!string.IsNullOrEmpty(search) && !search.StartsWith("?")) search = "?" + search;
-        if (!string.IsNullOrEmpty(hash) && !hash.StartsWith("#")) hash = "#" + hash;
-        return proto + "//" + hostv + path + search + hash;
     }
 
     public void assign(string url)

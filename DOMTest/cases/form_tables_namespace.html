@@ -158,7 +158,7 @@ ck('B7 the base element is what a relative link resolves against', function () {
     var a = document.createElement('a');
     a.href = '../up/x.html?1#2';
     var got = a.href === 'https://example.com/up/x.html?1#2' && a.pathname === '/up/x.html'
-        && a.host === 'example.com' && a.origin === 'https://example.com';
+        && a.host === 'example.com' && a.origin === 'https://example.com:443';
     base.remove();
     return got;
 }, function () {

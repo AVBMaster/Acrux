@@ -1,0 +1,225 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the address the location holds and the parts written over it (HTML §5.2.5, URL §2, §6.5, §7, Web IDL §3.7.2, §4.7.6)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 28, frozen from DOMTest/probes/probe131.html (the same 22 rows as a measurement). The Location
+// was hand-composing its address from strings, so a relative 'href' was stored as the fragment of a
+// sentence, 'port' was a setter that did nothing, a host write threw the port away and the hostname write
+// took the port with it. Every member is now the URL Standard's own rule for that part, run over the
+// parsed address (§7.3-§7.7): the port a scheme implies is not kept, an empty query or fragment takes its
+// mark off, a scheme the address may not change is dropped without a word, an address that cannot be
+// parsed is the SyntaxError the setter names. Two rules underneath changed with it: an origin carries the
+// port its scheme implies (§6.5), and an address can hold a port whenever it has a host and a path that is
+// not opaque, whatever its scheme is (§2).
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    // Each row starts from the address it names, so no row reads what the row before it left behind.
+    function at(address) {
+        location.href = address;
+        return location;
+    }
+
+    // ── A. the address, read ten ways ─────────────────────────────────────────
+    eq('A1 the parts of the address the location holds', safe(function () {
+        var loc = at('https://example.com:8443/a/b?q=1#frag');
+        return [loc.href, loc.protocol, loc.host, loc.hostname, loc.port, loc.pathname,
+            loc.search, loc.hash, loc.origin].join('|');
+    }), 'ok:https://example.com:8443/a/b?q=1#frag|https:|example.com:8443|example.com|8443|'
+        + '/a/b|?q=1|#frag|https://example.com:8443');
+
+    eq('A2 a default port is not spelled out again', safe(function () {
+        var loc = at('https://example.com:443/x');
+        return [loc.port, loc.host, loc.origin].join('|');
+    }), 'ok:|example.com|https://example.com:443');
+
+    eq('A3 a relative address is read against the one already there', safe(function () {
+        at('https://example.com/dir/page.html?q=1');
+        location.href = '../up/z';
+        var up = location.pathname;
+        location.href = '/root';
+        var root = location.pathname;
+        location.href = 'sibling';
+        return [up, root, location.pathname, location.href].join('|');
+    }), 'ok:/up/z|/root|/sibling|https://example.com/sibling');
+
+    eq('A4 an address the parser refuses is the refusal the setter names', safe(function () {
+        at('https://example.com/keep');
+        var before = location.href;
+        var made = name(function () { location.href = 'http://'; });
+        return [made, location.href === before].join('|');
+    }), 'ok:SyntaxError|true');
+
+    eq('A5 the empty address is the one the page is already at', safe(function () {
+        at('https://example.com/here?q=2');
+        location.href = '';
+        return location.href;
+    }), 'ok:https://example.com/here?q=2');
+
+    // ── B. a part written over the whole ──────────────────────────────────────
+    eq('B1 the port is written, cleared, and the one the scheme implies is not kept', safe(function () {
+        var loc = at('https://example.com/p');
+        loc.port = '9000';
+        var withPort = [loc.port, loc.host, loc.href].join(',');
+        loc.port = '';
+        var cleared = [loc.port, loc.href].join(',');
+        loc.port = '443';
+        var implied = [loc.port, loc.href].join(',');
+        return [withPort, cleared, implied].join('|');
+    }), 'ok:9000,example.com:9000,https://example.com:9000/p|,https://example.com/p|,https://example.com/p');
+
+    eq('B2 the host takes a port with it and the hostname leaves the port alone', safe(function () {
+        at('https://example.com:9000/p');
+        location.host = 'other.test:7';
+        var byHost = [location.hostname, location.port, location.href].join(',');
+        location.hostname = 'third.test';
+        return [byHost, location.hostname, location.port, location.href].join('|');
+    }), 'ok:other.test,7,https://other.test:7/p|third.test|7|https://third.test:7/p');
+
+    eq('B3 a hostname carrying a separator the host cannot hold is dropped', safe(function () {
+        at('https://example.com/p');
+        location.hostname = 'no/two';
+        var bySlash = location.href;
+        location.hostname = '';
+        var byEmpty = location.href;
+        return [bySlash, byEmpty].join('|');
+    }), 'ok:https://example.com/p|https://example.com/p');
+
+    eq('B4 the query is written with or without its mark and the empty one takes the mark off', safe(function () {
+        var loc = at('https://example.com/p?a=1');
+        loc.search = 'b=2';
+        var added = [loc.search, loc.href].join(',');
+        loc.search = '?c=3';
+        var kept = [loc.search, loc.href].join(',');
+        loc.search = '';
+        return [added, kept, loc.search, loc.href].join('|');
+    }), 'ok:?b=2,https://example.com/p?b=2|?c=3,https://example.com/p?c=3||https://example.com/p');
+
+    eq('B5 the fragment is written with or without its mark, the empty one takes it off', safe(function () {
+        var loc = at('https://example.com/p#one');
+        loc.hash = 'two';
+        var bare = loc.hash;
+        loc.hash = '#three';
+        var marked = loc.hash;
+        loc.hash = 'a b';
+        var spaced = [loc.hash, loc.href].join(',');
+        loc.hash = '';
+        return [bare, marked, spaced, loc.hash, loc.href].join('|');
+    }), 'ok:#two|#three|#a%20b,https://example.com/p#a%20b||https://example.com/p');
+
+    eq('B6 the path gets the leading separator a special scheme needs', safe(function () {
+        var loc = at('https://example.com/a/b?q=1#frag');
+        loc.pathname = 'c/d';
+        var made = [loc.pathname, loc.href].join(',');
+        loc.pathname = '/deep';
+        return [made, loc.pathname, loc.href].join('|');
+    }), 'ok:/c/d,https://example.com/c/d?q=1#frag|/deep|https://example.com/deep?q=1#frag');
+
+    eq('B7 the scheme changes within its own kind and not across it', safe(function () {
+        var loc = at('https://example.com/p');
+        loc.protocol = 'http';
+        var within = [loc.protocol, loc.href].join(',');
+        loc.protocol = 'acrux:';
+        var across = loc.href;
+        loc.protocol = 'not a name:';
+        return [within, across, loc.protocol, loc.href].join('|');
+    }), 'ok:http:,http://example.com/p|http://example.com/p|http:|http://example.com/p');
+
+    eq('B8 an address whose path is opaque has no path to write over', safe(function () {
+        var loc = at('about:blank');
+        var read = [loc.pathname, loc.host, loc.hostname, loc.origin].join(',');
+        loc.pathname = '/x';
+        var afterPath = location.pathname;
+        loc.hash = 'tail';
+        return [read, afterPath, loc.hash, loc.href].join('|');
+    }), 'ok:blank,,,null|blank|#tail|about:blank#tail');
+
+    // ── C. the interface the page enumerates ──────────────────────────────────
+    eq('C1 the keys the location hands to an enumeration', safe(function () {
+        at('https://example.com/p');
+        return Object.keys(location).join(',');
+    }), 'ok:ancestorOrigins,href,origin,protocol,host,hostname,port,pathname,search,hash,assign,reload,replace,toString');
+
+    eq('C2 the address is what the location turns into', safe(function () {
+        at('https://example.com/turn');
+        return [String(location), location + '', location.toString(),
+            typeof location.valueOf, Object.prototype.toString.call(location),
+            location === window.location].join('|');
+    }), 'ok:https://example.com/turn|https://example.com/turn|https://example.com/turn|function|'
+        + '[object Location]|true');
+
+    eq('C3 writing the location itself is the write to its address', safe(function () {
+        at('https://example.com/base');
+        var made = name(function () { window.location = '/through'; });
+        return [made, String(window.location), typeof window.location === 'object',
+            location.pathname].join('|');
+    }), 'ok:no-throw|https://example.com/through|true|/through');
+
+    eq('C4 the two navigations and the reload answer without a word', safe(function () {
+        at('https://example.com/first');
+        var made = [name(function () { location.assign('second'); }), location.pathname,
+            name(function () { location.replace('https://example.com/third'); }), location.pathname,
+            name(function () { location.reload(); }),
+            name(function () { location.assign('http://'); })].join(',');
+        return made;
+    }), 'ok:no-throw,/second,no-throw,/third,no-throw,SyntaxError');
+
+    eq('C5 the read-only members answer what the interface names', safe(function () {
+        at('https://example.com/p');
+        var origins = location.ancestorOrigins;
+        return [String(typeof origins), String(origins && origins.length),
+            name(function () { location.origin = 'https://other.test'; }), location.origin].join('|');
+    }), 'ok:object|0|no-throw|https://example.com:443');
+
+    // ── D. the rule underneath: which address can carry a port ────────────────
+    eq('D1 an address with a host of its own carries a port, whatever its scheme is', safe(function () {
+        var u = new URL('acrux://local/');
+        u.port = '8080';
+        var withPort = u.href;
+        u.username = 'me';
+        return [withPort, u.host, u.port, u.href].join('|');
+    }), 'ok:acrux://local:8080/|local:8080|8080|acrux://me@local:8080/');
+
+    eq('D2 a scheme-less host keeps the port the page wrote and a file address does not', safe(function () {
+        var made = new URL('foo://bar');
+        made.port = '7';
+        var file = new URL('file:///x');
+        file.port = '8080';
+        file.username = 'me';
+        return [made.href, file.href].join('|');
+    }), 'ok:foo://bar:7/|file:///x');
+
+    eq('D3 an address with an opaque path has no host to put a port behind', safe(function () {
+        var about = new URL('about:blank');
+        about.port = '80';
+        about.hostname = 'x.test';
+        var data = new URL('data:text/html,x');
+        data.port = '8';
+        return [about.href, about.hostname, data.href].join('|');
+    }), 'ok:about:blank||data:text/html,x');
+
+    eq('D4 the port a scheme already implies is dropped, the one it does not is kept', safe(function () {
+        var u = new URL('https://example.com/');
+        u.port = '443';
+        var implied = u.href;
+        u.port = '8443';
+        var written = u.href;
+        var other = new URL('acrux://local/');
+        other.port = '80';
+        return [implied, written, other.href].join('|');
+    }), 'ok:https://example.com/|https://example.com:8443/|acrux://local:80/');
+})();
+</script>
+<div>the address the location holds</div></body></html>
+
+</script>
+<div>the address the location holds</div></body></html>

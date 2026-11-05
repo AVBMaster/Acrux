@@ -17,7 +17,7 @@
     return J([
       p.toString() === 'a=1&b=2&b=3',
       new URL('/x', 'http://a/b').href === 'http://a/x',
-      new URL('http://a/b/c').origin === 'http://a',
+      new URL('http://a/b/c').origin === 'http://a:80',
       typeof URL.canParse, typeof URL.parse, typeof URL.fromJSON,
       URL.canParse('nope', 'http://a/b'), URL.canParse('nope'),
       g(function () { return URL.parse('http://a/b/c').pathname; }),
