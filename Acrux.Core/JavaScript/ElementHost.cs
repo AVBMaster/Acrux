@@ -139,7 +139,14 @@ public partial class ElementHost : IDomPrototypeHost
         }
     }
 
-    public string? outerHTML => BuildOuterHtml();
+    /// <summary>HTML §12.4.3.3: 'outerHTML' is read as the element with its own tags around it, and
+    /// written as a replacement of the element by the markup the page named — the work is the core
+    /// element's, which knows the parent to put the new nodes in and the sibling to stand in front of.</summary>
+    public string? outerHTML
+    {
+        get => BuildOuterHtml();
+        set => _element.OuterHTML = value ?? string.Empty;
+    }
 
     public CssStyleDeclaration style => _styleHost ??= new CssStyleDeclaration(_element);
 
@@ -1422,6 +1429,16 @@ public partial class ElementHost : IDomPrototypeHost
         return sb.ToString();
     }
 
+    /// <summary>The engine's one markup printer, handed to anything that has a node to write out — the
+    /// host's 'outerHTML', the core element's own, a fragment's children. Two printers of one tree are two
+    /// answers to one question, and the second one had been drifting (§13.4).</summary>
+    internal static string Serialize(Node node)
+    {
+        var sb = new System.Text.StringBuilder();
+        SerializeNode(node, sb);
+        return sb.ToString();
+    }
+
     private static readonly HashSet<string> VoidElements = new(StringComparer.OrdinalIgnoreCase)
     {
         "area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"
@@ -1431,7 +1448,10 @@ public partial class ElementHost : IDomPrototypeHost
     {
         if (node is TextNode tn)
         {
-            sb.Append(System.Net.WebUtility.HtmlEncode(tn.TextContent ?? ""));
+            // HTML §13.4: the text of a node is written through the text escaper, unless it belongs to
+            // the two elements whose children are markup rather than words — a script's body and a
+            // style's rules come back exactly as they were put in.
+            sb.Append(IsRawTextParent(tn.ParentNode) ? tn.Data ?? "" : EscapeText(tn.Data ?? ""));
         }
         else if (node is CommentNode cn)
         {
@@ -1450,7 +1470,7 @@ public partial class ElementHost : IDomPrototypeHost
                 // HTML §13.4: every attribute is written as name="value" — an empty value still gets
                 // its quotes, so 'hidden' serialises as hidden="" and not as the bare name (measured).
                 sb.Append(' ').Append(attr.Key)
-                    .Append("=\"").Append(System.Net.WebUtility.HtmlEncode(attr.Value ?? "")).Append('"');
+                    .Append("=\"").Append(EscapeAttribute(attr.Key, attr.Value ?? "")).Append('"');
             }
             // A void element has no content and closes at its start tag, so it must not grow a
             // spurious end tag the way 'br'/'img' did before.
@@ -1465,6 +1485,63 @@ public partial class ElementHost : IDomPrototypeHost
             sb.Append("</").Append(name).Append('>');
         }
     }
+
+    /// <summary>§13.4: the two elements whose child text is written without escaping, because their
+    /// children are the script's text and the stylesheet's rules rather than markup.</summary>
+    private static bool IsRawTextParent(Node? parent) => parent is Element owner
+        && (string.Equals(owner.TagName, "script", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(owner.TagName, "style", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>§13.4, "escape a text node": the four characters text cannot carry raw — the ampersand,
+    /// the two angle brackets, and the one non-breaking space a parser is free to collapse. Everything
+    /// else is written as itself, which is why an accented letter reaches the markup unescaped where the
+    /// general encoder turned it into a numeric reference.</summary>
+    private static string EscapeText(string data)
+    {
+        var made = new System.Text.StringBuilder(data.Length + 8);
+        for (var i = 0; i < data.Length; i++)
+        {
+            var c = data[i];
+            if (c == '&') made.Append("&amp;");
+            else if (c == '<') made.Append("&lt;");
+            else if (c == '>') made.Append("&gt;");
+            else if (c == '\u00A0') made.Append("&nbsp;");
+            else made.Append(c);
+        }
+        return made.ToString();
+    }
+
+    /// <summary>§13.4, "escape an attribute value": the delimiter and the quote that holds the value —
+    /// but not the angle brackets, which a quoted value may carry — and the non-breaking space; the
+    /// characters the attribute production refuses outright are written as numeric references. Inside a
+    /// 'style' the three whitespace controls are named references too, because the declaration parser
+    /// their value comes back through is not the one that wrote it.</summary>
+    private static string EscapeAttribute(string name, string data)
+    {
+        var style = string.Equals(name, "style", StringComparison.OrdinalIgnoreCase);
+        var made = new System.Text.StringBuilder(data.Length + 8);
+        for (var i = 0; i < data.Length; i++)
+        {
+            var c = data[i];
+            if (c == '&') made.Append("&amp;");
+            else if (c == '"') made.Append("&quot;");
+            else if (c == '\u00A0') made.Append("&nbsp;");
+            else if (style && c == '\n') made.Append("&#10;");
+            else if (style && c == '\r') made.Append("&#13;");
+            else if (style && c == '\t') made.Append("&#9;");
+            else if (RefusedInAttributeValue(c)) made.Append("&#").Append((int)c).Append(';');
+            else made.Append(c);
+        }
+        return made.ToString();
+    }
+
+    /// <summary>The characters an attribute value may not hold: the control characters other than the
+    /// four whitespace ones the production allows, DEL and the C1 run, and the non-characters.</summary>
+    private static bool RefusedInAttributeValue(char c) =>
+        (c < '\u0020' && c is not ('\t' or '\n' or '\r' or '\f'))
+        || (c >= '\u007F' && c <= '\u009F')
+        || c == '\uFFFE' || c == '\uFFFF'
+        || (c >= '\uFDD0' && c <= '\uFDEF');
 
     private static List<Element> GetElementsByTagNameInternal(Element root, string tagName)
     {
@@ -3377,10 +3454,26 @@ public class ScriptEvent : IDomPrototypeHost, IDomEnumerableHost
 
     // Keyboard event properties
     public string? key { get; set; }
-    /// <summary>UI Events §4.6.1: 'code' is the physical key the event came from, spelled the way the
-    /// KeyboardEvent interface names it; it is a member of the event rather than something derived from
-    /// 'key', because the same character arrives from a different key on a different layout.</summary>
-    public string? code { get; set; }
+    /// <summary>Two interfaces carry this name with two different types: a keyboard event's 'code' is the
+    /// name of the physical key (UI Events §4.6.1) and a close event's is the status number the connection
+    /// closed with (WebSockets §7.1.6). One bag of members sits behind both, and the interop hands a number
+    /// over as its spelling, so the read gives each interface back the type its own declaration names.</summary>
+    public object? code
+    {
+        get => Kind == "CloseEvent" && _code is string written && IsAllDigits(written)
+            ? (double)long.Parse(written, System.Globalization.CultureInfo.InvariantCulture)
+            : _code;
+        set => _code = value;
+    }
+
+    private object? _code;
+
+    private static bool IsAllDigits(string text)
+    {
+        if (text.Length == 0) return false;
+        foreach (var c in text) if (!char.IsAsciiDigit(c)) return false;
+        return true;
+    }
     public bool ctrlKey { get; set; }
     public bool shiftKey { get; set; }
     public bool altKey { get; set; }

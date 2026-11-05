@@ -14,19 +14,59 @@ public class DocumentHost : IDomPrototypeHost
     private ElementHost? _documentElementHost;
     private ElementHost? _bodyHost;
     private SelectionHost? _selection;
-    private readonly Dictionary<string, string> _cookies = new();
+    private CookieStore? _ownCookies;
     internal JavaScriptEngine? Engine { get; set; }
 
+    /// <summary>HTML §8.4: 'document.cookie' is a door onto the store, not a field of the document. The
+    /// string a page writes is one name-value pair followed by the attributes the pairing syntax knows,
+    /// and the string a page reads is the names and values of the cookies its OWN address would be sent
+    /// with — so a cookie written under a path the document is not inside, or under a domain the host
+    /// does not sit in, is not read back, and no attribute ever shows in the read (RFC 6265 §5.2-§5.4).</summary>
     public string cookie
     {
-        get => string.Join("; ", _cookies.Select(kv => $"{kv.Key}={kv.Value}"));
+        get
+        {
+            var (host, path, secure) = CookieAddress();
+            return CookieJar.Read(host, secure, path);
+        }
         set
         {
-            if (string.IsNullOrEmpty(value)) return;
-            var parts = value.Split('=', 2);
-            if (parts.Length == 2)
-                _cookies[parts[0].Trim()] = parts[1].Split(';')[0].Trim();
+            var (host, path, secure) = CookieAddress();
+            CookieJar.Write(host, secure, path, value);
         }
+    }
+
+    private CookieStore CookieJar => Engine?.Cookies ?? (_ownCookies ??= new CookieStore());
+
+    /// <summary>The three things the store keys a document's writes by. The address the document carries
+    /// is the one that counts, with the location behind it for a document the shell has not placed yet;
+    /// the trustworthiness follows the scheme, which is the same rule the window's 'isSecureContext'
+    /// answers by.</summary>
+    private (string Host, string Path, bool Secure) CookieAddress()
+    {
+        var href = _document.Url;
+        if (string.IsNullOrEmpty(href)) href = Engine?.LocationHost?.href ?? "";
+        var host = "";
+        var path = "/";
+        var scheme = "";
+        try
+        {
+            if (!string.IsNullOrEmpty(href))
+            {
+                var url = new URLHost(href);
+                host = url.hostname;
+                path = string.IsNullOrEmpty(url.pathname) ? "/" : url.pathname;
+                scheme = url.protocol.TrimEnd(':');
+            }
+        }
+        catch
+        {
+            // An address that is not one leaves the store writing for an empty host under the root path,
+            // which is what a document with no URL at all is given.
+        }
+        var secure = scheme is "https" or "wss" or "file" or "acrux"
+            || host is "localhost" or "127.0.0.1" or "[::1]" or "";
+        return (host, path, secure);
     }
 
     public DocumentHost(Document document)

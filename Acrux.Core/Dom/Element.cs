@@ -486,14 +486,22 @@ public abstract class Element : Node
     }
 
     // ===== outerHTML =====
+    /// <summary>HTML §12.4.3.3: writing 'outerHTML' is a replacement rather than an edit. The markup is
+    /// parsed with this element's parent as its context, what comes out is put where this element stood,
+    /// and this element leaves. An element with no parent to take the place of — and the root of a
+    /// document, whose parent is the document itself — is left exactly where it was.</summary>
     public string OuterHTML
     {
-        get => SerializeElement(this);
+        get => Acrux.Core.JavaScript.ElementHost.Serialize(this);
         set
         {
-            if (ParentNode == null) return;
-            var next = NextSibling;
-            Remove();
+            var parent = ParentNode;
+            if (parent is null || parent is Document) return;
+            var context = parent is Element host ? host.TagName : string.Empty;
+            var made = JavaScript.HtmlParser.ParseFragment(value ?? string.Empty, context);
+            foreach (var child in made)
+                parent.InsertBefore(child, this);
+            parent.RemoveChild(this);
         }
     }
 
@@ -850,51 +858,9 @@ public abstract class Element : Node
         }
     }
 
-    private static string SerializeElement(Element el)
-    {
-        var sb = new System.Text.StringBuilder();
-        // DOM §12.5: the serialiser writes the element's qualified name as it stands — the folding an
-        // HTML document's names went through happened when it was parsed, and a tree that came from an
-        // XML parse keeps the case it was written with (measured: an XML '<Child>' serialises as
-        // '<Child>', while a parsed HTML element still writes its lowercase local name).
-        var name = el.QualifiedName;
-        sb.Append('<').Append(name);
-        foreach (var attr in el.Attributes)
-            sb.Append(' ').Append(attr.Key).Append("=\"").Append(attr.Value.Replace("\"", "&quot;")).Append('"');
-        if (el.Children.Count == 0 && !voidElements.Contains(el.TagName))
-        {
-            sb.Append("></").Append(name).Append('>');
-        }
-        else if (voidElements.Contains(el.TagName))
-        {
-            sb.Append(" />");
-        }
-        else
-        {
-            sb.Append('>');
-            foreach (var child in el.Children)
-            {
-                if (child is Element childEl)
-                    sb.Append(SerializeElement(childEl));
-                else if (child is TextNode text)
-                {
-                    var data = text.Data;
-                    data = data.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-                    sb.Append(data);
-                }
-                else if (child is CommentNode comment)
-                    sb.Append("<!--").Append(comment.Data).Append("-->");
-            }
-            sb.Append("</").Append(name).Append('>');
-        }
-        return sb.ToString();
-    }
-
-    private static readonly HashSet<string> voidElements = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "area", "base", "br", "col", "embed", "hr", "img", "input",
-        "link", "meta", "param", "source", "track", "wbr"
-    };
+    // The markup of a tree is written by one printer — 'ElementHost.Serialize' — which is the only place
+    // §13.4's two escapers are spelled; a second printer here wrote the same tree a second way
+    // ('<br />' for a void element, and no escape of the non-breaking space) until it was removed.
 
     // ===== Private =====
     private static bool MatchesSelector(Element el, string selector)

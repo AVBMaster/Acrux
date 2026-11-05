@@ -27,36 +27,44 @@ public class TextNode : CharacterData
         return true;
     }
 
-    public string WholeText
+    /// <summary>DOM §3.3.11: the whole text of a node is its own data and that of the Text nodes that
+    /// <em>follow</em> it — the walk stops at the first sibling that is not text and never runs back
+    /// towards the start, so the second of two adjacent nodes reads only its own part. A CDATA section
+    /// anywhere in the walk answers null: the two spellings of the same characters are not mixed.</summary>
+    public string? WholeText
     {
         get
         {
             var sb = new System.Text.StringBuilder();
-            var current = this;
-            while (current.PreviousSibling is TextNode prev)
-                current = prev;
-            while (current != null && current is TextNode tn)
+            for (Node? node = this; node is TextNode text; node = node.NextSibling)
             {
-                sb.Append(tn.Data);
-                current = current.NextSibling as TextNode;
+                if (text.NodeType == NodeType.CDataSection) return null;
+                sb.Append(text.Data);
             }
             return sb.ToString();
         }
     }
 
+    /// <summary>DOM §3.3.10: the tail of the split is a new node of the <em>same interface</em> in the
+    /// same document — a CDATA section splits into two CDATA sections — and it is only inserted where
+    /// there is a parent to insert it into: a detached node still keeps its head and hands back its
+    /// tail.</summary>
     public TextNode SplitText(int offset)
     {
         if (offset < 0 || offset > Data.Length)
             throw new DOMException("Index out of bounds", "IndexSizeError");
 
-        var newData = Data[offset..];
+        var tail = CreateTail(Data[offset..]);
         Data = Data[..offset];
-
-        var newNode = new TextNode(newData);
-        if (ParentNode != null)
-            ParentNode.InsertBefore(newNode, NextSibling);
-        return newNode;
+        ParentNode?.InsertBefore(tail, NextSibling);
+        return tail;
     }
+
+    private TextNode CreateTail(string data) => this switch
+    {
+        CDataSection => new CDataSection(data) { OwnerDocument = OwnerDocument },
+        _ => new TextNode(data) { OwnerDocument = OwnerDocument },
+    };
 
     public Element? AssignedSlot => null;
 

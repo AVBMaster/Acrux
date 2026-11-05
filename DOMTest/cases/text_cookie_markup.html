@@ -1,0 +1,361 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the text a node hands back, the store a cookie writes, the markup a tree is written as (DOM §3.3.10-§3.3.11, HTML §8.4, §12.4.3.3, §13.4, RFC 6265 §5.1-§5.4, UI Events §4.6.1)</title></head>
+<body><div id="root"></div>
+<script>
+// Round 29, frozen from DOMTest/probes/probe133.html (the same 30 rows as a measurement). Four surfaces
+// the standard fixes by its own words. The whole text of a node runs FORWARD from the node it was asked of
+// and a CDATA section anywhere in it answers null (DOM §3.3.11); a split hands back a node of the same
+// interface, so a CDATA section splits into two CDATA sections, and a node with no parent still splits
+// without the tail being put anywhere (§3.3.10). The cookie door was a field of the document: it is now a
+// store keyed by the name with the domain AND the path, with the pair syntax's refusals, the default path
+// of the document's own address, and a run-out that takes the cookie away (HTML §8.4, RFC 6265 §5.1-§5.4).
+// The serialiser had been handing every string to a general HTML encoder, which is not the two escapers the
+// markup algorithm names: text escapes four characters and writes the rest as itself, an attribute does not
+// escape the angle brackets, and a script's or a style's child is not escaped at all (§13.4). A comment a
+// page wrote through 'innerHTML' also survives now — the fragment converter had been dropping it. And
+// 'outerHTML' became a write as well as a read: the markup is parsed against the parent, put where the
+// element stood, and the element leaves (§12.4.3.3) — where before the assignment only took the element
+// away. The engine's second markup printer, which spelled a void element '<br />' and left the
+// non-breaking space raw, was removed rather than kept beside the first.
+(function () {
+    var root = document.getElementById('root');
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function host(tag, html) {
+        var made = document.createElement(tag || 'div');
+        made.innerHTML = html === undefined ? '' : html;
+        root.appendChild(made);
+        return made;
+    }
+    // The directory the document's own address sits in — the default path a cookie takes when the write
+    // did not name one (§5.1.4).
+    var dir = location.pathname.slice(0, location.pathname.lastIndexOf('/') + 1);
+    // A deletion is keyed by the name, the domain AND the path it was written under (§5.3), so a wipe
+    // has to name each path the row used; taking one of them away leaves the other in place.
+    function wipe(list, paths) {
+        var places = paths || ['/', dir];
+        for (var i = 0; i < list.length; i++) {
+            for (var j = 0; j < places.length; j++) {
+                document.cookie = list[i] + '=x;max-age=0;path=' + places[j];
+            }
+        }
+    }
+
+    // ── A. the whole text of a node, and a node split in two ──────────────────
+    eq('A1 the whole text runs forward from the node it was asked of', safe(function () {
+        var box = host('div');
+        var first = document.createTextNode('ab');
+        var second = document.createTextNode('cd');
+        box.appendChild(first);
+        box.appendChild(second);
+        return [first.wholeText, second.wholeText, first.data, second.data].join('|');
+    }), 'ok:abcd|cd|ab|cd');
+
+    eq('A2 the run stops at the first sibling that is not text', safe(function () {
+        var box = host('div');
+        var a = document.createTextNode('a');
+        var c = document.createComment('mid');
+        var b = document.createTextNode('b');
+        box.appendChild(a); box.appendChild(c); box.appendChild(b);
+        return [a.wholeText, b.wholeText, String(c.wholeText)].join('|');
+    }), 'ok:a|b|undefined');
+
+    eq('A3 a CDATA section in the run answers null', safe(function () {
+        var doc = new DOMParser().parseFromString('<r><![CDATA[one]]>tail</r>', 'text/xml');
+        var cdata = doc.documentElement.firstChild;
+        var tail = cdata.nextSibling;
+        return [String(cdata.wholeText), String(tail.wholeText), cdata.nodeType,
+            cdata.nodeName, tail.nodeType].join('|');
+    }), 'ok:null|tail|4|#cdata-section|3');
+
+    eq('A4 a split keeps the head here and takes the tail next door', safe(function () {
+        var box = host('div');
+        var text = document.createTextNode('abcdef');
+        box.appendChild(text);
+        var tail = text.splitText(3);
+        return [text.data, tail.data, text.nextSibling === tail, tail.parentNode === box,
+            tail.ownerDocument === document, box.childNodes.length].join(',');
+    }), 'ok:abc,def,true,true,true,2');
+
+    eq('A5 a split at either end leaves one side empty', safe(function () {
+        var box = host('div');
+        var text = document.createTextNode('xy');
+        box.appendChild(text);
+        var whole = text.splitText(0);
+        var nothing = whole.splitText(2);
+        return [text.data, whole.data, nothing.data, box.childNodes.length].join(',');
+    }), 'ok:,xy,,3');
+
+    eq('A6 a detached node still splits, and the tail has nowhere to go', safe(function () {
+        var text = document.createTextNode('xyz');
+        var tail = text.splitText(1);
+        return [text.data, tail.data, String(tail.parentNode),
+            tail.ownerDocument === document, String(tail.previousSibling)].join('|');
+    }), 'ok:x|yz|null|true|null');
+
+    eq('A7 an offset the data cannot hold is refused', safe(function () {
+        var text = document.createTextNode('abc');
+        return [name(function () { text.splitText(4); }),
+            name(function () { text.splitText(-1); }),
+            name(function () { text.splitText(3); }), text.data].join(',');
+    }), 'ok:IndexSizeError,IndexSizeError,no-throw,abc');
+
+    eq('A8 a CDATA section splits into a CDATA section', safe(function () {
+        var doc = new DOMParser().parseFromString('<r><![CDATA[abcd]]></r>', 'text/xml');
+        var cdata = doc.documentElement.firstChild;
+        var tail = cdata.splitText(2);
+        return [cdata.data, tail.data, tail.nodeType, tail.nodeName,
+            tail instanceof CDATASection, tail instanceof Text,
+            String(tail instanceof CharacterData)].join('|');
+    }), 'ok:ab|cd|4|#cdata-section|true|true|true');
+
+    eq('A9 the Text the page builds carries what it was given', safe(function () {
+        var made = new Text('ab');
+        var bare = new Text();
+        return [made.data, made.nodeValue, made.nodeName, made.nodeType,
+            made.ownerDocument === document, bare.data, bare.length, made.length].join('|');
+    }), 'ok:ab|ab|#text|3|true||0|2');
+
+    eq('A10 a normalize joins the two halves back into one text', safe(function () {
+        var box = host('div');
+        var text = document.createTextNode('hello');
+        box.appendChild(text);
+        text.splitText(2);
+        box.normalize();
+        return [box.childNodes.length, box.firstChild.data, String(box.lastChild.nextSibling)].join(',');
+    }), 'ok:1,hello,null');
+
+    // ── B. the store a cookie is written to ───────────────────────────────────
+    eq('B1 the pair a page writes is the pair it reads back', safe(function () {
+        wipe(['r29b1', 'r29b2']);
+        document.cookie = 'r29b1=one;path=/';
+        document.cookie = 'r29b2=two;path=/';
+        var made = [document.cookie.indexOf('r29b1=one') >= 0,
+            document.cookie.indexOf('r29b2=two') >= 0,
+            document.cookie.split('; ').length >= 2];
+        wipe(['r29b1', 'r29b2']);
+        return [made.join(','), document.cookie.indexOf('r29b1')].join('|');
+    }), 'ok:true,true,true|-1');
+
+    eq('B2 a name the pair syntax refuses stores nothing', safe(function () {
+        wipe(['r29n1', 'r29n2', 'r29n3', 'r29n4']);
+        var before = document.cookie;
+        document.cookie = 'r29nothing';
+        document.cookie = '=r29novalue';
+        document.cookie = 'r29 name=1';
+        document.cookie = 'r29;name=1';
+        var made = [document.cookie === before];
+        document.cookie = 'r29n1=1';
+        var after = document.cookie.indexOf('r29n1=1') >= 0;
+        wipe(['r29n1']);
+        return [made.join(','), after].join('|');
+    }), 'ok:true|true');
+
+    eq('B3 the value keeps its own separators and an empty one is an empty one', safe(function () {
+        wipe(['r29e1', 'r29e2', 'r29e3']);
+        document.cookie = 'r29e1=;path=/';
+        document.cookie = 'r29e2=a=b;path=/';
+        document.cookie = 'r29e3=x,y;path=/';
+        var made = document.cookie;
+        var seen = [made.indexOf('r29e1=') >= 0, made.indexOf('r29e2=a=b') >= 0,
+            made.indexOf('r29e3=x,y') >= 0];
+        wipe(['r29e1', 'r29e2', 'r29e3']);
+        return seen.join(',');
+    }), 'ok:true,true,true');
+
+    eq('B4 the read is the cookies whose path the document sits inside', safe(function () {
+        wipe(['r29p1', 'r29p2', 'r29p3']);
+        document.cookie = 'r29p1=1;path=/';
+        document.cookie = 'r29p2=2;path=/nope-at-all';
+        document.cookie = 'r29p3=3;path=' + dir;
+        var made = document.cookie;
+        var seen = [made.indexOf('r29p1=1') >= 0, made.indexOf('r29p2') < 0,
+            made.indexOf('r29p3=3') >= 0];
+        // The same name under a second path is a second cookie, not a rewrite of the first: the pair the
+        // store keys by is the name with the domain AND the path (§5.3), and only the path this document
+        // sits inside is read back.
+        document.cookie = 'r29p1=9;path=/nope-at-all';
+        var again = document.cookie;
+        var made2 = [(again.match(/r29p1/g) || []).length, again.indexOf('r29p1=1') >= 0,
+            again.indexOf('r29p1=9') < 0];
+        wipe(['r29p1', 'r29p2', 'r29p3'], ['/', dir, '/nope-at-all']);
+        return [seen.join(','), made2.join(','), document.cookie.indexOf('r29p1')].join('|');
+    }), 'ok:true,true,true|1,true,true|-1');
+
+    eq('B5 no path named is the directory of the document itself', safe(function () {
+        wipe(['r29d1']);
+        document.cookie = 'r29d1=1';
+        var here = document.cookie.indexOf('r29d1=1') >= 0;
+        document.cookie = 'r29d1=;max-age=0;path=' + dir;
+        document.cookie = 'r29d1=2;path=/';
+        var alsoRoot = document.cookie.indexOf('r29d1=2') >= 0;
+        wipe(['r29d1']);
+        return [here, alsoRoot].join(',');
+    }), 'ok:true,true');
+
+    eq('B6 a run-out takes the cookie away instead of writing one', safe(function () {
+        wipe(['r29m1']);
+        document.cookie = 'r29m1=one;path=/';
+        var lived = document.cookie.indexOf('r29m1=one') >= 0;
+        document.cookie = 'r29m1=two;max-age=0;path=/';
+        var afterZero = document.cookie.indexOf('r29m1') < 0;
+        document.cookie = 'r29m1=three;path=/';
+        document.cookie = 'r29m1=four;max-age=-5;path=/';
+        var afterNegative = document.cookie.indexOf('r29m1') < 0;
+        document.cookie = 'r29m1=long;max-age=99999;path=/';
+        var longLived = document.cookie.indexOf('r29m1=long') >= 0;
+        wipe(['r29m1']);
+        return [lived, afterZero, afterNegative, longLived].join(',');
+    }), 'ok:true,true,true,true');
+
+    eq('B7 an expiry the grammar cannot read is not an expiry', safe(function () {
+        wipe(['r29x1', 'r29x2']);
+        document.cookie = 'r29x1=1;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+        var gone = document.cookie.indexOf('r29x1') < 0;
+        document.cookie = 'r29x2=2;expires=tomorrow;path=/';
+        var nonsense = document.cookie.indexOf('r29x2=2') >= 0;
+        document.cookie = 'r29x3=3;expires=Wed, 09 Jun 2100 10:18:14 GMT;path=/';
+        var future = document.cookie.indexOf('r29x3=3') >= 0;
+        wipe(['r29x1', 'r29x2', 'r29x3']);
+        return [gone, nonsense, future].join(',');
+    }), 'ok:true,true,true');
+
+    eq('B8 the same name, domain and path is one cookie', safe(function () {
+        wipe(['r29o1']);
+        document.cookie = 'r29o1=one;path=/';
+        document.cookie = 'r29o1=two;path=/';
+        var text = document.cookie;
+        var made = [text.indexOf('r29o1=two') >= 0, text.indexOf('r29o1=one') < 0,
+            (text.match(/r29o1=/g) || []).length];
+        wipe(['r29o1']);
+        return made.join(',');
+    }), 'ok:true,true,1');
+
+    eq('B9 the longer path is read first and the arrival order breaks a tie', safe(function () {
+        wipe(['r29s1', 'r29s2', 'r29s3']);
+        document.cookie = 'r29s1=root;path=/';
+        document.cookie = 'r29s2=here;path=' + dir;
+        document.cookie = 'r29s3=also;path=/';
+        var text = document.cookie;
+        var at = [text.indexOf('r29s1'), text.indexOf('r29s2'), text.indexOf('r29s3')];
+        var made = [at[1] < at[0], at[0] < at[2]];
+        wipe(['r29s1', 'r29s2', 'r29s3']);
+        return [made.join(','), at[0] >= 0 && at[1] >= 0 && at[2] >= 0].join('|');
+    }), 'ok:true,true|true');
+
+    eq('B10 no attribute is ever read back', safe(function () {
+        wipe(['r29a1']);
+        document.cookie = 'r29a1=v;path=/;secure;httponly;max-age=100;samesite=lax';
+        var text = document.cookie;
+        var mine = text.split('; ').filter(function (one) { return one.indexOf('r29a1') === 0; });
+        var made = [text.indexOf('r29a1=v') >= 0, mine.length === 1 && mine[0] === 'r29a1=v',
+            text.indexOf('httponly') < 0, text.indexOf('samesite') < 0];
+        wipe(['r29a1']);
+        return made.join(',');
+    }), 'ok:true,true,true,true');
+
+    // ── C. what a tree is written back as ─────────────────────────────────────
+    eq('C1 the four characters a text node cannot carry raw', safe(function () {
+        var box = host('div');
+        box.textContent = 'a<b>&c\u00a0d';
+        return box.innerHTML;
+    }), 'ok:a&lt;b&gt;&amp;c&nbsp;d');
+
+    eq('C2 an attribute escapes its own delimiter and the quote that holds it', safe(function () {
+        var made = host('div');
+        var span = document.createElement('span');
+        span.setAttribute('title', 'a"b&c<d>e\u00a0');
+        made.appendChild(span);
+        return made.innerHTML;
+    }), 'ok:<span title="a&quot;b&amp;c<d>e&nbsp;"></span>');
+
+    eq('C3 the two elements whose children are written as they came', safe(function () {
+        var made = host('div');
+        var script = document.createElement('script');
+        script.textContent = 'if (a<b && c>d) {}';
+        made.appendChild(script);
+        var style = document.createElement('style');
+        style.textContent = 'a > b { content: "&" }';
+        made.appendChild(style);
+        return [script.innerHTML, style.innerHTML].join('|||');
+    }), 'ok:if (a<b && c>d) {}|||a > b { content: "&" }');
+
+    eq('C4 a comment, a void element and a template write themselves back', safe(function () {
+        var made = host('div', '<p>one<!--mid-->two<br></p>');
+        var template = document.createElement('template');
+        template.innerHTML = '<b>x</b>';
+        return [made.innerHTML, template.innerHTML, String(template.content.childNodes.length),
+            template.content.firstChild.parentNode === template.content].join('|');
+    }), 'ok:<p>one<!--mid-->two<br></p>|<b>x</b>|1|true');
+
+    eq('C5 the space written as a reference round-trips as one', safe(function () {
+        var made = host('div');
+        made.innerHTML = 'a\u00a0b&amp;c';
+        var nbsp = String.fromCharCode(0xA0);
+        return [made.textContent, made.innerHTML, made.firstChild.data,
+            made.firstChild.nodeType].join('|');
+    }), 'ok:a' + String.fromCharCode(0xA0) + 'b&c|a&nbsp;b&amp;c|a'
+        + String.fromCharCode(0xA0) + 'b&c|3');
+
+    // ── E. the element written over by its own markup ────────────────────────
+    eq('E1 the write replaces the element with what the markup held', safe(function () {
+        var box = host('div', '<span id=first>one</span><i>two</i>');
+        var target = box.querySelector('#first');
+        target.outerHTML = '<b>held</b><em>other</em>';
+        return [box.childNodes.length, box.firstChild.tagName, box.firstChild.textContent,
+            box.childNodes[1].tagName, box.lastChild.tagName,
+            String(box.querySelector('#first'))].join(',');
+    }), 'ok:3,B,held,EM,I,null');
+
+    eq('E2 an element with nowhere to stand is left where it is', safe(function () {
+        var made = document.createElement('p');
+        made.textContent = 'own';
+        var before = made.outerHTML;
+        made.outerHTML = '<div>else</div>';
+        var root = document.documentElement;
+        var rootBefore = root.outerHTML.slice(0, 6);
+        root.outerHTML = '<div>no</div>';
+        return [made.tagName, made.textContent, before, root === document.documentElement,
+            rootBefore].join('|');
+    }), 'ok:P|own|<p>own</p>|true|<html>');
+
+    eq('E3 the read writes what the write was given', safe(function () {
+        var box = host('div');
+        box.innerHTML = '<p title="a&b">one</p>';
+        var round = box.firstChild.outerHTML;
+        box.firstChild.outerHTML = round;
+        return [round, box.innerHTML, box.firstChild.getAttribute('title'),
+            box.firstChild.textContent].join('|');
+    }), 'ok:<p title="a&amp;b">one</p>|<p title="a&amp;b">one</p>|a&b|one');
+
+    // ── D. the window against itself ──────────────────────────────────────────
+    eq('D1 a window with no frames is its own everything', safe(function () {
+        return [window.self === window, window.window === window, window.top === window,
+            window.parent === window, window.frames === window, window.globalThis === window,
+            String(window.frameElement), String(window.length), String(window.closed),
+            String(window.opener)].join(',');
+    }), 'ok:true,true,true,true,true,true,null,0,false,null');
+
+    eq('D2 the name a page gives itself and the origin it is at', safe(function () {
+        var before = window.name;
+        window.name = 'r29-two';
+        var made = [window.name, String(window.origin), window.origin === location.origin,
+            document.defaultView === window, window.frames.length, typeof window.frames[0]];
+        window.name = before;
+        return made.join('|');
+    }), 'ok:r29-two|null|true|true|0|undefined');
+})();
+</script>
+<div>the text a node hands back</div></body></html>
+
+</script>
+<div>the text a node hands back</div></body></html>

@@ -40,6 +40,11 @@ public static class HtmlParser
     {
         if (node is AngleSharp.Dom.IText textNode)
             return new TextNode(textNode.TextContent ?? "");
+        // A comment is a node of the tree, not a thing the parser throws away: markup written through
+        // 'innerHTML' keeps its comments, and the serialiser writes them back again (DOM §3.2.4,
+        // HTML §13.4).
+        if (node is AngleSharp.Dom.IComment commentNode)
+            return new CommentNode(commentNode.Data ?? "");
         if (node is not AngleSharp.Dom.IElement element)
             return null;
 

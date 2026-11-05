@@ -245,6 +245,12 @@ public class JavaScriptEngine : IDisposable
 
     private StorageHost? _localStorageHost;
     private StorageHost? _sessionStorageHost;
+    private CookieStore? _cookieStore;
+
+    /// <summary>HTML §8.4 with RFC 6265 §5.3: the cookie store belongs to the user agent and not to one
+    /// document, so the engine keeps the one store and hands it to every page it runs — a cookie a page
+    /// wrote is there for the page that comes after it.</summary>
+    internal CookieStore Cookies => _cookieStore ??= new CookieStore();
 
     /// <summary>Web Storage §5.1: the storage area belongs to the origin and the document set, not to
     /// one document, so the engine keeps the two areas and hands the same one to every page it runs.
