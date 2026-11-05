@@ -61,6 +61,8 @@ public static class ShorthandExpander
             case "text-decoration": ExpandTextDecoration(result, value); break;
             case "white-space": ExpandWhiteSpace(result, value); break;
             case "container": ExpandContainer(result, value); break;
+            case "scroll-timeline": ExpandTimeline(result, value, "scroll-timeline"); break;
+            case "view-timeline": ExpandTimeline(result, value, "view-timeline"); break;
             case "contain-intrinsic-size": ExpandContainIntrinsicSize(result, value); break;
             case "text-wrap": ExpandTextWrap(result, value); break;
             case "text-emphasis": ExpandTextEmphasis(result, value); break;
@@ -235,6 +237,7 @@ public static class ShorthandExpander
         // from it reads back empty through the CSSOM even though the shorthand set it.
         "place-content", "place-items", "place-self", "list-style",
         "container", "grid-template",
+        "scroll-timeline", "view-timeline",
         "scroll-margin", "scroll-padding", "offset",
         "scroll-margin-block", "scroll-margin-inline",
         "scroll-padding-block", "scroll-padding-inline",
@@ -318,6 +321,34 @@ public static class ShorthandExpander
         }
         result["container-name"] = canonical[..slash].Trim();
         result["container-type"] = canonical[(slash + 1)..].Trim();
+    }
+
+    /// <summary>Scroll-linked Animations 1 §3.1/§5: the shorthand says the timeline's name, the axis
+    /// it runs on and — for a view timeline — the inset the observer starts at. Whatever the page
+    /// left out is the longhand's own initial value, and writing it is what makes the enumeration
+    /// complete (measured: 'scroll-timeline: --t' writes 'scroll-timeline-name: --t' beside
+    /// 'scroll-timeline-axis: block', and 'view-timeline: --t' adds 'view-timeline-inset: auto').
+    /// The parts are read from the shorthand's own printer, so the expansion and the echo cannot
+    /// disagree about which word is which.</summary>
+    private static void ExpandTimeline(Dictionary<string, string> result, string value, string prefix)
+    {
+        var canonical = Resolver.EchoedProperties.Normalize(prefix, value);
+        if (canonical == null) return;
+        var words = canonical.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries
+            | StringSplitOptions.TrimEntries);
+        if (words.Length == 0) return;
+        string name = words[0], axis = "block", inset = "auto";
+        for (int i = 1; i < words.Length; i++)
+        {
+            var p = words[i].ToLowerInvariant();
+            if (p is "block" or "inline" or "x" or "y") { axis = p; continue; }
+            inset = string.Join(" ", words[i..]);
+            break;
+        }
+        result[prefix + "-name"] = name;
+        result[prefix + "-axis"] = axis;
+        if (prefix.Equals("view", StringComparison.OrdinalIgnoreCase))
+            result["view-timeline-inset"] = inset;
     }
 
     private static void ExpandWhiteSpace(Dictionary<string, string> result, string value)
@@ -1116,6 +1147,13 @@ public static class ShorthandExpander
         // CSS Containment 3 §3.4: the name list and the type, in that order, whether or not the
         // page said the type (measured: 'container: x' enumerates both, with 'normal' for the type).
         "container" => new[] { "container-name", "container-type" },
+        // Scroll-linked Animations 1 §3.1/§5: the same rule for the two timeline shorthands — the
+        // name and the axis always enumerate, and a view timeline adds the inset whether or not the
+        // page said it (measured: 'scroll-timeline: --t' has length 2 and 'view-timeline: --t' has
+        // length 3, while cssText prints the shorthand again).
+        "scroll-timeline" => new[] { "scroll-timeline-name", "scroll-timeline-axis" },
+        "view-timeline" => new[] { "view-timeline-name", "view-timeline-axis",
+            "view-timeline-inset" },
         "text-decoration" => new[] {
             "text-decoration-line", "text-decoration-thickness", "text-decoration-style",
             "text-decoration-color",

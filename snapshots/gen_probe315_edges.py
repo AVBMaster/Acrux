@@ -72,10 +72,10 @@ CASES = [
     ("contain-intrinsic-size", "auto 100px 200px"), ("contain-intrinsic-size", "auto auto"),
     ("contain-intrinsic-size", "none 100px"), ("contain-intrinsic-size", "auto 100px auto"),
     ("contain-intrinsic-size", "100px"), ("contain-intrinsic-size", "auto none"),
-    ("~", "container"), ("~", "container-name"), ("~", "interpolate-size"),
-    ("~", "shape-image-threshold"), ("~", "inset-block"), ("~", "padding-inline"),
-    ("~", "columns"), ("~", "overscroll-behavior-inline"), ("~", "contain-intrinsic-size"),
-    ("~", "background-repeat"), ("~", "background-size"),
+    ("container", "~"), ("container-name", "~"), ("interpolate-size", "~"),
+    ("shape-image-threshold", "~"), ("inset-block", "~"), ("padding-inline", "~"),
+    ("columns", "~"), ("overscroll-behavior-inline", "~"), ("contain-intrinsic-size", "~"),
+    ("background-repeat", "~"), ("background-size", "~"),
 ]
 
 

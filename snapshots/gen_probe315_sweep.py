@@ -171,15 +171,15 @@ CASES = [
     ("inline-size", "none"), ("inline-size", "stretch"), ("min-inline-size", "stretch"),
     ("max-block-size", "stretch"), ("min-block-size", "contain"),
     # The declaration surface for the same names, so a family with no grammar of its own is asked.
-    ("~", "container"), ("~", "container-type"), ("~", "view-transition-group"),
-    ("~", "speak"), ("~", "text-anchor"), ("~", "interactivity"),
-    ("~", "interpolate-size"), ("~", "transition-behavior"),
-    ("~", "scroll-initial-target"), ("~", "shape-image-threshold"),
-    ("~", "inset-block"), ("~", "columns"), ("~", "flex-flow"), ("~", "outline"),
-    ("~", "background-position-x"), ("~", "contain-intrinsic-size"),
-    ("~", "overscroll-behavior-block"), ("~", "overflow-clip-margin"),
-    ("~", "text-spacing-trim"), ("~", "line-sliding"), ("~", "grid-auto-flow"),
-    ("~", "will-change"), ("~", "text-decoration-thickness"), ("~", "block-size"),
+    ("container", "~"), ("container-type", "~"), ("view-transition-group", "~"),
+    ("speak", "~"), ("text-anchor", "~"), ("interactivity", "~"),
+    ("interpolate-size", "~"), ("transition-behavior", "~"),
+    ("scroll-initial-target", "~"), ("shape-image-threshold", "~"),
+    ("inset-block", "~"), ("columns", "~"), ("flex-flow", "~"), ("outline", "~"),
+    ("background-position-x", "~"), ("contain-intrinsic-size", "~"),
+    ("overscroll-behavior-block", "~"), ("overflow-clip-margin", "~"),
+    ("text-spacing-trim", "~"), ("line-sliding", "~"), ("grid-auto-flow", "~"),
+    ("will-change", "~"), ("text-decoration-thickness", "~"), ("block-size", "~"),
 ]
 
 

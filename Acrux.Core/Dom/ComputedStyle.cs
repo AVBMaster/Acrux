@@ -1153,13 +1153,19 @@ public class ComputedStyle
     /// (CSS Display 3 §3.3, measured: getComputedStyle().display === "flow-root").</summary>
     public bool DisplayIsFlowRoot { get; set; }
 
+    /// <summary>The computed 'display' text for the pair of keywords the layout enum has no member
+    /// for — 'inline-table' and 'block ruby' are laid out as a table and as a ruby box, but the
+    /// reference engine answers both words (CSS Display 3 §3.2, measured). Null for every value the
+    /// enum already spells, so the printer below keeps its own answer for them.</summary>
+    public string? DisplayText { get; set; }
+
     /// <summary>The computed 'display' text, including the flow-root keyword that the
     /// layout-facing <see cref="DisplayType"/> cannot express.</summary>
-    public string DisplayCssText => DisplayIsFlowRoot
+    public string DisplayCssText => DisplayText ?? (DisplayIsFlowRoot
         // The multi-keyword form keeps its 'list-item' addition after the internal keyword
         // (measured: 'display:flow-root list-item' reads back exactly that way).
         ? (Display == DisplayType.ListItem ? "flow-root list-item" : "flow-root")
-        : Display.ToCssString();
+        : Display.ToCssString());
 
     /// <summary>'line-height' as a computed style reports it: 'normal', or a length. A
     /// multiplier or percentage is resolved against this element's own font size, which is
@@ -1879,7 +1885,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             BorderBottomRightRadius = BorderBottomRightRadius, BorderBottomLeftRadius = BorderBottomLeftRadius,
             BorderTopLeftRadiusY = BorderTopLeftRadiusY, BorderTopRightRadiusY = BorderTopRightRadiusY,
             BorderBottomRightRadiusY = BorderBottomRightRadiusY, BorderBottomLeftRadiusY = BorderBottomLeftRadiusY,
-            Display = Display, DisplayIsFlowRoot = DisplayIsFlowRoot,
+            Display = Display, DisplayIsFlowRoot = DisplayIsFlowRoot, DisplayText = DisplayText,
             Position = Position, Float = Float, Clear = Clear,
             FontFamily = FontFamily, FontSize = FontSize, FontSizeIsDefault = FontSizeIsDefault, FontWeight = FontWeight, FontWeightNumber = FontWeightNumber,
             FontStyle = FontStyle, FontStyleObliqueDegrees = FontStyleObliqueDegrees, LineHeight = LineHeight,

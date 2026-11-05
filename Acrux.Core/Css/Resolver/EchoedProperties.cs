@@ -209,11 +209,13 @@ public static class EchoedProperties
 
             // Scroll-linked Animations 1 §3/§5: the two shorthands say the name and the axis (and
             // for a view timeline the inset) the longhands carry. Measured: a lone dashed name, a
-            // name with an axis, and 'none' all stand; a plain name is not a timeline name.
+            // name with an axis, and 'none' all stand; a plain name is not a timeline name, a lone
+            // axis is no timeline, and the axis or inset that repeats the longhand's initial value
+            // is left out of the print.
             new() { Name = "scroll-timeline", Initial = "none",
                 Normalize = NormalizeTimelineShorthand },
             new() { Name = "view-timeline", Initial = "none",
-                Normalize = NormalizeTimelineShorthand },
+                Normalize = NormalizeViewTimelineShorthand },
 
             new() { Name = "scroll-marker-group", Initial = "none",
                 Normalize = NormalizeScrollMarkerGroup,
@@ -548,15 +550,57 @@ public static class EchoedProperties
                 if (axis != null) return null;
                 axis = p;
             }
-            else if (IsDashedIdent(word))
+            else if (IsDashedIdent(word)
+                || word.Equals("none", StringComparison.OrdinalIgnoreCase))
             {
                 if (name != null) return null;
-                name = word;
+                name = word.Equals("none", StringComparison.OrdinalIgnoreCase) ? "none" : word;
             }
             else return null;
         }
-        if (name == null && axis == null) return null;
-        return name == null ? axis : axis == null ? name : name + " " + axis;
+        // Scroll-linked Animations 1 §3.1/§3.2: the shorthand says a timeline, and a timeline has a
+        // name — a lone axis is no declaration (measured: 'scroll-timeline: block' and
+        // 'view-timeline: auto' each fall). The axis the longhand assumes anyway is not said twice
+        // ('--t block' and 'none block' each read back one word).
+        if (name == null) return null;
+        return axis == null || axis == "block" ? name : name + " " + axis;
+    }
+
+    /// <summary>Scroll-linked Animations 1 §5: a view timeline is the same name and axis with the
+    /// inset the observer starts from beside it. The inset is the longhand's own shape — 'auto' or
+    /// one or two lengths or percentages — and the 'auto' the property assumes is left out of the
+    /// print (measured: 'view-timeline: --t auto' reads '--t' while '--t inline 10px' keeps all
+    /// three parts, and '--t nearest' is no inset and falls).</summary>
+    private static string? NormalizeViewTimelineShorthand(string value)
+    {
+        var words = Words(value);
+        if (words.Length == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "none";
+        string? name = null, axis = null;
+        var inset = new List<string>();
+        foreach (var word in words)
+        {
+            var p = word.ToLowerInvariant();
+            if (p is "block" or "inline" or "x" or "y")
+            {
+                if (axis != null) return null;
+                axis = p;
+            }
+            else if (IsDashedIdent(word)
+                || word.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                if (name != null) return null;
+                name = word.Equals("none", StringComparison.OrdinalIgnoreCase) ? "none" : word;
+            }
+            else inset.Add(p);
+        }
+        if (name == null || inset.Count > 2) return null;
+        if (inset.Count > 0 && NormalizeViewTimelineInset(string.Join(" ", inset)) == null) return null;
+        var parts = new List<string>(3) { name };
+        if (axis != null && axis != "block") parts.Add(axis);
+        if (inset.Count > 0 && !(inset.Count == 1 && inset[0] == "auto"))
+            parts.AddRange(inset);
+        return string.Join(" ", parts);
     }
 
     private static string? NormalizeScrollMarkerGroup(string value)

@@ -212,6 +212,12 @@ public static class ShorthandReparse
             "text-emphasis" => CssValueText.Canonicalize(string.Join(" ", values), "text-emphasis"),
             "text-wrap" => CssValueText.Canonicalize(string.Join(" ", values), "text-wrap"),
             "container" => CssValueText.Canonicalize(values[0] + " / " + values[1], "container"),
+            // The timeline's name, its axis and — for a view timeline — its inset are said again by
+            // the printer that says the authored shorthand, so a part at its initial value drops out
+            // of the fold exactly as it does from a declaration the page wrote (measured:
+            // '--t' + 'block' reads back '--t').
+            "scroll-timeline" or "view-timeline"
+                => CssValueText.Canonicalize(string.Join(" ", values), shorthand),
             "text-decoration" => CssValueText.Canonicalize(string.Join(" ", values), "text-decoration"),
             "white-space" => WhiteSpaceText(byName),
             "border" => BorderText(byName),

@@ -936,6 +936,7 @@ public class CascadeResolver
         // carries the keyword the enum cannot express. Copying one without the other
         // silently drops the formatting context.
         dest.DisplayIsFlowRoot = src.DisplayIsFlowRoot;
+        dest.DisplayText = src.DisplayText;
         dest.Float = src.Float; dest.Clear = src.Clear;
         dest.MarginTop = src.MarginTop; dest.MarginRight = src.MarginRight;
         dest.MarginBottom = src.MarginBottom; dest.MarginLeft = src.MarginLeft;

@@ -1548,14 +1548,15 @@ public static class CssValueGrammar
         // as 'margin' with five values below).
         CssPropertyId.TextOverflow
             => static text => IsPairOf(text, IsTextOverflowKeyword),
-        // CSS Backgrounds 3 §4.2 and CSS Borders: a width, a style and a colour in any order. The
-        // width is itself a one-to-four list — 'border: 2px 8px 12px 4px solid #36c' sets the four
-        // sides at once — while the style and the colour each appear at most once.
-        // 'border: 1px bogus red' names no style and is no declaration (measured), and
-        // 'border: 1px solid red' and 'border: solid' both are.
+        // CSS Borders 3 §4.1 and CSS Backgrounds 3 §4.2: a width, a style and a colour in any
+        // order, and ONE of each. The width is a <line-width>, not the one-to-four list the
+        // 'border-width' longhand takes, so a second of them is the longhand's shape rather than
+        // the shorthand's (measured: 'border: 1px 2px', '… : 1px solid red medium' and
+        // 'border-top: 1px 2px solid' are each dropped while 'border: 1px solid red',
+        // 'border: solid' and 'border: 0 solid' stand).
         CssPropertyId.Border or CssPropertyId.BorderTop or CssPropertyId.BorderRight
             or CssPropertyId.BorderBottom or CssPropertyId.BorderLeft
-            => static text => IsBorderSideValue(text, maxWidth: 4),
+            => static text => !SaysTopLevelComma(text) && IsBorderSideValue(text, maxWidth: 1),
         // CSS Logical 1 §4: the logical border shorthands measure two edges, and the shorthand of
         // the axis says ONE width, ONE style and ONE colour for both of them — a second value of
         // any one part is the longhand's own shape, not the shorthand's
@@ -1564,7 +1565,7 @@ public static class CssValueGrammar
         CssPropertyId.BorderBlockStart or CssPropertyId.BorderBlockEnd
             or CssPropertyId.BorderInlineStart or CssPropertyId.BorderInlineEnd
             or CssPropertyId.BorderBlock or CssPropertyId.BorderInline
-            => static text => IsBorderSideValue(text, maxWidth: 1),
+            => static text => !SaysTopLevelComma(text) && IsBorderSideValue(text, maxWidth: 1),
         // 'outline' is <'outline-color'> || <'outline-style'> || <'outline-width'> (CSS UI 4 §5.1)
         // — one of each, and the width is a single value rather than the four-side list a border
         // side shorthand takes. Measured: 'outline: 2px dashed rgb(1, 2, 3)' and 'outline: red'
@@ -1685,6 +1686,8 @@ public static class CssValueGrammar
         CssPropertyId.BreakInside => static text => IsSingleKeywordWord(text,
             new[] { "auto", "avoid", "avoid-page", "avoid-column" }),
         CssPropertyId.PageBreakBefore or CssPropertyId.PageBreakAfter or CssPropertyId.PageBreakInside
+            or CssPropertyId.WebkitColumnBreakBefore or CssPropertyId.WebkitColumnBreakAfter
+            or CssPropertyId.WebkitColumnBreakInside
             => text => IsSingleKeywordWord(text, LegacyBreakAlias.ValuesOf(id)!),
         // ===== The keyword families measured value by value in b290 (251 cases,
         // snapshots/_probe_b290_unswept_keyword_sets.html). None of these properties had a grammar
@@ -2253,6 +2256,7 @@ public static class CssValueGrammar
                 "double", "groove", "ridge", "inset", "outset"),
         CssPropertyId.BorderStyle => static text =>
         {
+            if (SaysTopLevelComma(text)) return false;
             var words = SplitComponents(text);
             if (words.Count is < 1 or > 4) return false;
             return words.All(word => IsOneOf(word, "none", "hidden", "dotted", "dashed", "solid",
@@ -3274,6 +3278,7 @@ public static class CssValueGrammar
     /// keyword per axis and so never more than two.</summary>
     private static bool IsPairOf(string text, Func<string, bool> one)
     {
+        if (SaysTopLevelComma(text)) return false;
         var parts = SplitComponents(text);
         if (parts.Count == 0 || parts.Count > 2) return false;
         foreach (var part in parts)
@@ -3665,16 +3670,32 @@ public static class CssValueGrammar
 
     /// <summary>A family list: one name per comma, each name a quoted string or the identifiers
     /// that stand for one family. A component that is a number, a dimension or an empty slot is not
-    /// a name, and the declaration that carries one names no font.</summary>
+    /// a name, and the declaration that carries one names no font. A name has one spelling: a
+    /// string is the whole name and a generic keyword is the whole name, so what stands beside
+    /// either of them is a second name whose comma the page left out (measured:
+    /// <c>font-family: 'A' "B"</c> and <c>serif serif</c> are each dropped, while
+    /// <c>Arial sans-serif</c> is one name of two identifiers and <c>Arial 12pt</c> — whose second
+    /// word is a dimension — is no name at all).</summary>
     private static bool IsFamilyNameList(string text)
     {
         if (ContainsAnyStructural(text)) return true;
-        foreach (var item in text.Split(','))
+        foreach (var item in Acrux.Core.Css.MaskLayerParser.SplitTopLevel(text, ','))
         {
             var trimmed = item.Trim();
             if (trimmed.Length == 0) return false;
-            if (trimmed[0] is '"' or '\'') continue;   // a string's characters are data, not syntax
-            foreach (var word in SplitWords(trimmed))
+            var words = new List<string>(SplitWords(trimmed));
+            if (words.Count == 0) return false;
+            if (trimmed[0] is '"' or '\'')
+            {
+                // A string is the whole name: it closes before anything else starts, and it has
+                // characters in it. Two strings side by side are two families whose comma the page
+                // left out, and the empty string names nothing (both measured).
+                int close = SkipString(trimmed, 0);
+                if (close < 0 || close != trimmed.Length - 1 || close <= 1) return false;
+                continue;
+            }
+            if (Acrux.Core.Css.CssValueText.IsGenericFamilyName(words[0])) return words.Count == 1;
+            foreach (var word in words)
                 if (!IsFamilyIdentifier(word)) return false;
         }
         return true;
@@ -3713,6 +3734,26 @@ public static class CssValueGrammar
             if ((c is 'L' or 'l') && i + 6 <= text.Length &&
                 string.Compare(text, i, "local(", 0, 6, StringComparison.OrdinalIgnoreCase) == 0)
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether a value writes a comma outside its functions and strings. A comma divides
+    /// the layers of a background, a mask or a transition; the one-to-four edge lists and the
+    /// corner pairs have no layers, so the reference engine drops the declaration that carries one
+    /// (measured: 'border-color: red, blue', 'border-top-left-radius: 10px, 20px' and
+    /// 'border: 1px solid red, 2px dashed blue' are each dropped). A comma inside a quoted string
+    /// is data, not a separator, so the scan skips a string the way the component splitter does.</summary>
+    private static bool SaysTopLevelComma(string text)
+    {
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == '"' || c == '\'') { i = SkipString(text, i); continue; }
+            else if (c == ',' && depth == 0) return true;
         }
         return false;
     }
@@ -4908,8 +4949,15 @@ public static class CssValueGrammar
         {
             1 => parts[0].Equals("auto", StringComparison.OrdinalIgnoreCase) ||
                  parts[0].Equals("stable", StringComparison.OrdinalIgnoreCase),
-            2 => parts[0].Equals("stable", StringComparison.OrdinalIgnoreCase) &&
-                 parts[1].Equals("both-edges", StringComparison.OrdinalIgnoreCase),
+            // CSS Scrollbars 1 §4.2: the two words of the pair say different things — one which
+            // gutters the engine reserves, one which edges it reserves them at — so either may come
+            // first, but a word does not stand in for the other (measured: 'both-edges stable' and
+            // 'STABLE BOTH-EDGES' both stand while 'stable stable', 'both-edges both-edges',
+            // 'auto stable' and 'stable auto' are each dropped).
+            2 => (parts[0].Equals("stable", StringComparison.OrdinalIgnoreCase)
+                    && parts[1].Equals("both-edges", StringComparison.OrdinalIgnoreCase))
+                || (parts[0].Equals("both-edges", StringComparison.OrdinalIgnoreCase)
+                    && parts[1].Equals("stable", StringComparison.OrdinalIgnoreCase)),
             _ => false,
         };
     }
@@ -4988,6 +5036,7 @@ public static class CssValueGrammar
     /// layer list to write.</summary>
     internal static bool IsColorListValue(string text, int max, params string[] extra)
     {
+        if (SaysTopLevelComma(text)) return false;
         var words = SplitComponents(text);
         if (words.Count == 0 || words.Count > max) return false;
         foreach (var word in words)
@@ -5624,6 +5673,7 @@ public static class CssValueGrammar
 
     private static bool IsLengthList(string text, params string[] keywords)
     {
+        if (SaysTopLevelComma(text)) return false;
         foreach (var token in SplitComponents(text))
         {
             if (IsBoxLength(token)) continue;

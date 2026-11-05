@@ -680,6 +680,10 @@ public static class CssValueText
             4 when Same(w[0], w[2]) && Same(w[1], w[3]) && !Same(w[0], w[1]) => w[0] + " " + w[1],
             4 when Same(w[1], w[3]) && !Same(w[0], w[1]) && !Same(w[1], w[2])
                 => w[0] + " " + w[1] + " " + w[2],
+            // Three values put the fourth behind the second, so a list whose first and third agree
+            // says two pairs and prints both (measured: 'border-width: 1px 2px 1px' reads
+            // '1px 2px', while 'border-color: red blue green' keeps all three).
+            3 when Same(w[0], w[2]) && !Same(w[0], w[1]) => w[0] + " " + w[1],
             _ => text,
         };
     }
@@ -1191,6 +1195,42 @@ public static class CssValueText
             case "border-radius":
                 return CollapseRadiusHalves(text);
 
+            // CSS Borders 3 §5.3: one corner's two radii are a horizontal and a vertical one, and
+            // the corner that is round in both directions says the radius once
+            // (measured: 'border-top-left-radius: 10px 10px' reads '10px' while '10px 50%' and
+            // '50% 0' keep both).
+            case "border-top-left-radius":
+            case "border-top-right-radius":
+            case "border-bottom-left-radius":
+            case "border-bottom-right-radius":
+            case "border-start-start-radius":
+            case "border-start-end-radius":
+            case "border-end-start-radius":
+            case "border-end-end-radius":
+                return CollapseEqualPair(text);
+
+            // CSS Scrollbars 1 §4.2: the two words of 'scrollbar-gutter' say which gutter is
+            // reserved and at which edges, and the property prints them in that order whichever
+            // end the page wrote them on (measured: 'both-edges stable' reads 'stable both-edges',
+            // and 'STABLE BOTH-EDGES' reads lower-cased).
+            case "scrollbar-gutter":
+                return ScrollbarGutterPair(text);
+
+            // CSS Borders 3 §4.1: the side shorthand's width, style and colour print in that
+            // order, not the order the page wrote them.
+            case "border":
+            case "border-top":
+            case "border-right":
+            case "border-bottom":
+            case "border-left":
+            case "border-block":
+            case "border-block-start":
+            case "border-block-end":
+            case "border-inline":
+            case "border-inline-start":
+            case "border-inline-end":
+                return OrderBorderSideParts(text);
+
             // CSS Grid 1 §7.2: the template with no areas and no tracks on either axis is the one
             // word 'none', not the pair the page wrote (measured: 'grid: none / none' and
             // 'grid-template: none / none' both read back 'none').
@@ -1250,14 +1290,63 @@ public static class CssValueText
         return horizontal + " / " + CollapseFourCornerList(halves[1].Trim());
     }
 
+    /// <summary>CSS Borders 3 §4.1: the three parts of a border side print in the order the
+    /// shorthand's grammar is written — the width, then the style, then the colour — whichever end
+    /// of the value the page put them on (measured: 'border: red 1px' reads '1px red' and
+    /// 'border-top: solid 1px red' reads '1px solid red'). The same matchers the grammar uses
+    /// decide the parts, so the two cannot disagree about which word is which.</summary>
+    private static string OrderBorderSideParts(string text)
+    {
+        string? width = null, style = null, colour = null;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            if (style == null && ShorthandExpander.IsBorderStyle(word)) { style = word; continue; }
+            if (width == null && Resolver.CssPropertyApplier.IsBorderWidthToken(word)) { width = word; continue; }
+            if (colour == null) { colour = word; continue; }
+            // A fourth part is not this shorthand's shape, and a printer must never make one out of
+            // a value the grammar has already refused.
+            return text;
+        }
+        var parts = new List<string>(3);
+        if (width != null) parts.Add(width);
+        if (style != null) parts.Add(style);
+        if (colour != null) parts.Add(colour);
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>CSS Scrollbars 1 §4.2: which gutter is reserved, then at which edges — the one
+    /// order the property prints its two words in (measured: 'both-edges stable' reads back
+    /// 'stable both-edges'). A word this grammar does not know leaves the text as it stands.</summary>
+    private static string ScrollbarGutterPair(string text)
+    {
+        bool stable = false, bothEdges = false;
+        foreach (var word in SplitTopLevelWords(text))
+        {
+            if (word.Equals("stable", StringComparison.OrdinalIgnoreCase)) stable = true;
+            else if (word.Equals("both-edges", StringComparison.OrdinalIgnoreCase)) bothEdges = true;
+            else return text;
+        }
+        if (!stable) return text;
+        return bothEdges ? "stable both-edges" : "stable";
+    }
+
     private static string CollapseFourCornerList(string text)
     {
         var words = SplitTerms(text);
-        if (words.Count != 4) return text;
-        if (words[0] == words[1] && words[1] == words[2] && words[2] == words[3]) return words[0];
-        if (words[0] == words[2] && words[1] == words[3]) return words[0] + " " + words[1];
-        if (words[1] == words[3]) return words[0] + " " + words[1] + " " + words[2];
-        return string.Join(" ", words);
+        if (words.Count is < 1 or > 4) return text;
+        // A corner list says the corners it leaves out the way the four-edge lists do: the second
+        // and fourth share, and a third value that is not repeated puts the fourth behind the
+        // second. Folding needs all four, so the short list is grown first (measured:
+        // 'border-radius: 10px 10px / 20px 20px' reads '10px / 20px' — each axis says one corner).
+        var four = new string[4];
+        four[0] = words[0];
+        four[1] = words.Count > 1 ? words[1] : words[0];
+        four[2] = words.Count > 2 ? words[2] : words[0];
+        four[3] = words.Count == 4 ? words[3] : four[1];
+        if (four[0] == four[1] && four[1] == four[2] && four[2] == four[3]) return four[0];
+        if (four[0] == four[2] && four[1] == four[3]) return four[0] + " " + four[1];
+        if (four[1] == four[3]) return four[0] + " " + four[1] + " " + four[2];
+        return string.Join(" ", four);
     }
 
     /// <summary>The order the 'font-variant' shorthand prints its families in: ligatures, then
@@ -2573,8 +2662,11 @@ public static class CssValueText
     /// identifiers is one string and is quoted — <c>font-family: My Font</c> reads back
     /// <c>"My Font"</c> — and a name that is written as a string and could have been written as one
     /// identifier loses its quotes: <c>font-family: "FFF"</c> reads back <c>FFF</c> (measured both,
-    /// in a style rule and in an '@font-face').</summary>
-    private static string FoldFamilyNames(string text)
+    /// in a style rule and in an '@font-face'). The computed surface prints through this same
+    /// printer, so the family the engine assumes when the page named none — which is a name, not a
+    /// generic keyword — carries the quotes a name of several words always gets (measured:
+    /// an unstyled element answers <c>"Times New Roman"</c>).</summary>
+    internal static string FoldFamilyNames(string text)
     {
         var items = SplitTopLevelCommas(text);
         for (int i = 0; i < items.Count; i++)

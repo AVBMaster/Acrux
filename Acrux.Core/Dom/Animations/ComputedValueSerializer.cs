@@ -272,7 +272,10 @@ public static class ComputedValueSerializer
             // so the computed value is the authored list (measured: 'Arial, sans-serif'). It is
             // here rather than only in the hand-built map because a generated box reads through
             // this serializer for everything the map does not carry.
-            case "font-family": return style.FontFamily ?? "";
+            // The family list prints through the one fold the specified value uses, so a name the
+            // engine assumes — which is a name, not a generic keyword — carries the quotes a name
+            // of several words always gets (measured: an unstyled element answers '"Times New Roman"').
+            case "font-family": return Acrux.Core.Css.CssValueText.FoldFamilyNames(style.FontFamily ?? "");
             case "font-size": return Px(style.FontSize, cut: true);
             case "font": return FontShorthandText(style);
             case "line-height":
@@ -580,6 +583,12 @@ public static class ComputedValueSerializer
             case "page-break-before": return LegacyPageBreakText("page-break-before", style.BreakBefore);
             case "page-break-after": return LegacyPageBreakText("page-break-after", style.BreakAfter);
             case "page-break-inside": return LegacyPageBreakText("page-break-inside", style.BreakInside);
+            case "-webkit-column-break-before":
+                return LegacyPageBreakText("-webkit-column-break-before", style.BreakBefore);
+            case "-webkit-column-break-after":
+                return LegacyPageBreakText("-webkit-column-break-after", style.BreakAfter);
+            case "-webkit-column-break-inside":
+                return LegacyPageBreakText("-webkit-column-break-inside", style.BreakInside);
             // 'text-wrap' prints as the shorthand the page wrote: a wrapping mode is what a style
             // word alone means, so 'wrap balance' reads 'balance' while 'nowrap stable' says both
             // (measured).
@@ -828,7 +837,7 @@ public static class ComputedValueSerializer
             case "transition-property": return ListOr(style.TransitionProperty, "all");
             case "transition-duration": return TimeListOr(style.TransitionDuration, "0s", nonNegative: true);
             case "transition-delay": return TimeListOr(style.TransitionDelay, "0s");
-            case "transition-timing-function": return ListOr(style.TransitionTimingFunction, "ease");
+            case "transition-timing-function": return StepTimingWords(style.TransitionTimingFunction);
             case "animation-name": return ListOr(style.AnimationName, "none");
             // CSS Animations 1 §3 with Scroll-driven Animations 1: an 'auto' duration is the length
             // the timeline would run for, and with no timeline that is nothing — the longhand says
@@ -839,7 +848,7 @@ public static class ComputedValueSerializer
                 ? string.Join(", ", List(style.AnimationDuration).Select(t =>
                     t.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "0s" : t))
                 : TimeListOr(style.AnimationDuration, "0s", nonNegative: true);
-            case "animation-timing-function": return ListOr(style.AnimationTimingFunction, "ease");
+            case "animation-timing-function": return StepTimingWords(style.AnimationTimingFunction);
             case "animation-delay": return TimeListOr(style.AnimationDelay, "0s");
             case "animation-iteration-count": return ListOr(style.AnimationIterationCount, "1");
             case "animation-direction": return ListOr(style.AnimationDirection, "normal");
@@ -1147,6 +1156,25 @@ public static class ComputedValueSerializer
         return kept.Count > 0 ? string.Join(", ", kept) : fallback;
     }
 
+    /// <summary>CSS Easing 1 §3: the two step keywords a page may write name the one-step function
+    /// they stand for, and the computed value answers the function — 'step-start' computes
+    /// 'steps(1, start)' and 'step-end' computes 'steps(1)', with the direction the function
+    /// assumes left off (measured, both). The specified value keeps the keyword the page wrote, so
+    /// this belongs to the computed surface and to no printer beside it.</summary>
+    private static string StepTimingWords(string? value)
+    {
+        var items = List(value);
+        if (items.Count == 0) return "ease";
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i].Equals("step-start", StringComparison.OrdinalIgnoreCase))
+                items[i] = "steps(1, start)";
+            else if (items[i].Equals("step-end", StringComparison.OrdinalIgnoreCase))
+                items[i] = "steps(1)";
+        }
+        return string.Join(", ", items);
+    }
+
     private static string ColorOrAuto(SkiaSharp.SKColor? color) => color.HasValue ? ColorText(color.Value) : "auto";
 
     /// <summary>'text-underline-position' prints the vertical choice before the horizontal one
@@ -1233,7 +1261,7 @@ public static class ComputedValueSerializer
     /// read as well (see <see cref="LegacyBreakAlias"/>), because the two surfaces cannot be
     /// allowed to disagree about which word a name owns.</summary>
     private static string LegacyPageBreakText(string legacyName, string? canonical)
-        => Acrux.Core.Css.LegacyBreakAlias.SpecifiedValue(legacyName, canonical ?? "auto") ?? string.Empty;
+        => Acrux.Core.Css.LegacyBreakAlias.ComputedValue(legacyName, canonical) ?? string.Empty;
 
     /// <summary>A border width's computed value: zero while its style is 'none' or 'hidden'
     /// (CSS 2.1 §10.3.2 — the width is suppressed at computed-value time, so an authored

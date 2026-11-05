@@ -1072,15 +1072,26 @@ public sealed class BoxBorderPainter
     /// </summary>
     private bool PaintRoundedSolidBorders()
     {
-        if (!_outer.IsRounded || _visibleEdgeSet != AllBorderEdges)
+        if (!_outer.IsRounded)
             return false;
 
+        // A rounded box can wear a border on two opposite edges only — 'border-top' and
+        // 'border-bottom' with the sides left at 'none' — and the ring the two bands cut out of
+        // each other is still the border box minus the padding box, which has nothing to take off
+        // at those two edges. Only the edges that render are filled; an edge that does not render
+        // would otherwise be painted with its own colour over the side it cannot reach.
+        bool any = false;
         for (int i = 0; i < 4; i++)
         {
             ref BorderEdge edge = ref _edges[i];
-            if (!edge.ShouldRender || edge.BorderStyleValue != BorderStyle.Solid)
-                return false;
+            // A side the fragment does not carry at all — the cut edge of a broken inline box —
+            // is not this shorthand's shape: the mitre path below knows how to cap it.
+            if (!edge.IsPresent) return false;
+            if (!edge.ShouldRender) continue;
+            if (edge.BorderStyleValue != BorderStyle.Solid) return false;
+            any = true;
         }
+        if (!any) return false;
 
         using var ring = BuildRoundRectPath(_outer, false);
         if (IsRenderable(_inner) && !_inner.IsEmpty)
@@ -1088,6 +1099,7 @@ public sealed class BoxBorderPainter
 
         foreach (BoxSide side in new[] { BoxSide.Top, BoxSide.Right, BoxSide.Bottom, BoxSide.Left })
         {
+            if (!Edge(side).ShouldRender) continue;
             using var region = BuildSideMiterPath(side);
             EmitPushClipPath(ring, true);
             EmitPushClipPath(region, false);

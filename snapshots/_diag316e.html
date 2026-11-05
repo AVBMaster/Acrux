@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  body { margin: 8px; }
+  .b { width: 70px; height: 44px; background: #fd8; display: inline-block; margin: 0 10px 14px 0; }
+</style></head>
+<body>
+<div id="host"></div>
+<script>
+function build() {
+  const rows = [];
+  const decls = [
+    'border-top: 8px solid #e33; border-bottom: 8px solid #33e; border-radius: 20px',
+    'border-top: 8px solid rgb(238,51,51); border-bottom: 8px solid rgb(51,51,238)',
+    'border-top: 8px solid red',
+    'border: 2px 8px 12px 4px solid #36c; border-radius: 16px',
+    'border-width: 2px 8px 12px 4px; border-style: solid; border-color: #36c'
+  ];
+  for (let i = 0; i < decls.length; i++) {
+    const el = document.createElement('div');
+    el.className = 'b';
+    el.setAttribute('style', decls[i]);
+    document.getElementById('host').appendChild(el);
+    const cs = getComputedStyle(el);
+    rows.push(i + '|' + decls[i]
+      + '|w=' + cs.borderTopWidth + ',' + cs.borderRightWidth + ',' + cs.borderBottomWidth + ',' + cs.borderLeftWidth
+      + '|s=' + cs.borderTopStyle + ',' + cs.borderRightStyle + ',' + cs.borderBottomStyle + ',' + cs.borderLeftStyle
+      + '|c=' + cs.borderTopColor + ',' + cs.borderBottomColor
+      + '|rect=' + JSON.stringify(el.getBoundingClientRect()));
+  }
+  document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>');
+  document.getElementById('record').textContent = rows.join('\n');
+  console.log(rows.join('\n'));
+}
+build();
+</script>
+</body></html>

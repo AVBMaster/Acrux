@@ -48,7 +48,7 @@ CASES = [
     # CSS Containment 3 §4.4: the 'auto' flag said once for the pair.
     ("contain-intrinsic-size", "auto 100px auto"), ("contain-intrinsic-size", "100px auto"),
     ("contain-intrinsic-size", "auto 100px 200px 300px"),
-    ("~", "background-repeat"), ("~", "background-size"), ("~", "container-name"),
+    ("background-repeat", "~"), ("background-size", "~"), ("container-name", "~"),
 ]
 
 

@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b316 sheet border</title>
+<style>
+  .a { border: 2px 8px 12px 4px solid rgb(51,51,204); }
+  .b { border: 1px 2px solid red; }
+  .c { border: 1px 2px 3px 4px solid red; }
+  .d { border: 4px 2px solid red; }
+  div { width: 40px; height: 20px; }
+</style></head>
+<body>
+<div id="host"></div>
+<script>
+function build() {
+  const rows = [];
+  for (const cls of ['a','b','c','d']) {
+    const el = document.createElement('div');
+    el.className = cls;
+    document.getElementById('host').appendChild(el);
+    const cs = getComputedStyle(el);
+    rows.push(cls + '|w=' + cs.borderTopWidth + ',' + cs.borderRightWidth + ','
+      + cs.borderBottomWidth + ',' + cs.borderLeftWidth
+      + '|s=' + cs.borderTopStyle + ',' + cs.borderRightStyle + ','
+      + cs.borderBottomStyle + ',' + cs.borderLeftStyle
+      + '|c=' + cs.borderTopColor + ',' + cs.borderRightColor + ','
+      + cs.borderBottomColor + ',' + cs.borderLeftColor);
+  }
+  document.body.insertAdjacentHTML('beforeend',
+    '<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>');
+  document.getElementById('record').textContent = rows.join('\n');
+  console.log(rows.join('\n'));
+}
+build();
+</script>
+</body></html>

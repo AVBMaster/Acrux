@@ -171,7 +171,15 @@ public static class CssPropertyTraits
             return WebkitAliases.Contains(name["-webkit-".Length..])
                 || LegacyDeclaredOnly.ContainsKey(name)
                 || Acrux.Core.Css.Resolver.EchoedProperties.Find(name) != null
-                || Css.CssValueGrammar.IsLegacyPrefixedName(name);
+                || Css.CssValueGrammar.IsLegacyPrefixedName(name)
+                // The third case the enum loop knows and this table used to guess: a '-webkit-'
+                // spelling that is a property of its own is stored and printed under that spelling,
+                // which is what gives it an id whose own name is the prefixed one —
+                // '-webkit-column-break-before' takes 'auto', 'avoid' and 'always' and refuses
+                // 'left', where 'break-before' is the other way round (measured, name and value by
+                // name). An alias is NOT this: '-webkit-margin' folds onto 'margin' for behaviour
+                // and is still a name the reference engine has no property for (measured, b256).
+                || DeclaresItsOwnPrefixedName(name);
         // The IDL spelling of a prefixed property carries no dash, and only the member path turns
         // it back into the CSS name (CssStyleDeclaration.ToCssName). Written into setProperty, the
         // same spelling is a name no page can set (measured: 'setProperty("webkit-line-clamp", …)'
@@ -184,6 +192,18 @@ public static class CssPropertyTraits
         // engine takes it, and a gate that consulted only the id table would drop the declaration).
         if (Acrux.Core.Css.Resolver.EchoedProperties.Find(name) != null) return true;
         return IsKnown(name) || ReferenceDeclared.Contains(name);
+    }
+
+    /// <summary>Whether a '-webkit-' spelling names a property of its own rather than an alias of
+    /// an unprefixed one. The id table answers both, so the difference is read from the name the id
+    /// carries: an alias prints as its unprefixed twin, a property of its own prints as the
+    /// prefixed spelling it was written in.</summary>
+    private static bool DeclaresItsOwnPrefixedName(string name)
+    {
+        var id = Properties.CssPropertyIdExtensions.FromString(name);
+        return id != Properties.CssPropertyId.Invalid
+            && Properties.CssPropertyIdExtensions.ToString(id)
+                .Equals(name, StringComparison.OrdinalIgnoreCase);
     }
 
     private static readonly string[] OtherVendorPrefixes = { "-moz-", "-ms-", "-o-" };
@@ -452,7 +472,8 @@ public static class CssPropertyTraits
             case "min-height": to.MinHeight = from.MinHeight; break;
             case "max-width": to.MaxWidth = from.MaxWidth; break;
             case "max-height": to.MaxHeight = from.MaxHeight; break;
-            case "display": to.Display = from.Display; to.DisplayIsFlowRoot = from.DisplayIsFlowRoot; break;
+            case "display": to.Display = from.Display; to.DisplayIsFlowRoot = from.DisplayIsFlowRoot;
+                to.DisplayText = from.DisplayText; break;
             case "position": to.Position = from.Position; break;
             case "float": to.Float = from.Float; break;
             case "clear": to.Clear = from.Clear; break;
@@ -691,6 +712,7 @@ public static class CssPropertyTraits
         {
             to.Display = DisplayType.Inline;
             to.DisplayIsFlowRoot = false;
+            to.DisplayText = null;
             return;
         }
         Copy(to, new ComputedStyle(), property);

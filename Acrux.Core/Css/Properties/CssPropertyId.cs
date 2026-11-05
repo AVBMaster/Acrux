@@ -274,6 +274,13 @@ public enum CssPropertyId
     PageBreakAfter,
     PageBreakBefore,
     PageBreakInside,
+    // The three column spellings of the same CSS 2.1 break names. Each is stored under the
+    // fragmentation property it aliases and re-spells 'always' as that property's 'column' — a
+    // value the modern name takes and 'page-break-*' does not — while its own computed value keeps
+    // the word the page wrote (measured, snapshots/_probe_b316_edges.html; see LegacyBreakAlias).
+    WebkitColumnBreakAfter,
+    WebkitColumnBreakBefore,
+    WebkitColumnBreakInside,
     Orphans,
     Widows,
     IMEMode,

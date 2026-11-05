@@ -1273,17 +1273,26 @@ public static class CssPropertyApplier
             case "page-break-before":
                 if (ParseBreakBetween(name, value) is { } brkPB) style.BreakBefore = brkPB;
                 break;
+            case "-webkit-column-break-before":
+                if (ParseBreakBetween(name, value) is { } brkWPB) style.BreakBefore = brkWPB;
+                break;
             case "break-after":
                 if (ParseBreakBetween(name, value) is { } brkA) style.BreakAfter = brkA;
                 break;
             case "page-break-after":
                 if (ParseBreakBetween(name, value) is { } brkPA) style.BreakAfter = brkPA;
                 break;
+            case "-webkit-column-break-after":
+                if (ParseBreakBetween(name, value) is { } brkWPA) style.BreakAfter = brkWPA;
+                break;
             case "break-inside":
                 if (ParseBreakInside(name, value) is { } brkI) style.BreakInside = brkI;
                 break;
             case "page-break-inside":
                 if (ParseBreakInside(name, value) is { } brkPI) style.BreakInside = brkPI;
+                break;
+            case "-webkit-column-break-inside":
+                if (ParseBreakInside(name, value) is { } brkWPI) style.BreakInside = brkWPI;
                 break;
             // Both were empty stubs: the declaration was accepted (so nothing warned)
             // and then thrown away, which also silently disabled the multicol
@@ -1633,6 +1642,31 @@ public static class CssPropertyApplier
         if (!TryParseDisplay(value, out var display, out var flowRoot)) return;
         style.Display = display;
         style.DisplayIsFlowRoot = flowRoot;
+        style.DisplayText = ComputedDisplayText(value);
+    }
+
+    /// <summary>The computed 'display' text the layout's enum has no member for. A table box that
+    /// sits on the line is still laid out as a table here, but the reference engine answers
+    /// 'inline-table' for it, and a ruby box with the outer word written answers 'block ruby' —
+    /// both measured. 'display: math' is not one of them: its computed value is the outer type the
+    /// keyword stands for ('inline' when the page wrote nothing or wrote 'inline', measured), which
+    /// is what the enum already says.</summary>
+    private static string? ComputedDisplayText(string value)
+    {
+        if (TryParseDisplayParts(value, out var parts))
+            return parts.Internal switch
+            {
+                3 when parts.InlineLevel => "inline-table",
+                6 when parts.SaysBlock && !parts.InlineLevel => "block ruby",
+                _ => null,
+            };
+        // A legacy keyword this engine lays out under another of the enum's members: 'inline-table'
+        // is a table box here, but the reference engine answers the word the page wrote (measured).
+        var single = SplitDisplayTokens(value);
+        return single.Length == 1
+            && DisplayKeywords.TryGetValue(single[0], out var type)
+            && !type.ToCssString().Equals(single[0], StringComparison.OrdinalIgnoreCase)
+                ? single[0].ToLowerInvariant() : null;
     }
 
     /// <summary>
@@ -1664,19 +1698,28 @@ public static class CssPropertyApplier
         return tokens.Length == 1 && DisplayKeywords.TryGetValue(tokens[0], out display);
     }
 
-    /// <summary>The three axes the modern grammar (CSS Display 3 §3) is written on: an
-    /// external keyword, an internal keyword and the 'list-item' addition. The layout type
-    /// and the canonical text are both derived from this, so they cannot drift apart.</summary>
+    /// <summary>
+    /// The three axes the modern grammar (CSS Display 3 §3) is written on: an external keyword
+    /// ('block' / 'inline'), an internal keyword ('flow', 'flow-root', 'table', 'flex', 'grid',
+    /// 'ruby', 'math') and the 'list-item' addition. The layout type and the canonical text are
+    /// both derived from this, so they cannot drift apart. 'SaysBlock' records whether the page
+    /// wrote the 'block' external keyword, which two of the internal keywords keep in their own
+    /// spelling ('block ruby', 'block math') even though 'block' is the type they mean by default
+    /// (measured for the pair 'display: ruby' and 'display: block ruby', which read back
+    /// differently).
+    /// </summary>
     public readonly struct DisplayParts
     {
         public readonly bool InlineLevel;
-        /// <summary>1 flow, 2 flow-root, 3 table, 4 flex, 5 grid, 6 ruby; never 0.</summary>
+        public readonly bool SaysBlock;
+        /// <summary>1 flow, 2 flow-root, 3 table, 4 flex, 5 grid, 6 ruby, 7 math; never 0.</summary>
         public readonly int Internal;
         public readonly bool ListItem;
 
-        public DisplayParts(bool inlineLevel, int @internal, bool listItem)
+        public DisplayParts(bool inlineLevel, bool saysBlock, int @internal, bool listItem)
         {
             InlineLevel = inlineLevel;
+            SaysBlock = saysBlock;
             Internal = @internal;
             ListItem = listItem;
         }
@@ -1706,6 +1749,9 @@ public static class CssPropertyApplier
                 case "flex": if (internal_ != 0) return false; internal_ = 4; break;
                 case "grid": if (internal_ != 0) return false; internal_ = 5; break;
                 case "ruby": if (internal_ != 0) return false; internal_ = 6; break;
+                // CSS MathML Core §5.3 with CSS Display 3 §3: 'math' is an internal keyword of its
+                // own, and the box it means sits on the line unless the page says otherwise.
+                case "math": if (internal_ != 0) return false; internal_ = 7; break;
                 case "list-item": if (listItem) return false; listItem = true; break;
                 default: return false;
             }
@@ -1718,7 +1764,7 @@ public static class CssPropertyApplier
         if (internal_ == 0 && !listItem) return false;
         // Without an internal keyword the grammar fills in 'flow'; without an external one the
         // box is block-level.
-        parts = new DisplayParts(external == 2, internal_ == 0 ? 1 : internal_, listItem);
+        parts = new DisplayParts(external == 2, external == 1, internal_ == 0 ? 1 : internal_, listItem);
         return true;
     }
 
@@ -1742,6 +1788,9 @@ public static class CssPropertyApplier
             4 => parts.InlineLevel ? DisplayType.InlineFlex : DisplayType.Flex,
             5 => parts.InlineLevel ? DisplayType.InlineGrid : DisplayType.Grid,
             6 => DisplayType.Ruby,
+            // CSS MathML Core §5.3: a display:math box is inline-level unless the page puts it on
+            // its own line (measured: 'display: math' computes 'inline').
+            7 => parts.SaysBlock && !parts.InlineLevel ? DisplayType.Block : DisplayType.Inline,
             _ => DisplayType.Block
         };
     }
@@ -1787,8 +1836,12 @@ public static class CssPropertyApplier
             4 => inline ? "inline-flex" : "flex",
             5 => inline ? "inline-grid" : "grid",
             // 'ruby' has no inline-level spelling (measured: 'display: inline ruby' reads
-            // back as 'ruby'), and 'list-item' cannot pair with it.
-            _ => "ruby"
+            // back as 'ruby'), and 'list-item' cannot pair with it. A block ruby box is the one
+            // case the outer word survives: the reference engine keeps both words for
+            // 'display: block ruby' while a page that wrote only 'ruby' reads back one word
+            // (measured, the pair).
+            6 => parts.SaysBlock && !inline ? "block ruby" : "ruby",
+            7 => parts.SaysBlock && !inline ? "block math" : "math",
         };
     }
 

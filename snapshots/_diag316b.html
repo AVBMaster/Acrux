@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 16px monospace; }
+  .a { display: table; background: rgb(128,0,128); }
+  .b { display: ruby; background: rgb(0,128,128); }
+  .c { display: inline-table; background: rgb(128,0,128); }
+  .d { display: block ruby; background: rgb(0,128,128); }
+</style></head>
+<body>
+<div>before<span class="a">table</span>after</div>
+<div>line<span class="b">ruby</span>end</div>
+<div>before<span class="c">inline-table</span>after</div>
+<div><span class="d">block-ruby</span></div>
+</body></html>

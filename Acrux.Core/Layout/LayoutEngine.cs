@@ -417,11 +417,7 @@ public class LayoutEngine
         // grammar rejects is dropped, which leaves that initial 'inline' — the shared
         // 'display' parser is the only keyword list here, as for float and clear.
         string displayStr = props.TryGetValue("display", out var d) ? d : "inline";
-        if (Acrux.Core.Css.Resolver.CssPropertyApplier.TryParseDisplay(displayStr, out var displayType, out var displayFlowRoot))
-        {
-            pseudoStyle.Display = displayType;
-            pseudoStyle.DisplayIsFlowRoot = displayFlowRoot;
-        }
+        Acrux.Core.Css.Resolver.CssPropertyApplier.ApplyDisplay(pseudoStyle, displayStr);
 
         // Apply the remaining pseudo-element properties.
         foreach (var kv in props)

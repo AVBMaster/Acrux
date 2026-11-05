@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html><head><title>diag 316</title></head><body>
+<div id="rec"></div>
+<script>
+(function () {
+  var lines = [];
+  function say(s) { lines.push(s); }
+  function probe(name, value) {
+    var el = document.createElement('div');
+    document.body.appendChild(el);
+    var sup = '';
+    try { sup = CSS.supports(name, value) ? '1' : '0'; } catch (e) { sup = 'err'; }
+    el.style.setProperty(name, value);
+    say(name + ' | ' + value + ' | sup=' + sup + ' | n=' + el.style.length +
+        ' | echo=' + el.style.getPropertyValue(name) +
+        ' | cssText=' + el.style.cssText +
+        ' | comp=' + getComputedStyle(el).getPropertyValue(name));
+  }
+  probe('-webkit-column-break-before', 'auto');
+  probe('-webkit-column-break-before', 'avoid');
+  probe('-webkit-column-break-before', 'always');
+  probe('-webkit-column-break-before', 'left');
+  probe('page-break-before', 'always');
+  probe('break-before', 'auto');
+  probe('font-family', '"Helvetica Neue"');
+  probe('font-family', 'Arial sans-serif');
+  probe('font-family', '""');
+  probe('font-family', 'Times New Roman');
+  probe('display', 'inline-table');
+  probe('display', 'inline table');
+  document.getElementById('rec').textContent = lines.join('\n');
+})();
+</script>
+</body></html>

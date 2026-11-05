@@ -42,6 +42,7 @@ public static class PseudoStyleMerger
         // initial value of a generated box's display is 'inline' (CSS Pseudo-Elements 4 §3.1).
         style.Display = DisplayType.Inline;
         style.DisplayIsFlowRoot = false;
+        style.DisplayText = null;
         // A generated box with no 'content' declaration generates nothing, and that is what the
         // reference engine reports for it (measured: 'none', where the element itself reads
         // 'normal').
@@ -132,6 +133,7 @@ public static class PseudoStyleMerger
         // reset with it, or a generated box inside a flow-root parent keeps the parent's
         // formatting context.
         style.DisplayIsFlowRoot = false;
+        style.DisplayText = null;
         style.ZIndex = null;
         style.Opacity = 1f;
         style.Overflow = style.OverflowX = style.OverflowY = OverflowType.Visible;
