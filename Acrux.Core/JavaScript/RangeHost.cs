@@ -325,8 +325,17 @@ public class RangeHost : IDomPrototypeHost
     {
         var fragment = new Acrux.Core.Dom.DocumentFragment();
         if (collapsed) return WrapFragment(fragment);
-        foreach (var node in CoveredNodes())
-            fragment.AppendChild(node.CloneNode(true));
+        // §3.6.9: the boundaries cut through character data are split first, so the copy is whole
+        // nodes and the cut lands on the boundary the page named (measured: (text,2)-(text,4) copies
+        // 'cd' rather than nothing).
+        LiveRangeAdjustments.Suppressed = true;
+        try
+        {
+            NormaliseBoundaries();
+            foreach (var node in CoveredNodes())
+                fragment.AppendChild(node.CloneNode(true));
+        }
+        finally { LiveRangeAdjustments.Suppressed = false; }
         return WrapFragment(fragment);
     }
 
@@ -368,6 +377,7 @@ public class RangeHost : IDomPrototypeHost
         {
             InsertAt(boundary, offset, parent);
             foreach (var child in content.ChildNodes.ToList()) parent.AppendChild(child);
+            // §3.6.11 step 8: the range is set to surround the wrapper itself.
             selectNode(parent);
         }
         finally { LiveRangeAdjustments.Suppressed = false; }

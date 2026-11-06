@@ -1,0 +1,146 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe135 — what a Range cuts, keeps and wraps</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 28); }
+    }
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. a range that cuts through text ─────────────────────────────────────
+    eq('A1 deleteContents keeps what is outside and leaves the range collapsed', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 2); range.setEnd(text, 4);
+        range.deleteContents();
+        // §3.6.7: the split moved the boundaries up to the paragraph — start (P,1), end (P,1).
+        return [box.textContent, range.collapsed, range.startContainer.nodeName, range.startOffset].join(',');
+    }), 'ok:abef,true,P,1');
+
+    eq('A2 extractContents hands back the cut text and empties the range', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 2); range.setEnd(text, 4);
+        var made = range.extractContents();
+        return [box.textContent, made.firstChild.nodeValue, range.collapsed, made.childNodes.length].join(',');
+    }), 'ok:abef,cd,true,1');
+
+    eq('A3 cloneContents copies and leaves the tree alone', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 2); range.setEnd(text, 4);
+        var made = range.cloneContents();
+        return [box.textContent, made.firstChild.nodeValue, made.childNodes.length].join(',');
+    }), 'ok:abcdef,cd,1');
+
+    // ── B. a range that cuts an element in half ───────────────────────────────
+    eq('B1 a boundary inside an element keeps the element itself out of the fragment', safe(function () {
+        var box = host('<div id=a>one<b>two</b>three</div>');
+        var range = document.createRange();
+        range.setStart(box.firstChild, 0);
+        range.setEnd(box.querySelector('#a'), 2);
+        var made = range.extractContents();
+        var names = [];
+        for (var i = 0; i < made.childNodes.length; i++) names.push(made.childNodes[i].nodeName);
+        return [names.join(','), box.textContent].join('|');
+    }), 'ok:#text,B|three');
+
+    eq('B2 a range that fully covers a node lifts the node whole', safe(function () {
+        var box = host('<div>one<b>two</b>three</div>');
+        var b = box.querySelector('b');
+        var range = document.createRange();
+        range.selectNode(b);
+        var made = range.extractContents();
+        var names = [];
+        for (var i = 0; i < made.childNodes.length; i++) names.push(made.childNodes[i].nodeName + ':' + made.childNodes[i].textContent);
+        return [names.join(','), box.textContent].join('|');
+    }), 'ok:B:two|onethree');
+
+    // ── C. inserting into a range ─────────────────────────────────────────────
+    eq('C1 insertNode puts it at the start and keeps the range after it', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 3); range.setEnd(text, 5);
+        var node = document.createElement('b');
+        node.textContent = 'X';
+        range.insertNode(node);
+        return [box.textContent, range.startContainer.nodeType, range.startOffset,
+            range.collapsed].join(',');
+    }), 'ok:abcXdef,3,3,false');
+
+    eq('C2 a fragment inserts its children, not itself', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 3); range.setEnd(text, 3);
+        var frag = document.createDocumentFragment();
+        var one = document.createElement('b'); one.textContent = 'X';
+        var two = document.createElement('i'); two.textContent = 'Y';
+        frag.appendChild(one); frag.appendChild(two);
+        range.insertNode(frag);
+        return [box.textContent, frag.childNodes.length, range.startOffset].join(',');
+    }), 'ok:abcXYdef,0,3');
+
+    // ── D. surroundContents and the refusals it names ─────────────────────────
+    eq('D1 surroundContents wraps the covered text and selects the wrapper', safe(function () {
+        var box = host('<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 2); range.setEnd(text, 4);
+        var wrap = document.createElement('b');
+        range.surroundContents(wrap);
+        return [box.firstChild.innerHTML, range.startContainer.tagName].join('|');
+    }), 'ok:ab<b>cd</b>ef|P');
+
+    eq('D2 surroundContents refuses when the boundaries are on different ancestors', safe(function () {
+        var box = host('<div><span id=a>one</span><b id=b>two</b></div>');
+        var range = document.createRange();
+        range.setStart(box.querySelector('#a').firstChild, 1);
+        range.setEnd(box.querySelector('#b').firstChild, 2);
+        return name(function () { range.surroundContents(document.createElement('b')); });
+    }), 'ok:InvalidStateError');
+
+    // ── E. the range the tree left behind ─────────────────────────────────────
+    eq('E1 removing a node the range sat after shifts the boundary back', safe(function () {
+        var box = host('<div>one<i>two</i>three</div>');
+        var text = box.firstChild.firstChild;   // 'one'
+        var range = document.createRange();
+        range.setStart(text, 1); range.setEnd(text, 2);
+        // The <i> is the next sibling; a boundary after it shifts back by its node length (1).
+        box.firstChild.removeChild(box.firstChild.childNodes[1]);
+        return [range.collapsed, range.startOffset, range.endOffset,
+            range.endContainer === text, box.textContent].join(',');
+    }), 'ok:false,1,2,true,onethree');
+
+    eq('E2 a range that selects a later child shifts back when it is removed', safe(function () {
+        var box = host('<div><b>one</b><i>two</i><u>three</u></div>');
+        var range = document.createRange();
+        range.selectNode(box.firstChild.childNodes[2]);
+        var before = [range.startOffset, range.endOffset].join(',');
+        box.firstChild.removeChild(box.firstChild.childNodes[2]);
+        // §3.5 'removing': the boundary that was at index 3 shifts back to index 2, the position
+        // the removed node held; the range ends up collapsed there.
+        return [before, range.startOffset, range.endOffset, range.collapsed].join(',');
+    }), 'ok:2,3,2,2,true');
+})();
+</script>
+<div>range tree algorithms</div></body></html>
