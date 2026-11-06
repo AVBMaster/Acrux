@@ -3254,6 +3254,8 @@ public class TextNodeWrapper : IDomPrototypeHost
     public object? splitText(int offset)
     {
         var tail = _node.SplitText(offset);
+        var host = JsIntegrationService.WrapAny((Node)tail);
+        if (host is RangeHost range) LiveRangeAdjustments.Register(range);
         var engine = JavaScriptEngine.Current;
         return engine?.IntegrationService != null
             ? engine.IntegrationService.WrapDomNode((Node)tail)

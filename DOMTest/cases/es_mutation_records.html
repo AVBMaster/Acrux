@@ -1,8 +1,7 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>the names ES2025 adds and the records an observer is told (ES §24.1.1, §27.1.6, DOM §3.5, §4.5)</title></head>
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>the names ES2025 adds and the records an observer is told (ES §24.1.1, §27.1.6, DOM §3.3.10, §3.5, §4.5)</title></head>
 <body><div id="root"></div>
 <script>
-// Round 30, frozen from DOMTest/probes/probe134b.html (the A and B sections of its 16 rows; the range
-// rows of section C stay with the probe until the engine keeps a list of live ranges). Two surfaces. The
+// Round 30, frozen from DOMTest/probes/probe134b.html (all 16 rows as a measurement). Three surfaces. The
 // language names the ES2025 upsert pair and the concatenation of iterators — the map writes the default
 // only when the key was not there and hands back what the entry ended up being, the callback's deletion of
 // its own entry is respected, and a list of iterables concatenates their VALUES rather than themselves.
@@ -10,6 +9,10 @@
 // had before the first write, the same run of text is one record, and a child that arrives and is taken
 // away again inside one batch is not told about at all. A node removed first and written to afterwards is
 // no longer inside the subtree its observer registered on, so that write reaches nobody (§3.5 step 1).
+// The range rows are DOM §3.5's boundary adjustments: a removal moves a boundary inside the node to the
+// position it held, a split moves a boundary at or past the split into the tail, and a removal that
+// empties a range leaves it collapsed — the engine keeps a list of live ranges now and walks it at each
+// of the three triggers.
 (function () {
     var root = document.getElementById('root');
     function safe(fn) {
@@ -255,6 +258,60 @@
         });
     }, 'childList/[object HTMLDivElement]');
 
+    // ── C. the range the tree moves under (DOM §3.5, §3.3.10) ────────────────
+    // RED ON PURPOSE until the engine keeps a list of live ranges: §3.5 ends the split, the removal and
+    // the extraction by walking every live range whose boundary was inside the node that moved, and there
+    // is no such list to walk. These rows measure the gap; they are not part of the frozen suite.
+    later('C1 a node removed from the tree leaves the range at its common ancestor', function () {
+        var box = host('div', '<p id=p1>one</p><p id=p2>two</p>');
+        var p1 = box.querySelector('#p1'), p2 = box.querySelector('#p2');
+        var range = document.createRange();
+        range.setStart(p1.firstChild, 0);
+        range.setEnd(p2.firstChild, 3);
+        box.removeChild(p1);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve([range.startContainer.nodeName, range.startOffset,
+                    range.endContainer.nodeName, range.collapsed].join(','));
+            }, 10);
+        });
+    }, 'DIV,0,#text,false');
+
+    later('C2 a split moves the boundary that was inside the tail', function () {
+        var box = host('div', '<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 4);
+        range.setEnd(text, 6);
+        var tail = text.splitText(2);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                // §3.3.10: the start uses a strict greater-than and moves to the tail at its reduced
+                // position; the end uses an at-least and moves too. The toString is the slice between
+                // them — 'ef' from the tail 'cdef'.
+                resolve([range.startContainer.length, range.startOffset,
+                    range.endContainer.length, range.endOffset,
+                    range.toString()].join(','));
+            }, 10);
+        });
+    }, '4,2,4,4,ef');
+
+    later('C3 a range that selects a node is emptied by its removal', function () {
+        var box = host('div', '<p id=q>keep</p><b id=r>gone</b>');
+        var q = box.querySelector('#q'), r = box.querySelector('#r');
+        var range = document.createRange();
+        range.selectNode(r);
+        box.removeChild(r);
+        var other = document.createRange();
+        other.setStart(q.firstChild, 0); other.setEnd(q.firstChild, 4);
+        box.removeChild(q);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve([range.collapsed, String(range.startContainer),
+                    other.collapsed, other.startOffset, other.endOffset].join(','));
+            }, 10);
+        });
+    }, 'true,[object HTMLDivElement],true,0,0');
 })();
 
 </script>

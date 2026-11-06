@@ -55,8 +55,14 @@ public class TextNode : CharacterData
             throw new DOMException("Index out of bounds", "IndexSizeError");
 
         var tail = CreateTail(Data[offset..]);
+        var parent = ParentNode;
+        var original = this;
         Data = Data[..offset];
-        ParentNode?.InsertBefore(tail, NextSibling);
+        // §3.3.10: every live range boundary at or past the split moves to the tail at its reduced
+        // position — the start with a strict greater-than, the end with an at-least, because the
+        // boundary exactly at the split belongs to the new node.
+        LiveRangeAdjustments.SplitText(original, tail, offset);
+        parent?.InsertBefore(tail, NextSibling);
         return tail;
     }
 

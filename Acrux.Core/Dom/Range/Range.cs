@@ -158,10 +158,15 @@ public class Range
     {
         if (Collapsed) return;
         var nodesToRemove = GetNodesInRange();
-        foreach (var node in nodesToRemove)
+        Acrux.Core.Dom.LiveRangeAdjustments.Suppressed = true;
+        try
         {
-            node.Remove();
+            foreach (var node in nodesToRemove)
+            {
+                node.Remove();
+            }
         }
+        finally { Acrux.Core.Dom.LiveRangeAdjustments.Suppressed = false; }
     }
 
     public DocumentFragment ExtractContents()
@@ -170,10 +175,15 @@ public class Range
         if (Collapsed) return fragment;
 
         var nodes = GetNodesInRange();
-        foreach (var node in nodes)
+        Acrux.Core.Dom.LiveRangeAdjustments.Suppressed = true;
+        try
         {
-            fragment.AppendChild(node);
+            foreach (var node in nodes)
+            {
+                fragment.AppendChild(node);
+            }
         }
+        finally { Acrux.Core.Dom.LiveRangeAdjustments.Suppressed = false; }
         return fragment;
     }
 

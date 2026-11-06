@@ -330,10 +330,12 @@ public abstract class Node : EventTarget
         child.Remove();
         var previousOwner = child.OwnerDocument;
         var frame = _children.Count > 0 ? _children[^1] : null;
+        int insertionIndex = _children.Count;
         child._parent = this;
         _children.Add(child);
         child.OwnerDocument = InsertedChildOwner;
         OnChildInserted(child);
+        LiveRangeAdjustments.InsertAt(child, this, insertionIndex);
         CustomElements.Inserted(child, previousOwner);
         DomMutationTracker.NoteChildList(this, new[] { child }, EmptyChildren, frame, null);
         DomMutationTracker.Notify();
@@ -364,9 +366,13 @@ public abstract class Node : EventTarget
         var previousOwner = newChild.OwnerDocument;
         var frame = index > 0 ? _children[index - 1] : null;
         newChild._parent = this;
+        // The pre-insertion index is what the range adjustment needs: a boundary at that offset in
+        // this parent shifts forward by the length of what was put there (§3.5 "inserting").
+        int insertionIndex = index;
         _children.Insert(index, newChild);
         newChild.OwnerDocument = InsertedChildOwner;
         OnChildInserted(newChild);
+        LiveRangeAdjustments.InsertAt(newChild, this, insertionIndex);
         CustomElements.Inserted(newChild, previousOwner);
         DomMutationTracker.NoteChildList(this, new[] { newChild }, EmptyChildren, frame, refChild);
         DomMutationTracker.Notify();
@@ -376,6 +382,7 @@ public abstract class Node : EventTarget
     public virtual Node RemoveChild(Node child)
     {
         var frame = (child.PreviousSibling, child.NextSibling);
+        LiveRangeAdjustments.Remove(child);
         if (!_children.Remove(child))
             throw new DOMException("Node is not a child", "NotFoundError");
         child._parent = null;

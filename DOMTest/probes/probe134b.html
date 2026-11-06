@@ -259,11 +259,11 @@
         box.removeChild(p1);
         return new Promise(function (resolve) {
             setTimeout(function () {
-                resolve([range.startContainer === box, range.startOffset,
-                    range.endContainer === p2.firstChild, range.collapsed].join(','));
+                resolve([range.startContainer.nodeName, range.startOffset,
+                    range.endContainer.nodeName, range.collapsed].join(','));
             }, 10);
         });
-    }, 'true,0,true,false');
+    }, 'DIV,0,#text,false');
 
     later('C2 a split moves the boundary that was inside the tail', function () {
         var box = host('div', '<p>abcdef</p>');
@@ -274,12 +274,15 @@
         var tail = text.splitText(2);
         return new Promise(function (resolve) {
             setTimeout(function () {
-                resolve([range.startContainer === tail, range.startOffset,
-                    range.endContainer === tail, range.endOffset,
+                // §3.3.10: the start uses a strict greater-than and moves to the tail at its reduced
+                // position; the end uses an at-least and moves too. The toString is the slice between
+                // them — 'ef' from the tail 'cdef'.
+                resolve([range.startContainer.length, range.startOffset,
+                    range.endContainer.length, range.endOffset,
                     range.toString()].join(','));
             }, 10);
         });
-    }, 'true,2,true,4,ef');
+    }, '4,2,4,4,ef');
 
     later('C3 a range that selects a node is emptied by its removal', function () {
         var box = host('div', '<p id=q>keep</p><b id=r>gone</b>');

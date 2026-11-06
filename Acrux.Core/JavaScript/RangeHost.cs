@@ -131,9 +131,27 @@ public class RangeHost : IDomPrototypeHost
     /// <summary>A range the engine makes is given its interface here: the host object reaches the
     /// page without going through the identity map, and 'range instanceof Range' needs the
     /// prototype the script side registered.</summary>
+    /// <summary>DOM §3.5: the boundary-adjustment algorithms set a boundary point directly, without
+    /// the reordering a page's 'setStart' carries — the tree changed under the range, and the point
+    /// moves to where the tree now says it is.</summary>
+    internal void SetStartBoundary(Node node, int offset)
+    {
+        _startContainer = node;
+        _startOffset = offset;
+    }
+
+    internal void SetEndBoundary(Node node, int offset)
+    {
+        _endContainer = node;
+        _endOffset = offset;
+    }
+
     internal static RangeHost Adopt(RangeHost host)
     {
         JsIntegrationService.FixProto(host);
+        // DOM §3.5: a live range is registered with the document of its boundary so the boundary-
+        // adjustment algorithms can find it when the tree changes under it.
+        LiveRangeAdjustments.Register(host);
         return host;
     }
 
@@ -234,6 +252,12 @@ public class RangeHost : IDomPrototypeHost
     /// an empty fragment at (p, 0)–(p, 0), and a node put between the halves of a split text left the
     /// start on the text and moved the end to (p, 2)).</summary>
     public void insertNode(object? node)
+    {
+        LiveRangeAdjustments.Suppressed = true;
+        try { InsertNodeBody(node); } finally { LiveRangeAdjustments.Suppressed = false; }
+    }
+
+    private void InsertNodeBody(object? node)
     {
         var n = RequireNode(node, "insertNode");
         if (n is DomDocument or Acrux.Core.Dom.DocumentTypeNode)
@@ -339,9 +363,14 @@ public class RangeHost : IDomPrototypeHost
 
         var boundary = _startContainer;
         int offset = _startOffset;
-        InsertAt(boundary, offset, parent);
-        foreach (var child in content.ChildNodes.ToList()) parent.AppendChild(child);
-        selectNode(parent);
+        LiveRangeAdjustments.Suppressed = true;
+        try
+        {
+            InsertAt(boundary, offset, parent);
+            foreach (var child in content.ChildNodes.ToList()) parent.AppendChild(child);
+            selectNode(parent);
+        }
+        finally { LiveRangeAdjustments.Suppressed = false; }
     }
 
     /// <summary>True when a node on the way down from 'from' to the root holds one boundary and
@@ -498,25 +527,33 @@ public class RangeHost : IDomPrototypeHost
     {
         if (collapsed) return toFragment ? new Acrux.Core.Dom.DocumentFragment() : null;
 
-        NormaliseBoundaries();
-        var run = CoveredNodes();
-        if (run.Count == 0) return toFragment ? new Acrux.Core.Dom.DocumentFragment() : null;
-
-        var fragment = toFragment ? new Acrux.Core.Dom.DocumentFragment() : null;
-        var home = run[0].ParentNode!;
-        int at = home.ChildNodes.IndexOfNode(run[0]);
-
-        foreach (var node in run)
+        // The Range's own algorithm: it splits the character data its boundaries cut and then moves the
+        // covered nodes out, setting its own boundaries when the work is done. The live-range adjustment
+        // is about a change the page made, not one the Range is making here (§3.5 vs §3.6).
+        LiveRangeAdjustments.Suppressed = true;
+        try
         {
-            var parent = node.ParentNode;
-            if (parent == null) continue;
-            parent.RemoveChild(node);
-            fragment?.AppendChild(node);
-        }
+            NormaliseBoundaries();
+            var run = CoveredNodes();
+            if (run.Count == 0) return toFragment ? new Acrux.Core.Dom.DocumentFragment() : null;
 
-        _startContainer = home; _startOffset = Math.Max(0, at);
-        _endContainer = home; _endOffset = _startOffset;
-        return fragment;
+            var fragment = toFragment ? new Acrux.Core.Dom.DocumentFragment() : null;
+            var home = run[0].ParentNode!;
+            int at = home.ChildNodes.IndexOfNode(run[0]);
+
+            foreach (var node in run)
+            {
+                var parent = node.ParentNode;
+                if (parent == null) continue;
+                parent.RemoveChild(node);
+                fragment?.AppendChild(node);
+            }
+
+            _startContainer = home; _startOffset = Math.Max(0, at);
+            _endContainer = home; _endOffset = _startOffset;
+            return fragment;
+        }
+        finally { LiveRangeAdjustments.Suppressed = false; }
     }
 
     /// <summary>Splits the character data both boundaries cut through, so everything the range
