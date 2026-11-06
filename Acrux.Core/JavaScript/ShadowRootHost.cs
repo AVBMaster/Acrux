@@ -34,6 +34,10 @@ public class ShadowRootHost : DocumentFragmentHost
     public bool serializable => _root.Serializable;
     public string slotAssignment => _root.SlotAssignment == Acrux.Core.Dom.SlotAssignmentMode.Manual
         ? "manual" : "named";
+    /// <summary>DOM §4.3.7: a shadow root is a document fragment, so it answers nodeType 11 and
+    /// isConnected — the host is connected, which is what makes the shadow root connected too.</summary>
+    public new int nodeType => 11;
+    public bool isConnected => _root.Host != null && _root.Host.IsConnected;
 
     /// <summary>HTML §13.2.5.114: the markup written into a shadow root is parsed in the context of the
     /// host's tag — a 'tr' written into a root whose host is a 'div' is dropped the way the parser

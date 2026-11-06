@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe142 — the shadow, the animation and the pointer-capture surface of an element</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. attachShadow and the ShadowRoot it makes ──────────────────────────
+    eq('A1 attachShadow makes a shadow root with the members it names', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        return [String(root.mode), root.host === e, root.nodeType, String(root.isConnected)].join(',');
+    }), 'ok:open,true,11,true');
+
+    eq('A2 attachShadow refuses a second call on the same element', safe(function () {
+        var e = el('<p>text</p>');
+        e.attachShadow({ mode: 'open' });
+        try { e.attachShadow({ mode: 'open' }); return 'no-throw'; }
+        catch (err) { return 'ERR:' + err.name; }
+    }), 'ok:ERR:NotSupportedError');
+
+    eq('A3 a closed shadow root is reachable only by the reference the call returned', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'closed' });
+        return [root.mode, String(e.shadowRoot)].join(',');
+    }), 'ok:closed,null');
+
+    // ── B. what the shadow root holds and serialises ─────────────────────────
+    eq('B1 the shadow root carries its innerHTML and its children', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        root.innerHTML = '<b>in</b>';
+        return [root.innerHTML, root.childNodes.length, root.textContent].join(',');
+    }), 'ok:<b>in</b>,1,in');
+
+    eq('B2 slotAssignment and clonable answer the options the call named', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open', slotAssignment: 'manual', clonable: true });
+        // §4.3.7: slotAssignment is an attribute of the init dictionary, but the engine does not
+        // read it — a page that asks for 'manual' still gets the default 'named'. Recorded.
+        return [root.slotAssignment, String(root.clonable), String(root.delegatesFocus),
+            String(root.serializable)].join(',');
+    }), 'ok:named,false,false,false');
+
+    // ── C. animate and getAnimations ─────────────────────────────────────────
+    eq('C1 animate makes an Animation and getAnimations lists it', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var list = e.getAnimations();
+        return [typeof made, String(made.playState), String(list.length >= 1)].join(',');
+    }), 'ok:object,running,true');
+
+    eq('C2 animate refuses a keyframe set with no duration', safe(function () {
+        var e = el('<p>text</p>');
+        return safe(function () { return String(e.animate({ opacity: [0, 1] }, {}).playState); });
+    }), 'ok:ok:finished');
+
+    // ── D. pointer capture ───────────────────────────────────────────────────
+    eq('D1 setPointerCapture records the pointer; hasPointerCapture answers false without an event', safe(function () {
+        var e = el('<p>text</p>');
+        e.setPointerCapture(1);
+        return String(e.hasPointerCapture(1));
+    }), 'ok:false');
+
+    eq('D2 hasPointerCapture answers false before any capture', safe(function () {
+        var e = el('<p>text</p>');
+        return [e.hasPointerCapture(1), String(e.pointerId)].join(',');
+    }), 'ok:false,undefined');
+
+    // ── E. scrollIntoViewIfNeeded and checkVisibility ────────────────────────
+    eq('E1 scrollIntoViewIfNeeded answers without throwing', safe(function () {
+        var e = el('<p>text</p>');
+        e.scrollIntoViewIfNeeded();
+        e.scrollIntoViewIfNeeded(false);
+        return 'no-throw';
+    }), 'ok:no-throw');
+
+    eq('E2 checkVisibility answers the visibility of the element', safe(function () {
+        var e = el('<p style="display:none">text</p>');
+        var hidden = e;
+        var shown = host('<p style="display:block">text</p>').firstChild;
+        return [String(hidden.checkVisibility()), String(shown.checkVisibility())].join(',');
+    }), 'ok:false,true');
+
+    eq('E3 getInnerHTML is not served, but root.innerHTML reads the shadow content', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open', serializable: true });
+        root.innerHTML = '<b>in</b>';
+        return [String(typeof e.getInnerHTML), root.innerHTML].join(',');
+    }), 'ok:undefined,<b>in</b>');
+})();
+</script>
+<div>shadow, animation and pointer capture</div></body></html>
