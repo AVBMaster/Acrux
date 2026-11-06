@@ -1,0 +1,106 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe140 — what matches and closest answer, and what they refuse</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function el(html) { return host(html).firstChild; }
+
+    // ── A. matches answers what the element is ───────────────────────────────
+    eq('A1 matches answers the tag, the class and the id', safe(function () {
+        var e = el('<p id=x class="a b">text</p>');
+        return [e.matches('p'), e.matches('.a'), e.matches('#x'), e.matches('div')].join(',');
+    }), 'ok:true,true,true,false');
+
+    eq('A2 matches answers a compound and a descendant selector', safe(function () {
+        var box = host('<div><p class=c><span>text</span></p></div>');
+        var span = box.querySelector('span');
+        // §4.3.5: :scope is the element itself, which the engine answers for the element and its own
+        // tag, but ':scope > span' (a compound) is not supported and answers false.
+        return [span.matches('p.c span'), span.matches('span.c'), String(span.matches(':scope > span')),
+            String(span.matches(':scope'))].join(',');
+    }), 'ok:true,false,false,true');
+
+    eq('A3 matches on a detached element still answers the tag', safe(function () {
+        var e = document.createElement('section');
+        e.className = 'pane';
+        return [e.matches('section'), e.matches('.pane'), e.matches('div')].join(',');
+    }), 'ok:true,true,false');
+
+    // ── B. closest walks up and refuses a bad selector ───────────────────────
+    eq('B1 closest walks up to the nearest ancestor that matches', safe(function () {
+        var box = host('<div id=outer class=wrap><p><span id=in>text</span></p></div>');
+        var span = box.querySelector('#in');
+        var found = span.closest('.wrap');
+        // A name nothing matches answers null — the closest walk returns the element it found or null.
+        return [String(found === box.querySelector('#outer')), String(span.closest('span') === span),
+            String(span.closest('#root-not-here'))].join(',');
+    }), 'ok:true,true,null');
+
+    eq('B2 closest on the element itself answers it when it matches', safe(function () {
+        var box = host('<div class=wrap><p id=in>text</p></div>');
+        var p = box.querySelector('#in');
+        return [String(p.closest('p') === p), String(p.closest('div') === box.firstChild)].join(',');
+    }), 'ok:true,true');
+
+    eq('B3 matches refuses a selector the syntax does not allow', safe(function () {
+        var e = el('<p>text</p>');
+        var sels = ['', '>>', 'p >>'];
+        var names = [];
+        for (var i = 0; i < sels.length; i++) {
+            try { e.matches(sels[i]); names.push('no-throw'); }
+            catch (err) { names.push(err.name); }
+        }
+        return names.join(',');
+    }), 'ok:SyntaxError,SyntaxError,SyntaxError');
+
+    eq('B4 closest refuses the same bad selector', safe(function () {
+        var e = el('<p>text</p>');
+        var names = [];
+        var sels = ['>>', ''];
+        for (var i = 0; i < sels.length; i++) {
+            try { e.closest(sels[i]); names.push('no-throw'); }
+            catch (err) { names.push(err.name); }
+        }
+        return names.join(',');
+    }), 'ok:SyntaxError,SyntaxError');
+
+    // ── C. webkitMatchesSelector is the same answer ──────────────────────────
+    eq('C1 webkitMatchesSelector answers what matches does', safe(function () {
+        var e = el('<p id=x class=a>text</p>');
+        return [typeof e.webkitMatchesSelector, e.webkitMatchesSelector('p#x.a'),
+            e.webkitMatchesSelector('div')].join(',');
+    }), 'ok:function,true,false');
+
+    // ── D. the attribute map's edges ─────────────────────────────────────────
+    eq('D1 the namespaced getters need the namespace recorded, which the parser did not do', safe(function () {
+        var box = host('<div><p xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#a"></p></div>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        var el = box.firstChild.firstChild;
+        return [String(el.hasAttributeNS(xlink, 'href')), el.getAttributeNS(xlink, 'href'),
+            el.getAttribute('xlink:href')].join(',');
+    }), 'ok:false,,#a');
+
+    eq('D2 hasAttributeNS answers false when the namespace was never recorded', safe(function () {
+        var box = host('<div><p xlink:href="#a"></p></div>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        var el = box.firstChild.firstChild;
+        return [String(el.hasAttributeNS(xlink, 'href')), el.getAttributeNS(xlink, 'href'),
+            String(el.hasAttribute('xlink:href'))].join(',');
+    }), 'ok:false,,true');
+})();
+</script>
+<div>matches and closest</div></body></html>
