@@ -1,0 +1,106 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe141 — the fullscreen, scroll and geometry surface of an element</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function el(html) { return host(html).firstChild; }
+
+    // ── A. requestFullscreen and the fullscreen state ────────────────────────
+    eq('A1 requestFullscreen returns a promise and the state stays off', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.requestFullscreen();
+        return [String(made instanceof Promise), String(document.fullscreenElement === null),
+            document.fullscreenEnabled].join(',');
+    }), 'ok:true,true,true');
+
+    eq('A2 fullscreenchange is not fired by a refused request', safe(function () {
+        var e = el('<p>text</p>');
+        var fired = 0;
+        var on = function () { fired++; };
+        document.addEventListener('fullscreenchange', on);
+        var made = e.requestFullscreen();
+        document.removeEventListener('fullscreenchange', on);
+        return [String(made instanceof Promise), fired].join(',');
+    }), 'ok:true,0');
+
+    eq('A3 exitFullscreen answers a promise too', safe(function () {
+        return [String(document.exitFullscreen() instanceof Promise)].join(',');
+    }), 'ok:true');
+
+    // ── B. scrollIntoView and the scroll members ─────────────────────────────
+    eq('B1 scrollIntoView accepts no argument and an options object', safe(function () {
+        var e = el('<p>text</p>');
+        e.scrollIntoView();
+        e.scrollIntoView(true);
+        e.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return 'no-throw';
+    }), 'ok:no-throw');
+
+    eq('B2 scroll and scrollBy accept a number pair and an options object', safe(function () {
+        var e = el('<p>text</p>');
+        e.scroll(10, 20);
+        e.scroll({ top: 5, left: 6, behavior: 'instant' });
+        e.scrollBy(1, 2);
+        e.scrollBy({ top: 3 });
+        return [e.scrollTop, e.scrollLeft].join(',');
+    }), 'ok:0,0');
+
+    eq('B3 scrollTo answers without throwing', safe(function () {
+        var e = el('<p>text</p>');
+        e.scrollTo(0, 0);
+        e.scrollTo({ top: 1 });
+        return 'no-throw';
+    }), 'ok:no-throw');
+
+    // ── C. the geometry the layout answers ───────────────────────────────────
+    eq('C1 getBoundingClientRect answers the box the layout gave', safe(function () {
+        var box = host('<div><p style="width:100px;height:50px">text</p></div>');
+        var p = box.querySelector('p');
+        var rect = p.getBoundingClientRect();
+        return [typeof rect.width, String(rect.width > 0), typeof rect.top, String(rect.right > rect.left)].join(',');
+    }), 'ok:number,true,number,true');
+
+    eq('C2 getClientRects answers one rect per line box', safe(function () {
+        var box = host('<div><p style="width:100px">text</p></div>');
+        var rects = box.querySelector('p').getClientRects();
+        return [String(rects.length >= 1), typeof rects[0].width].join(',');
+    }), 'ok:true,number');
+
+    eq('C3 offsetWidth answers the border-box width as a number', safe(function () {
+        var box = host('<div><p style="width:100px">text</p></div>');
+        return [typeof box.querySelector('p').offsetWidth, String(box.querySelector('p').offsetWidth >= 0)].join(',');
+    }), 'ok:number,true');
+
+    // ── D. Attr.value writes through the element ─────────────────────────────
+    eq('D1 writing Attr.value writes the attribute', safe(function () {
+        var box = host('<div><p data-k="old">text</p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        attr.value = 'new';
+        return [el.getAttribute('data-k'), attr.value].join(',');
+    }), 'ok:new,new');
+
+    eq('D2 reading Attr.value after a setAttribute reads the new value', safe(function () {
+        var box = host('<div><p data-k="old">text</p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        el.setAttribute('data-k', 'new');
+        return [attr.value, el.getAttribute('data-k')].join(',');
+    }), 'ok:new,new');
+})();
+</script>
+<div>fullscreen, scroll and geometry</div></body></html>
