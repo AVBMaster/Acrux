@@ -164,7 +164,12 @@ public static class ComputedValueSerializer
             case "min-width": return MinLengthText(style, style.MinWidth, cut: true);
             case "max-width": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
             case "min-height": return MinLengthText(style, style.MinHeight, cut: true);
-            case "max-height": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
+            // A maximum is never the keyword 'auto' on the computed surface: its initial is 'none',
+            // and a call the engine cannot price (a calc-size() whose size only the layout knows)
+            // falls back to that rather than printing a word the property does not take (measured:
+            // 'max-height: calc-size(auto, size + 1em)' computes 'none').
+            case "max-height": return style.MaxHeight != null
+                ? AutoTextAsNone(LengthText(style, style.MaxHeight)) : "none";
 
             case "top": return LengthText(style, style.Top, cut: true);
             case "right": return LengthText(style, style.Right, cut: true);
@@ -2168,6 +2173,12 @@ public static class ComputedValueSerializer
         var text = LengthText(style, length, cut);
         return text.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "0px" : text;
     }
+
+    /// <summary>A maximum whose length priced to nothing worth naming: the property's own initial
+    /// 'none' is the answer, never the keyword 'auto' (measured: 'max-height: calc-size(auto,
+    /// size + 1em)' computes 'none', where an unpriced calc-size() fell back to an auto length).</summary>
+    private static string AutoTextAsNone(string text) =>
+        text.Equals("auto", StringComparison.OrdinalIgnoreCase) ? "none" : text;
 
     private static string GridLine(string start, string end) =>
         end == "auto" ? start : (start == "auto" && end == "auto" ? "auto" : $"{start} / {end}");
