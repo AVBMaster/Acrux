@@ -1857,6 +1857,17 @@ public static class ShorthandExpander
     /// <c>flex: 0% 0%</c>, <c>flex: 1 1 -5px</c> and <c>flex: 1 1 auto extra</c> are all dropped,
     /// while <c>flex: auto 1</c> is the same value as <c>flex: 1 auto</c> because the parts of a
     /// <c>||</c> list may be written in either order).</summary>
+    /// <summary>The keywords that stand for a width without naming a length: the three intrinsic
+    /// sizes and 'stretch', which is what a flex basis may be both as the longhand and inside the
+    /// shorthand (measured: 'flex-basis: stretch' reads 'stretch' and 'flex: stretch' reads
+    /// '1 1 stretch'). A 'fit-content()' CALL is not one of them: the longhand takes it and the
+    /// shorthand does not (both measured).</summary>
+    internal static bool IsIntrinsicBasisKeyword(string token) =>
+        token.Equals("min-content", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("max-content", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("fit-content", StringComparison.OrdinalIgnoreCase)
+        || token.Equals("stretch", StringComparison.OrdinalIgnoreCase);
+
     public static FlexShorthandParts? ParseFlexParts(string value)
     {
         var tokens = SplitShorthand(value);
@@ -1886,12 +1897,26 @@ public static class ShorthandExpander
                 continue;
             }
 
+            // CSS Sizing 4 §2.2: the intrinsic keywords are a width, so they are a basis too —
+            // 'flex: fit-content' is the shorthand saying '1 1 fit-content' (measured).
+            if (IsIntrinsicBasisKeyword(token))
+            {
+                if (basis != null) return null;
+                basis = token.ToLowerInvariant();
+                continue;
+            }
+
             // A math function goes into the slot its type names: 'flex: calc(1) 1 auto' asks for the
             // count and 'flex: 1 1 calc(10px)' for the length (measured, both), and an expression
             // whose type the engine cannot name — a variable — takes a count slot as the shorthand's
             // own.
             if (token.Contains('('))
             {
+                // 'fit-content()' is a basis the longhand takes and this shorthand does not
+                // (measured: 'flex: fit-content(100px)' leaves no declaration while
+                // 'flex-basis: fit-content(100px)' stands); every other length-valued call goes
+                // into the basis slot as before.
+                if (token.StartsWith("fit-content(", StringComparison.OrdinalIgnoreCase)) return null;
                 if (MathExpressionIsLength(token))
                 {
                     if (basis != null) return null;

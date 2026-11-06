@@ -1082,8 +1082,12 @@ public static class CssValueGrammar
         // evaluates negative is NOT refused here — the grammar cannot price it — it is clamped to '0s'
         // at computed-value time instead (measured: 'transition-duration: calc(-1s)' echoes as written
         // and computes '0s', while the same calc on a delay computes '-1s').
-        CssPropertyId.TransitionDuration or CssPropertyId.AnimationDuration
-            => static text => IsTimeList(text, nonNegative: true),
+        CssPropertyId.TransitionDuration => static text => IsTimeList(text, nonNegative: true),
+        // Scroll-linked Animations 1 §5: 'auto' is a duration of its own for an animation — the
+        // length the timeline would run for — and for nothing else (measured:
+        // 'animation-duration: auto' stands and computes '0s').
+        CssPropertyId.AnimationDuration => static text => IsTimeList(text, nonNegative: true,
+            allowAuto: true),
         CssPropertyId.TransitionDelay or CssPropertyId.AnimationDelay
             => static text => IsTimeList(text),
         // CSS Text Decoration 4 §2: any number of the four decoration lines (each at most once), at
@@ -1128,6 +1132,9 @@ public static class CssValueGrammar
             var word = words[0];
             if (word.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 || word.Equals("content", StringComparison.OrdinalIgnoreCase)) return true;
+            // CSS Sizing 4 §2.2: an intrinsic width is a width, and 'flex-basis' takes it
+            // (measured through the shorthand: 'flex: fit-content' reads '1 1 fit-content').
+            if (ShorthandExpander.IsIntrinsicBasisKeyword(word)) return true;
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) return true;
             return !IsFitContentFunction(word) && IsNonNegativeBoxLength(word);
         },
@@ -1356,8 +1363,16 @@ public static class CssValueGrammar
         // 'outline-width' is the same family with a narrower set: no 'auto' (that word belongs to
         // the style here), no bare number and no percentage, and nothing negative (all measured) —
         // which is why it stands apart from the four border widths above.
-        // CSS Multi-column 1 §6: 'auto' lets the column width be calculated.
-        CssPropertyId.ColumnWidth => static text => IsLengthList(text, "auto"),
+        // CSS Multi-column 1 §6: 'auto' lets the column width be calculated, and a width that is
+        // less than nothing is no width (measured: 'column-width: -1px' is dropped and reads 'auto').
+        // CSS Multi-column 1 §6.1: the width is a <length> or 'auto' — never a share of the
+        // container, and not one inside a math expression either (measured: 'column-width: 50%',
+        // 'calc(50%)' and 'calc(50% - 20px)' are each dropped while 'column-gap: 50%' stands). A
+        // negative the expression works out to IS a value: 'calc(-1px)' is kept and its computed
+        // width is zero (both measured).
+        CssPropertyId.ColumnWidth => static text =>
+            !text.Contains('%', StringComparison.Ordinal)
+            && IsNonNegativeLengthList(text, "auto"),
         // CSS Box Alignment 3 §3.7 and CSS Gap 1 §3: 'normal' or a length, one for each axis. The
         // shorthand takes at most two, so a third is no value (measured: 'gap: 10px 20px 30px' is
         // dropped while 'gap: 10px 20px' and 'gap: normal' stand), and a longhand takes exactly one.
@@ -2599,7 +2614,7 @@ public static class CssValueGrammar
         {
             if (item.StartsWith("[", StringComparison.Ordinal)) continue;
             if (IsTrackBreadth(item) || item.Equals("repeat", StringComparison.OrdinalIgnoreCase)
-                || item.StartsWith("repeat(", StringComparison.OrdinalIgnoreCase))
+                || IsRepeatCall(item))
             {
                 anyTrack = true;
                 continue;
@@ -2607,6 +2622,26 @@ public static class CssValueGrammar
             return false;
         }
         return anyTrack;
+    }
+
+    /// <summary>'repeat()' (CSS Grid 1 §7.2.2): a count or one of the two fill keywords, then the
+    /// list it repeats — and that list is read by the same grammar as any other track list, so a
+    /// breadth the function would refuse on its own is refused inside it too (measured:
+    /// 'grid-template-columns: repeat(2, minmax(auto, 1fr))' stands while
+    /// 'repeat(2, minmax(1fr, auto))' is dropped).</summary>
+    private static bool IsRepeatCall(string token)
+    {
+        if (!token.StartsWith("repeat(", StringComparison.OrdinalIgnoreCase)
+            || !token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var args = SplitTopLevel(token[7..^1], ',');
+        if (args.Count != 2) return false;
+        var count = args[0].Trim().ToLowerInvariant();
+        if (count is not ("auto-fill" or "auto-fit"))
+        {
+            if (!IsIntegerWord(count) || !int.TryParse(count, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var times) || times < 1) return false;
+        }
+        return HasATrackAndOnlyTracks(args[1]);
     }
 
     /// <summary>The items of a track list: bracketed line-name groups are one item each, and the
@@ -4590,11 +4625,12 @@ public static class CssValueGrammar
     /// math function that resolves to a time. The unit set is closed and small: '2min' is a perfectly
     /// good CSS dimension that is not a time, and the reference engine leaves the declaration out
     /// (measured: 'transition-duration: 2min' reads back empty from every surface).</summary>
-    private static bool IsTimeList(string text, bool nonNegative = false)
+    private static bool IsTimeList(string text, bool nonNegative = false, bool allowAuto = false)
     {
         foreach (var item in SplitTopLevel(text))
         {
             if (item.Length == 0) return false;
+            if (allowAuto && item.Equals("auto", StringComparison.OrdinalIgnoreCase)) continue;
             if (item.EndsWith(")"))
             {
                 int open = item.IndexOf('(');
@@ -4779,7 +4815,8 @@ public static class CssValueGrammar
     /// track-list notation the auto tracks do not take (measured: 'grid-auto-rows:
     /// repeat(auto-fill, 10px)' is dropped while 'minmax(auto, 1fr)' and 'fit-content(10px)' stand).
     /// </summary>
-    private static bool IsTrackBreadth(string token)
+    private static bool IsTrackBreadth(string token, bool allowFlex = true,
+        bool allowSizingFunctions = true)
     {
         var lower = token.ToLowerInvariant();
         if (lower is "auto" or "min-content" or "max-content") return true;
@@ -4789,17 +4826,41 @@ public static class CssValueGrammar
             return IsLengthOrPercentage(lower)
                 && (!Acrux.Core.Dom.Animations.CssValueTokenizer
                     .TrySplitUnit(lower, out var percent, out _) || percent >= 0);
-        if (lower.StartsWith("minmax(", StringComparison.Ordinal)
-            || lower.StartsWith("fit-content(", StringComparison.Ordinal)
-            || lower.StartsWith("calc(", StringComparison.Ordinal)) return true;
+        // 'minmax()' and 'fit-content()' are breadths a track list is built from, but neither is one
+        // inside the other: 'minmax(auto, fit-content(100px))', 'minmax(auto, minmax(1px, 2px))' and
+        // 'minmax(minmax(1px, 2px), auto)' are each dropped (measured).
+        if (lower.StartsWith("minmax(", StringComparison.Ordinal))
+            return allowSizingFunctions && IsMinMaxCall(lower);
+        if (lower.StartsWith("fit-content(", StringComparison.Ordinal))
+            return allowSizingFunctions && lower.EndsWith(")", StringComparison.Ordinal);
+        if (lower.StartsWith("calc(", StringComparison.Ordinal)) return true;
         // A math function is a breadth of its own, not only 'calc()': the reference engine reads
         // 'clamp(30px, 40%, 80px)' and 'min(60px, 50%)' as the <line-size> they work out to
         // (measured, both, as a bare track and beside '1fr').
         if (IsMathFunctionCall(lower, IsLengthOrPercentage)) return true;
         if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
+            // <flex> is a share of the space that is left, so it is a maximum a track may resolve
+            // to and never a minimum it may ask for first (measured: 'minmax(10px, 1fr)' stands
+            // while 'minmax(1fr, 10px)' and 'minmax(1fr, auto)' are each dropped).
             return unit.Equals("fr", StringComparison.OrdinalIgnoreCase)
-                || IsDimensionedLengthOrZero(token);
+                ? allowFlex
+                : IsDimensionedLengthOrZero(token);
         return false;
+    }
+
+    /// <summary>'minmax(MIN, MAX)' (CSS Grid 1 §7.2.3): exactly two arguments — a minimum that is
+    /// neither a share of the free space nor a function of its own, and a maximum that is a breadth.
+    /// Measured: 'minmax(auto, 1fr)', 'minmax(min-content, auto)' and 'minmax(50%, auto)' stand,
+    /// while 'minmax(1fr)', 'minmax(1fr,)' and 'minmax(1fr, 2fr, 3fr)' leave no declaration at all.
+    /// A negative the minimum carries is not refused here: 'minmax(calc(-1px), auto)' is a value
+    /// whose computed width the engine works out as zero (measured both).</summary>
+    private static bool IsMinMaxCall(string token)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return false;
+        var args = SplitTopLevel(token[7..^1], ',');
+        if (args.Count != 2) return false;
+        return IsTrackBreadth(args[0].Trim(), allowFlex: false, allowSizingFunctions: false)
+            && IsTrackBreadth(args[1].Trim(), allowSizingFunctions: false);
     }
 
     /// <summary>A track list: the breadths separated by spaces, with commas allowed between the
@@ -4813,7 +4874,7 @@ public static class CssValueGrammar
         {
             var words = SplitTopLevel(item, ' ');
             if (words.Count == 0) return false;
-            if (!words.All(IsTrackBreadth)) return false;
+            if (!words.All(word => IsTrackBreadth(word))) return false;
         }
         return true;
     }
@@ -4908,10 +4969,33 @@ public static class CssValueGrammar
                     // a line number in front of the keyword — falls).
                     || (IsIdentifierLike(words[1])
                         && !words[1].Equals("span", StringComparison.OrdinalIgnoreCase)))) continue;
+            // A line may be named and numbered at the same time, in either order (measured:
+            // 'grid-row-start: a 2' is a line and reads back with its number in front — '2 a').
+            if (words.Count == 2 && IsGridLineNameAndIndex(words[0], words[1])) continue;
+            // 'span' with both a name and a number is the same line spanned to a named line
+            // (measured: 'span a 2' stands and reads 'span 2 a').
+            if (words.Count == 3 && words[0].Equals("span", StringComparison.OrdinalIgnoreCase)
+                && IsGridLineNameAndIndex(words[1], words[2])) continue;
             return false;
         }
         return true;
     }
+
+    /// <summary>Whether two words are one line name and one line number, whichever order the page
+    /// wrote them in. 'span' is the span keyword's own word and never a name here, and a line
+    /// numbered zero is no line at all (measured: '0 a' is dropped while 'a -1' stands).</summary>
+    private static bool IsGridLineNameAndIndex(string first, string second)
+    {
+        bool firstIsName = IsLineNameWord(first), secondIsName = IsLineNameWord(second);
+        return (firstIsName && IsGridIndexWord(second)) || (secondIsName && IsGridIndexWord(first));
+    }
+
+    private static bool IsLineNameWord(string text) =>
+        IsIdentifierLike(text) && IsCustomIdent(text)
+        && !text.Equals("span", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGridIndexWord(string text) =>
+        IsIntegerWord(text) && !text.Equals("0", StringComparison.Ordinal);
 
     private static bool IsIntegerWord(string text) =>
         int.TryParse(text, System.Globalization.NumberStyles.Integer,
@@ -5281,21 +5365,25 @@ public static class CssValueGrammar
     /// engine prints a part once when all of its sides agree — '50% 50% 50% 50%' reads '50%' and
     /// '1 1 1 1' reads '1' — and drops a value with a fifth side, a negative number, or a unit
     /// the part does not take. <paramref name="extra"/> names the one word this part accepts
-    /// besides its numbers: 'fill' for the slice.</summary>
+    /// besides its numbers: 'fill' for the slice. That word is a flag, not another side, so it holds
+    /// either end of the list and the engine writes it last — 'fill 1 2' reads '1 2 fill' while
+    /// '1 fill 2' and '1 2 fill 3' are no value at all (all measured).</summary>
     private static string? CanonicalBoxPart(string text, int max, bool percentages, bool lengths,
         string? extra = null)
     {
         var words = SplitComponents(text);
         if (words.Count == 0) return null;
         var sides = new System.Collections.Generic.List<string>(words.Count);
-        string? trailing = null;
-        foreach (var word in words)
+        bool saysExtra = false;
+        for (int i = 0; i < words.Count; i++)
         {
-            var p = word.ToLowerInvariant();
+            var p = words[i].ToLowerInvariant();
             if (extra != null && p == extra)
             {
-                if (trailing != null) return null;
-                trailing = p;
+                // The flag is one word of the whole value, and it sits in front of the numbers or
+                // after them — nowhere else, and never twice.
+                if (saysExtra || (i != 0 && i != words.Count - 1)) return null;
+                saysExtra = true;
                 continue;
             }
             if (p.EndsWith("%", StringComparison.Ordinal))
@@ -5318,7 +5406,7 @@ public static class CssValueGrammar
         // '50%', '1 1 1 1' reads '1', and a repeat pair reads one word the same way).
         var kept = sides.All(side => side == sides[0])
             ? new System.Collections.Generic.List<string> { sides[0] } : sides;
-        return trailing == null ? string.Join(" ", kept) : string.Join(" ", kept) + " " + trailing;
+        return saysExtra ? string.Join(" ", kept) + " " + extra : string.Join(" ", kept);
     }
 
     /// <summary>The number in front of a two-letter unit, or NaN when the word is not a length.</summary>
@@ -5797,6 +5885,9 @@ public static class CssValueGrammar
         foreach (var token in SplitComponents(text))
         {
             if (IsOneOf(token, "auto")) continue;
+            // A share of the container is not a column width, and this shorthand's only other slot
+            // is a count (measured: 'columns: 50%' and 'columns: 3 50%' are each dropped).
+            if (token.Contains('%', StringComparison.Ordinal)) return false;
             // Count first: a bare positive integer is the count, and only a value that is not one is
             // a width. A lone '0' is not a count (a count starts at one) so it falls through to the
             // width, where it is a zero length; '0 0' is then a second width and is refused.
@@ -5806,7 +5897,8 @@ public static class CssValueGrammar
                 hasCount = true;
                 continue;
             }
-            if (IsColumnWidthToken(token) || IsMathFunctionCall(token, IsLengthOrPercentage))
+            if ((IsColumnWidthToken(token) && !IsNegativeValue(token))
+                || IsMathFunctionCall(token, IsLengthOrPercentage))
             {
                 if (hasWidth) return false;
                 hasWidth = true;

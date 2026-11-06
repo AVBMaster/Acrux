@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b317 stretch, tracks and refused widths</title>
+<style>
+body { margin: 0; font: 14px/1.2 monospace; }
+.box { margin: 4px; padding: 0; }
+.row { display: flex; width: 300px; height: 60px; background: rgb(238,238,238); }
+.cell { height: 60px; }
+.grid { display: grid; width: 300px; height: 120px; grid-template-columns: 300px; background: rgb(245,245,245); }
+.child { height: 20px; background: rgb(0,0,255); color: rgb(255,255,255); }
+.cols { width: 300px; background: rgb(250,250,210); }
+.solid { background: rgb(255,128,128); }
+.blue { background: rgb(0,0,255); }
+.green { background: rgb(0,200,0); }
+.orange { background: rgb(255,165,0); }
+</style>
+</head>
+<body>
+<!-- CSS Flexbox 1 §7.2 + CSS Sizing 4 §2.2: 'stretch' is a basis, and the shorthand says '1 1 stretch'. -->
+<div class="row" id="f1"><div class="cell solid" id="f1a" style="flex-basis: stretch; width: 20px"></div><div class="cell blue" id="f1b" style="flex: 1"></div></div>
+<div class="row" id="f2"><div class="cell green" id="f2a" style="flex: stretch"></div><div class="cell orange" id="f2b" style="width: 40px"></div></div>
+<!-- The same seat with the intrinsic keyword it already took, as the control. -->
+<div class="row" id="f3"><div class="cell solid" id="f3a" style="flex-basis: max-content; width: 20px"></div><div class="cell blue" id="f3b" style="flex: 1"></div></div>
+
+<!-- CSS Grid 1 §7.2.3: an 'auto' minimum before a flexible maximum is that maximum; a flexible minimum is no value at all. -->
+<div class="grid" id="g1" style="grid-auto-rows: minmax(auto, 1fr)"><div class="child" id="g1a">a</div><div class="child" id="g1b">b</div></div>
+<div class="grid" id="g2" style="grid-auto-rows: minmax(1fr, auto)"><div class="child" id="g2a">a</div><div class="child" id="g2b">b</div></div>
+<div class="grid" id="g3" style="grid-template-columns: repeat(2, minmax(1fr, auto)); height: 40px"><div class="cell" id="g3a" style="height:40px;background:rgb(255,0,0)"></div><div class="cell" id="g3b" style="height:40px;background:rgb(0,255,0)"></div></div>
+
+<!-- CSS Multi-column 1 §6.1: a width the page wrote through an expression is kept, and its computed width is nothing; a percentage is no width. -->
+<div class="cols" id="c1" style="column-width: calc(-1px)"><span id="c1a">AAAABBBBCCCCDDDD</span></div>
+<div class="cols" id="c2" style="columns: -100px"><span id="c2a">AAAABBBBCCCCDDDD</span></div>
+<div class="cols" id="c3" style="columns: calc(-1px) 3"><span id="c3a">AAAABBBBCCCCDDDDEEEEFFFFGGGG</span></div>
+<div class="cols" id="c4" style="column-width: 50%"><span id="c4a">AAAABBBBCCCCDDDD</span></div>
+<div class="cols" id="c5" style="column-gap: calc(-1px); columns: 3 40px"><span id="c5a">AAAABBBBCCCCDDDDEEEE</span></div>
+
+<!-- CSS Text Decoration 4 §2: a thickness the page wrote negative keeps its sign at the computed surface. -->
+<div id="t1" style="text-decoration: underline; text-decoration-thickness: -2px; width: 200px">underline -2px</div>
+<div id="t2" style="text-decoration: underline; text-decoration-thickness: 2px; width: 200px">underline 2px</div>
+
+<!-- CSS Text 3 §3.3: 'auto' is not an indent, and a refused indent leaves the line where it was. -->
+<div id="i1" style="text-indent: auto; width: 200px; background: rgb(220,220,220)">first line</div>
+<div id="i2" style="text-indent: 20px; width: 200px; background: rgb(220,220,220)">first line</div>
+
+<!-- CSS Fonts 4 §5.7: what the font shorthand prints for a family of several words, and the face it lays out. -->
+<div id="n1" style="font: 12px Times New Roman">Times New Roman twelve</div>
+<div id="n2" style="font: 12px monospace">monospace twelve</div>
+
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+// record
+function build() {
+const ids = ['f1','f1a','f1b','f2','f2a','f2b','f3','f3a','f3b',
+    'g1','g1a','g1b','g2','g2a','g2b','g3','g3a','g3b',
+    'c1','c1a','c2','c2a','c3','c3a','c4','c4a','c5','c5a',
+    't1','t2','i1','i2','n1','n2'];
+const rows = [];
+for (let i = 0; i < ids.length; i++) {
+const el = document.getElementById(ids[i]);
+const r = el.getBoundingClientRect();
+rows.push(ids[i] + '|x=' + Math.round(r.x * 100) / 100
+    + '|y=' + Math.round(r.y * 100) / 100
+    + '|w=' + Math.round(r.width * 100) / 100
+    + '|h=' + Math.round(r.height * 100) / 100
+    + '|comp=' + getComputedStyle(el).getPropertyValue(
+        ids[i].charAt(0) === 'c' ? 'column-width'
+        : ids[i].charAt(0) === 'g' ? 'grid-auto-rows'
+        : ids[i].charAt(0) === 'f' ? 'flex-basis'
+        : ids[i].charAt(0) === 'i' ? 'text-indent'
+        : ids[i].charAt(0) === 't' ? 'text-decoration-thickness' : 'font-size'));
+}
+document.getElementById('record').textContent = rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script>
+</body>
+</html>

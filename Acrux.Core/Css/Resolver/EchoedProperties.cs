@@ -128,9 +128,10 @@ public static class EchoedProperties
                 Normalize = Single("normal", "space-all", "space-first", "trim-start") },
 
             // ===== CSS UI 4 §3.7 and the caret's own animation. The reference engine declares
-            // 'caret-animation' with ONE value — 'auto' — and drops 'always' and 'never' with it
-            // (measured), and 'interactivity' takes 'auto' and 'inert' only.
-            new() { Name = "caret-animation", Initial = "auto", Normalize = Single("auto") },
+            // 'caret-animation' with two values — 'auto' and 'manual' — and drops 'always' and
+            // 'never' with it (measured), and 'interactivity' takes 'auto' and 'inert' only.
+            new() { Name = "caret-animation", Initial = "auto",
+                Normalize = Single("auto", "manual") },
             new() { Name = "interactivity", Initial = "auto", Normalize = Single("auto", "inert") },
             new() { Name = "scroll-initial-target", Initial = "none",
                 Normalize = Single("none", "nearest") },

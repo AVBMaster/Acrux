@@ -1014,7 +1014,9 @@ public static class CssValueText
                 words[0] = "span";
             else if (words[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
                 words[0] = "auto";
-            parts[i] = string.Join(" ", words);
+            // Each part is a line of its own, and a line that is named and numbered says its
+            // number first (measured: 'grid-row: a 2 / 3 b' reads '2 a / 3 b').
+            parts[i] = GridLineOrder(string.Join(" ", words));
         }
         int last = parts.Length - 1;
         while (last > 0 && parts[last].Equals("auto", StringComparison.Ordinal)) last--;
@@ -1244,9 +1246,51 @@ public static class CssValueText
             case "animation-name":
                 return UnquoteNameList(text);
 
+            // CSS Grid 1 §7.1: a line written as both a name and a number prints the number first,
+            // whichever end the page put it on (measured: 'grid-row-start: a 2' reads '2 a').
+            case "grid-row-start":
+            case "grid-row-end":
+            case "grid-column-start":
+            case "grid-column-end":
+                return GridLineOrder(text);
+
             default:
                 return text;
         }
+    }
+
+    /// <summary>One &lt;grid-line&gt; as the reference engine prints it: a name and a number say the
+    /// number first, and every other shape — 'auto', a bare number, a bare name, 'span 2',
+    /// 'span a' — says what the page wrote. A span with both keeps 'span' in front and its number
+    /// next (measured: 'grid-row-start: span a 2' reads 'span 2 a').</summary>
+    private static string GridLineOrder(string text)
+    {
+        var words = SplitTopLevelWords(text);
+        if (words.Count == 3 && words[0].Equals("span", StringComparison.OrdinalIgnoreCase)
+            && LineNameAndIndex(words[1], words[2], out var spanName, out var spanIndex))
+            return "span " + spanIndex + " " + spanName;
+        if (words.Count != 2) return text;
+        // 'span' is the keyword that owns its number: 'span 2' is one word of grammar with an
+        // argument, not a name and a number written in the wrong order.
+        if (words[0].Equals("span", StringComparison.OrdinalIgnoreCase)
+            || words[1].Equals("span", StringComparison.OrdinalIgnoreCase)) return text;
+        return LineNameAndIndex(words[0], words[1], out var name, out var index)
+            ? index + " " + name : text;
+    }
+
+    /// <summary>Whether two words are one line name and one non-zero line number, in either order,
+    /// said back as the name and the number the value carries.</summary>
+    private static bool LineNameAndIndex(string first, string second,
+        out string name, out string index)
+    {
+        static bool IsName(string w) => w.Length > 0 && w[0] != '-' && !char.IsAsciiDigit(w[0])
+            && Acrux.Core.Css.CssValueGrammar.IsIdentifierLike(w)
+            && !w.Equals("span", StringComparison.OrdinalIgnoreCase);
+        static bool IsIndex(string w) => int.TryParse(w, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) && v != 0;
+        if (IsName(first) && IsIndex(second)) { name = first; index = second; return true; }
+        if (IsName(second) && IsIndex(first)) { name = second; index = first; return true; }
+        name = string.Empty; index = string.Empty; return false;
     }
 
     /// <summary>Whether a template says nothing on both of its axes — the pair the grammar allows
@@ -1887,6 +1931,10 @@ public static class CssValueText
             if (length != null) return null;
             // A length or percentage, with the one exception every length property shares: a bare
             // number is a length only when it is zero, and then it is printed with its unit.
+            // 'auto' is not one of them — the engine's length reader calls it a length because the
+            // size properties do, and an indent has no automatic width to fall back to (measured:
+            // 'text-indent: auto' is dropped).
+            if (p is "auto" or "inherit" or "initial") return null;
             if (Dom.Length.IsLength(word)) length = word;
             else if (IsBareZero(p)) length = "0px";
             else return null;

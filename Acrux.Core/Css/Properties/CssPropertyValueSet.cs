@@ -114,7 +114,13 @@ public class CssPropertyValueSet
             var existing = _properties[index];
             if (existing.Value.Equals(property.Value) && existing.IsImportant == property.IsImportant)
                 return SetResult.Unchanged;
-            _properties[index] = property;
+            // A name written twice stands where it was written LAST: the value that wins and the
+            // place the block holds it in are both the later write's (CSSOM §5.1.4.2, measured:
+            // 'text-decoration-thickness: 2px' then 'text-decoration: underline' then
+            // 'text-decoration-thickness: 4px' reads 'text-decoration: underline 4px', where a
+            // thickness left in its first place is one the shorthand then takes away with it).
+            _properties.RemoveAt(index);
+            _properties.Add(property);
             return SetResult.ModifiedExisting;
         }
 

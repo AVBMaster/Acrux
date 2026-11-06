@@ -690,9 +690,9 @@ public static class ComputedValueSerializer
             // refused and the property still reads 'normal', while 'grid-column-gap: 8px' reads
             // '8px').
             case "row-gap":
-            case "grid-row-gap": return style.RowGapIsNormal ? "normal" : LengthText(style, style.RowGap);
+            case "grid-row-gap": return style.RowGapIsNormal ? "normal" : ClampedLengthText(style, style.RowGap);
             case "column-gap":
-            case "grid-column-gap": return style.ColumnGapIsNormal ? "normal" : LengthText(style, style.ColumnGap);
+            case "grid-column-gap": return style.ColumnGapIsNormal ? "normal" : ClampedLengthText(style, style.ColumnGap);
             case "orphans": return style.Orphans.ToString(CultureInfo.InvariantCulture);
             case "widows": return style.Widows.ToString(CultureInfo.InvariantCulture);
 
@@ -953,7 +953,7 @@ public static class ComputedValueSerializer
                 ? "auto"
                 : QuotedText(style.HyphenateCharacter);
             case "counter-set": return style.CounterSet;
-            case "column-width": return LengthText(style, style.ColumnWidth);
+            case "column-width": return ClampedLengthText(style, style.ColumnWidth);
             case "column-fill": return style.ColumnFill;
             case "column-span": return style.ColumnSpanAll ? "all" : "none";
             // The cascade stores the bare address (that is what the marker painter looks up), so it
@@ -1008,10 +1008,15 @@ public static class ComputedValueSerializer
 
     private static bool Almost(float a, float b) => Math.Abs(a - b) < 0.001f;
 
-    /// <summary>A track whose minimum is <c>auto</c> has nothing to say beyond its maximum: CSS Grid
-    /// 1 §7.2.3 stores one sizing function for it, and the reference engine prints that one (measured:
-    /// 'grid-auto-rows: minmax(auto, 1fr)' computes '1fr' while 'minmax(10px, 20px)' keeps both
-    /// sides). Split at the top level so a nested comma inside calc() is not a separator.</summary>
+    /// <summary>A track whose minimum is <c>auto</c> and whose maximum is a share of the free space
+    /// has nothing to say beyond that share: CSS Grid 1 §7.2.3 stores one sizing function for it and
+    /// the reference engine prints that one (measured: 'grid-template-rows: minmax(auto, 1fr)'
+    /// computes '1fr' and 'repeat(2, minmax(auto, 1fr))' computes 'repeat(2, 1fr)'). Every other
+    /// minimum-and-maximum pair keeps both sides — 'minmax(auto, auto)', 'minmax(auto, 50%)' and
+    /// 'minmax(auto, max-content)' each read back as two arguments (all measured) — and a breadth
+    /// that came out below zero keeps nothing of it (measured: 'minmax(calc(-1px), auto)' computes
+    /// 'minmax(0px, auto)'). Split at the top level so a nested comma inside calc() is not a
+    /// separator.</summary>
     private static string TrackListText(string authored)
     {
         var tracks = SplitTrackTokensWithNames(authored);
@@ -1019,17 +1024,66 @@ public static class ComputedValueSerializer
         var changed = false;
         for (int i = 0; i < tracks.Count; i++)
         {
-            var token = tracks[i].Trim();
-            if (!token.StartsWith("minmax(", StringComparison.OrdinalIgnoreCase)) continue;
-            int close = token.LastIndexOf(')');
-            if (close < 0) continue;
-            var args = SplitTopLevelOutside(token[7..close], ',');
-            if (args.Count != 2 || args[0].Trim().ToLowerInvariant() != "auto") continue;
-            tracks[i] = args[1].Trim();
+            var rewritten = RewriteTrackToken(tracks[i].Trim());
+            if (rewritten == tracks[i].Trim()) continue;
+            tracks[i] = rewritten;
             changed = true;
         }
         return changed ? string.Join(" ", tracks) : authored;
     }
+
+    /// <summary>One item of a track list: a 'minmax()' of its own, or the 'repeat()' that carries a
+    /// list of them.</summary>
+    private static string RewriteTrackToken(string token)
+    {
+        if (token.StartsWith("repeat(", StringComparison.OrdinalIgnoreCase))
+        {
+            int close = token.LastIndexOf(')');
+            if (close < 0) return token;
+            var args = SplitTopLevelOutside(token[7..close], ',');
+            if (args.Count != 2) return token;
+            var count = args[0].Trim();
+            // The second argument keeps the space the page wrote after the comma, so it is trimmed
+            // before it is compared and before it is written back: 'repeat(2, 1fr)' would otherwise
+            // compute as 'repeat(2,  1fr)' with the authored space still in front of the tracks.
+            var list = args[1].Trim();
+            var inner = TrackListText(list);
+            return inner == list
+                ? token
+                : $"repeat({count}, {inner})";
+        }
+        return RewriteMinMax(token);
+    }
+
+    /// <summary>'minmax(MIN, MAX)' as a computed value: the flexible maximum absorbs an 'auto'
+    /// minimum, and each side is clamped at zero (see <see cref="TrackListText"/>).</summary>
+    private static string RewriteMinMax(string token)
+    {
+        if (!token.StartsWith("minmax(", StringComparison.OrdinalIgnoreCase)) return token;
+        int close = token.LastIndexOf(')');
+        if (close < 0) return token;
+        var args = SplitTopLevelOutside(token[7..close], ',');
+        if (args.Count != 2) return token;
+        var min = args[0].Trim();
+        var max = args[1].Trim();
+        if (min.Equals("auto", StringComparison.OrdinalIgnoreCase) && IsFlexBreadth(max)) return max;
+        return $"minmax({ClampTrackBreadth(min)}, {ClampTrackBreadth(max)})";
+    }
+
+    /// <summary>A share of the free space, which is the only maximum that makes an 'auto' minimum
+    /// disappear (CSS Grid 1 §7.2.3: the track is flexible, so its minimum is the flex's own base
+    /// size).</summary>
+    private static bool IsFlexBreadth(string token) =>
+        token.EndsWith("fr", StringComparison.OrdinalIgnoreCase)
+        && Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
+        && unit.Equals("fr", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The range a track's breadth is written in: a track has no negative size, so an
+    /// expression that worked out below zero is a track of nothing (measured: 'grid-auto-rows:
+    /// minmax(calc(-1px), auto)' computes 'minmax(0px, auto)'). A breadth that still carries a
+    /// percentage is not priced yet and keeps its sign.</summary>
+    private static string ClampTrackBreadth(string token) =>
+        token.StartsWith("-", StringComparison.Ordinal) ? "0px" : token;
 
     /// <summary>The comma-separated parts of a function's argument list, ignoring commas that sit
     /// inside a nested function or a bracketed line-name group.</summary>
@@ -1354,7 +1408,10 @@ public static class ComputedValueSerializer
             parts.Add(style.LineHeightCssText);
         }
         if (!string.IsNullOrWhiteSpace(style.FontFamily))
-            parts.Add(style.FontFamily);
+            // The family list is printed by the one fold the 'font-family' longhand uses, so the
+            // shorthand cannot answer '16px Times New Roman' where the longhand answers
+            // '16px "Times New Roman"' (measured: a name of several words is quoted).
+            parts.Add(Acrux.Core.Css.CssValueText.FoldFamilyNames(style.FontFamily));
         // The size, its slash and the family are printed tight to what they belong to: the
         // reference engine puts one space between the components of the list.
         return string.Join(" ", parts);
@@ -1412,6 +1469,19 @@ public static class ComputedValueSerializer
     /// 'margin: calc(10px + 2px) auto' computes '12px 0px').</summary>
     private static string MarginText(ComputedStyle owner, Length? length, bool cut = false) =>
         length is AutoLength ? "0px" : LengthText(owner, length, cut);
+
+    /// <summary>A length whose property has no value below zero. The grammar refuses the negative a
+    /// page spelled out, but an expression that works out below zero is a declaration the engine
+    /// keeps — and what it computes is nothing wide (measured: 'column-width: calc(-1px)',
+    /// 'columns: calc(-1px)', 'column-gap: calc(-1px)' and 'row-gap: calc(-1px)' each answer '0px',
+    /// while 'outline-offset: calc(-1px)' and 'letter-spacing: calc(-1px)' keep the sign). A value
+    /// that still carries a percentage keeps its notation: the engine has not priced it yet, so it
+    /// cannot know its sign (measured: 'column-gap: calc(50% - 20px)' reads back as written).</summary>
+    private static string ClampedLengthText(ComputedStyle owner, Length? length, bool cut = false)
+    {
+        var text = LengthText(owner, length, cut);
+        return text.StartsWith("-", StringComparison.Ordinal) ? "0px" : text;
+    }
 
     /// <summary>The legacy 'clip' rect with every side priced and none of its words invented: the
     /// four sides come from the same split the grammar answered with, so the value that reaches a

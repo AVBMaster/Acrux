@@ -217,8 +217,15 @@ public class CssParser
         var set = CssParserImpl.ParseDeclarationBlock(styleText, CssParserContext.Default());
         foreach (var prop in set.Properties)
         {
-            if (prop.Value != null)
-                result[prop.Name.ToCssString()] = prop.Value.CssText();
+            if (prop.Value == null) continue;
+            // A name the page wrote twice stands where it was written LAST: the value that wins is
+            // the later one, and so is the place it holds in the block (CSSOM §5.1.4.2, measured:
+            // 'text-decoration-thickness: 2px' then 'text-decoration: underline' then
+            // 'text-decoration-thickness: 4px' reads 'text-decoration: underline 4px', while leaving
+            // the thickness where it was first written loses the value the shorthand then reset).
+            var name = prop.Name.ToCssString();
+            result.Remove(name);
+            result[name] = prop.Value.CssText();
         }
         return result;
     }

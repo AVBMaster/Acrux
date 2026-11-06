@@ -1,0 +1,123 @@
+"""Generate the b317 decoration order probe: a shorthand and its own longhand in one block.
+
+The paint page found a declaration block that says 'text-decoration: underline' and then
+'text-decoration-thickness: -2px' answering 'auto' for the thickness — the longhand written after
+the shorthand was lost. This table asks the same question of every family whose shorthand resets its
+longhands, in both orders, and of a block that names the longhand on both sides of the shorthand.
+One fresh element per row, the computed surface and the CSSOM echo.
+"""
+import json
+import os
+
+CASES = [
+    "text-decoration: underline; text-decoration-thickness: -2px",
+    "text-decoration-thickness: -2px; text-decoration: underline",
+    "text-decoration: underline solid red; text-decoration-thickness: 3px",
+    "text-decoration-thickness: 3px",
+    "text-decoration: underline; text-decoration-style: dotted",
+    "text-decoration-style: dotted; text-decoration: underline",
+    "text-decoration: none; text-decoration-line: underline",
+    "text-decoration-line: underline; text-decoration: none",
+    "text-decoration: underline; text-decoration-color: green",
+    "text-decoration-thickness: 2px; text-decoration: underline; text-decoration-thickness: 4px",
+    "border: 2px solid red; border-top-width: 5px",
+    "border-top-width: 5px; border: 2px solid red",
+    "background: red; background-position: 10px 20px",
+    "margin: 1px; margin-top: 9px",
+    "font: 12px serif; font-weight: bold",
+    "flex: 1; flex-basis: 40px",
+    "flex-basis: 40px; flex: 1",
+    "transition: all 1s; transition-duration: 2s",
+    "grid-area: a; grid-row-start: 3",
+    "columns: 3 40px; column-width: 80px",
+    "gap: 10px; row-gap: 20px",
+    "outline: 2px red; outline-width: 4px",
+    "text-decoration: underline; text-decoration: none",
+    "text-decoration: underline; color: blue",
+    # A part the page wrote AT its initial: does the fold say it, or drop it with the others?
+    "text-decoration: underline; text-decoration-style: solid",
+    "text-decoration: underline; text-decoration-color: currentcolor",
+    "text-decoration: underline; text-decoration-color: auto",
+    "text-decoration: underline; text-decoration-thickness: auto",
+    "text-decoration-line: none; text-decoration-style: solid; text-decoration-color: auto;"
+    " text-decoration-thickness: auto",
+    "text-decoration: underline; text-decoration-style: solid; text-decoration-color: green",
+    # The same family with a longhand written before and after the shorthand, one at a time.
+    "text-decoration-thickness: 2px; text-decoration: underline",
+    "text-decoration-thickness: 2px; text-decoration: underline; text-decoration-thickness: 4px",
+    "text-decoration-thickness: 2px; text-decoration: underline; text-decoration-color: green",
+    # The fold the other shorthands make: how many longhands each shorthand stands for, and which
+    # of them the reference engine prints as the shorthand itself.
+    "grid-row-start: 1; grid-column-start: 2; grid-row-end: 3; grid-column-end: 3",
+    "grid-row-start: 1; grid-column-start: 2; grid-row-end: 3; grid-column-end: 4",
+    "grid-row: 1 / 2; grid-column: 3 / 4",
+    "grid-row: 1; grid-column: 2",
+    "columns: 3 40px; column-width: 80px; column-rule: 1px solid red",
+    "outline: 2px red; outline-width: 4px; outline-style: dotted",
+    "outline: 2px red; outline-color: green",
+    "border: 2px solid red; border-top-width: 5px; border-image-source: url(a)",
+    "border: 2px solid red; border-left-color: green",
+    "background: red; background-position: 10px 20px; background-color: green",
+    "font: 12px serif; font-weight: bold; font-style: italic",
+    "transition: all 1s; transition-duration: 2s; transition-property: opacity",
+]
+PROPS = ["text-decoration-line", "text-decoration-thickness", "text-decoration-style",
+         "text-decoration-color", "border-top-width", "background-position-x", "margin-top",
+         "font-weight", "flex-basis", "transition-duration", "grid-row-start", "column-width",
+         "row-gap", "outline-width"]
+
+
+def page():
+    literal = "[" + ",".join(json.dumps(c) for c in CASES) + "]"
+    props = "[" + ",".join(json.dumps(p) for p in PROPS) + "]"
+    read = """  const cs = getComputedStyle(el);
+  let tail = '';
+  for (let j = 0; j < props.length; j++) {
+    tail += '|' + props[j] + '=' + cs.getPropertyValue(props[j]);
+  }
+  // What the block itself holds for each part of the family, spelled back by the shorthand that
+  // carries it, and the one the cascade answers for.
+  tail += '|sLine=' + el.style.getPropertyValue('text-decoration-line')
+      + '|sThick=' + el.style.getPropertyValue('text-decoration-thickness')
+      + '|sStyle=' + el.style.getPropertyValue('text-decoration-style')
+      + '|sColor=' + el.style.getPropertyValue('text-decoration-color')
+      + '|cLine=' + cs.getPropertyValue('text-decoration-line')
+      + '|cThick=' + cs.getPropertyValue('text-decoration-thickness')
+      + '|cStyle=' + cs.getPropertyValue('text-decoration-style')
+      + '|cColor=' + cs.getPropertyValue('text-decoration-color')
+      + '|cssText=' + el.style.cssText;
+  rows.push(i + '|' + cases[i] + '|n=' + el.style.length + tail);"""
+    template = """<!doctype html>
+<html><head><meta charset="utf-8"><title>b317 declaration order</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+// order
+function build() {{
+const host = document.createElement('div');
+document.body.appendChild(host);
+const rows = [];
+const cases = {cases};
+const props = {props};
+for (let i = 0; i < cases.length; i++) {{
+const el = document.createElement('div');
+el.setAttribute('style', cases[i]);
+host.appendChild(el);
+{read}
+    el.remove();
+}}
+host.remove();
+document.getElementById('record').textContent = rows.join('\\n');
+console.log(rows.join('\\n'));
+}}
+build();
+</script>
+</body></html>
+"""
+    return template.format(cases=literal, props=props, read=read)
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(HERE, "_probe_b317_declaration_order.html"), "w", encoding="utf-8") as h:
+    h.write(page())
+print("cases:", len(CASES))

@@ -170,8 +170,8 @@ public static class ShorthandReparse
     /// <summary>The text the reference engine prints for a shorthand its parts were folded into. Each
     /// shape here is a measured print: the four-side family collapses to the shortest list that says
     /// the same four edges, the two-term shorthands collapse when both terms agree, <c>border-radius</c>
-    /// keeps its <c>horizontal / vertical</c> split, and <c>text-decoration</c> is re-spelled by the
-    /// printer that says the parts the page left at their initial.</summary>
+    /// keeps its <c>horizontal / vertical</c> split, and <c>text-decoration</c> says only the parts the
+    /// page named — see <see cref="TextDecorationMerge"/>.</summary>
     private static string? MergeText(string shorthand, string[] parts, string[] values)
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -218,7 +218,15 @@ public static class ShorthandReparse
             // '--t' + 'block' reads back '--t').
             "scroll-timeline" or "view-timeline"
                 => CssValueText.Canonicalize(string.Join(" ", values), shorthand),
-            "text-decoration" => CssValueText.Canonicalize(string.Join(" ", values), "text-decoration"),
+            // Said by the shorthand's own printer, which already leaves out a part the page never
+            // wrote — and it must be the printer's TEXT, not the four longhands joined: a block that
+            // declared 'text-decoration: underline' and then 'text-decoration-thickness: -2px' holds
+            // the style as 'solid' and the colour as 'auto' because the shorthand reset them, and
+            // handing '… solid auto' to the parser writes a colour nothing reads, which loses the
+            // whole fold and the underline with it (measured: that block reads
+            // 'text-decoration: underline -2px', while a part the page DID name keeps its spelling —
+            // '… text-decoration-style: solid' reads 'underline solid').
+            "text-decoration" => TextDecorationMerge(byName),
             "white-space" => WhiteSpaceText(byName),
             "border" => BorderText(byName),
             "border-image" => CssValueText.Canonicalize(
@@ -238,6 +246,35 @@ public static class ShorthandReparse
             }, "background"),
             _ => null,
         };
+    }
+
+    /// <summary>'text-decoration' said again from its four parts, in the order the shorthand's own
+    /// printer uses — line, thickness, style, colour — and with every part at its initial left out.
+    /// Two reasons, both measured: a part that is the initial says nothing the shorthand's absence
+    /// would not already say, and the colour's initial is not a colour the shorthand's grammar reads,
+    /// so writing it back makes the fold a declaration the parser refuses and the block loses the
+    /// underline with it. Measured: 'text-decoration: underline' beside 'text-decoration-thickness:
+    /// -2px' reads 'underline -2px'; beside 'text-decoration-style: solid' it reads 'underline'; and
+    /// beside 'text-decoration-color: currentcolor' it reads 'underline'.</summary>
+    private static string? TextDecorationMerge(Dictionary<string, string> byName)
+    {
+        var slots = new (string Name, string[] Initial)[]
+        {
+            ("text-decoration-line", new[] { "none" }),
+            ("text-decoration-thickness", new[] { "auto" }),
+            ("text-decoration-style", new[] { "solid" }),
+            // The reset writes the longhand's own 'auto' and a page may write the colour that stands
+            // behind it; either spelling says the colour the shorthand already means by itself.
+            ("text-decoration-color", new[] { "auto", "currentcolor" }),
+        };
+        var said = new List<string>();
+        foreach (var (name, initials) in slots)
+        {
+            if (!byName.TryGetValue(name, out var value)) return null;
+            if (initials.Any(word => value.Equals(word, StringComparison.OrdinalIgnoreCase))) continue;
+            said.Add(value);
+        }
+        return said.Count == 0 ? "none" : string.Join(" ", said);
     }
 
     /// <summary>The four grid lines as the one <c>grid-area</c>: a name put on all four lines is the

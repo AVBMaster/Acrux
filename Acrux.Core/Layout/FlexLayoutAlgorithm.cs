@@ -728,6 +728,30 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
         {
             item.FlexBaseSize = ContentBox(MathMainPx(fbm, isRow));
         }
+        else if (style.FlexBasis is IntrinsicLength basisKeyword)
+        {
+            // CSS Sizing 4 §2.2 as CSS Flexbox 1 §7.2 reads it: an intrinsic width IS a width, so the
+            // keyword names the item's own contribution and the 'width' the page also wrote plays no
+            // part (measured: an empty item with 'flex-basis: max-content' beside 'width: 20px' is
+            // nothing wide, where the same item with 'flex-basis: auto' keeps the 20px).
+            item.FlexBaseSize = isRow
+                ? KeywordInlineSize(item, basisKeyword, availableMain, item.MainAxisBorderPadding)
+                : KeywordBlockSize(item, basisKeyword, availableMain);
+            if (float.IsNaN(item.FlexBaseSize))
+                item.FlexBaseSize = EstimateContentSize(item.Element, availableMain);
+        }
+        else if (style.FlexBasis is SizingKeywordLength stretch && stretch.Keyword == "stretch")
+        {
+            // 'stretch' names the space the containing block has left for this item, and a flex
+            // container's own inner main size is that space (measured: 'flex-basis: stretch' fills a
+            // 300px row and leaves the item after it nothing at all, while 'flex: stretch' beside a
+            // 40px item shrinks the two to 264.7px and 35.3px). With no space to fill the keyword is
+            // the auto size it always falls back to.
+            item.FlexBaseSize = float.IsNaN(availableMain) || float.IsInfinity(availableMain)
+                ? (isRow ? EstimateContentSize(item.Element, availableMain)
+                         : EstimateContentBlockMainSize(item))
+                : ContentBox(availableMain);
+        }
         else if (isRow && style.Width is PixelLength widthPx)
         {
             item.FlexBaseSize = ContentBox(widthPx.Value);

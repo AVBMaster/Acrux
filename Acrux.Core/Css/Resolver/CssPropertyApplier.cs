@@ -3402,13 +3402,17 @@ public static class CssPropertyApplier
     /// <summary>&lt;'flex-basis'&gt; (CSS Flexbox 1 §7.2): a length, a percentage, <c>auto</c>, and the
     /// <c>content</c> keyword — which measures the item's own content, so layout treats it as the free
     /// space it falls back to while the computed surface answers the word the page wrote (measured:
-    /// <c>flex-basis: content</c> computes <c>content</c>).</summary>
+    /// <c>flex-basis: content</c> computes <c>content</c>). CSS Sizing 4 §2.2 adds the intrinsic
+    /// widths and <c>stretch</c> to that set, and <c>stretch</c> is the same case: layout treats it as
+    /// the space the item is left with, the computed surface answers the word (measured:
+    /// <c>flex-basis: stretch</c> computes <c>stretch</c> and <c>flex: stretch</c> the three parts
+    /// <c>1 1 stretch</c>).</summary>
     private static Length ParseFlexBasis(string value)
     {
         var text = value.Trim();
         if (text.Equals("content", StringComparison.OrdinalIgnoreCase))
             return new SizingKeywordLength("content");
-        return Length.Parse(text);
+        return SizingKeywordLength.For(text) ?? Length.Parse(text);
     }
 
     public static FlexDirectionType ParseFlexDirection(string value) => value.ToLowerInvariant() switch
@@ -4106,7 +4110,11 @@ public static class CssPropertyApplier
         // was for the computed value, which the reference engine does not resolve (measured).
         style.TextDecorationThicknessPercent =
             length is PercentLength thicknessPercent ? thicknessPercent.Value * 100f : 0;
-        style.TextDecorationThickness = Math.Max(0, length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0));
+        // A negative thickness is kept as the page wrote it — the reference engine answers
+        // 'text-decoration-thickness: -2px' with '-2px' (measured) — and the painter, which cannot
+        // draw a stripe thinner than nothing, clamps it to its own minimum.
+        style.TextDecorationThickness =
+            length.ToPixels(style.FontSize, style.RootFontSizeOrInitial, 0, 0);
     }
 
     /// <summary>'text-decoration-color: auto | &lt;color&gt;' (CSS Text Decoration 4
