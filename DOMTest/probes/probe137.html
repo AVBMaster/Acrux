@@ -1,0 +1,121 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe137 — the attribute map's named access and its iteration</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. getNamedItem and its NS variant ───────────────────────────────────
+    eq('A1 getNamedItem answers the attribute by name', safe(function () {
+        var box = host('<div id=a class=x title=t></div>');
+        var attrs = box.firstChild.attributes;
+        return [String(attrs.getNamedItem('class').value), String(attrs.getNamedItem('title').value),
+            String(attrs.getNamedItem('missing'))].join(',');
+    }), 'ok:x,t,null');
+
+    eq('A2 getNamedItemNS answers by namespace and local name', safe(function () {
+        var box = host('<div></div>');
+        var attrs = box.firstChild.attributes;
+        var xlink = 'http://www.w3.org/1999/xlink';
+        // §4.3.6: an attribute put on under a namespace is reached by its local name alone, while
+        // the namespace has to agree — which is what setAttributeNS records and getNamedItemNS reads.
+        box.firstChild.setAttributeNS(xlink, 'xlink:href', '#a');
+        var href = attrs.getNamedItemNS(xlink, 'href');
+        return [String(href && href.localName), String(href && href.value),
+            String(attrs.getNamedItemNS(xlink, 'missing'))].join(',');
+    }), 'ok:href,#a,null');
+
+    eq('A3 a plain attribute is answered by the null namespace', safe(function () {
+        var box = host('<div class=x></div>');
+        return [String(box.firstChild.attributes.getNamedItemNS(null, 'class').value)].join(',');
+    }), 'ok:x');
+
+    // ── B. setNamedItem, setNamedItemNS and what they hand back ──────────────
+    eq('B1 setNamedItem adds a new attribute and hands back null', safe(function () {
+        var box = host('<div></div>');
+        var attrs = box.firstChild.attributes;
+        var made = document.createAttribute('data-k');
+        made.value = 'v';
+        var before = attrs.setNamedItem(made);
+        return [String(before), box.firstChild.getAttribute('data-k'), attrs.length].join(',');
+    }), 'ok:null,v,1');
+
+    eq('B2 setNamedItem replaces and hands back the one it took', safe(function () {
+        var box = host('<div data-k="old"></div>');
+        var attrs = box.firstChild.attributes;
+        var made = document.createAttribute('data-k');
+        made.value = 'new';
+        var replaced = attrs.setNamedItem(made);
+        return [String(replaced.value), box.firstChild.getAttribute('data-k'), attrs.length].join(',');
+    }), 'ok:old,new,1');
+
+    eq('B3 setNamedItemNS keeps the namespace it was given', safe(function () {
+        var box = host('<div></div>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        var made = document.createAttributeNS(xlink, 'xlink:href');
+        made.value = '#a';
+        box.firstChild.attributes.setNamedItemNS(made);
+        return [box.firstChild.getAttributeNS(xlink, 'href'), box.firstChild.attributes.length].join(',');
+    }), 'ok:#a,1');
+
+    // ── C. removeNamedItem and its NS variant ────────────────────────────────
+    eq('C1 removeNamedItem hands back the one it took and drops it', safe(function () {
+        var box = host('<div data-k="v" data-j="w"></div>');
+        var attrs = box.firstChild.attributes;
+        var taken = attrs.removeNamedItem('data-k');
+        return [String(taken.value), box.hasAttribute('data-k'), attrs.length].join(',');
+    }), 'ok:v,false,1');
+
+    eq('C2 removeNamedItem refuses a name that is not there', safe(function () {
+        var box = host('<div data-k="v"></div>');
+        box.firstChild.attributes.removeNamedItem('missing');
+        return 'removed';
+    }), 'ERR:NotFoundError:The named item does not exist.');
+
+    eq('C3 removeNamedItem by the name the parser stored answers the whole spelling', safe(function () {
+        var box = host('<div xlink:href="#a"></div>');
+        var taken = box.firstChild.attributes.removeNamedItem('xlink:href');
+        return [String(taken.name), String(taken.value), box.firstChild.attributes.length].join(',');
+    }), 'ok:xlink:href,#a,0');
+
+    // ── D. length, item and the iteration the map answers ────────────────────
+    eq('D1 length counts the attributes and item reads them by index', safe(function () {
+        var box = host('<div data-a="1" data-b="2"></div>');
+        var attrs = box.firstChild.attributes;
+        return [attrs.length, String(attrs.item(0).value), String(attrs.item(1).value),
+            String(attrs.item(2))].join(',');
+    }), 'ok:2,1,2,null');
+
+    eq('D2 the map iterates its attributes in order', safe(function () {
+        var box = host('<div data-a="1" data-b="2" data-c="3"></div>');
+        var attrs = box.firstChild.attributes;
+        var names = [];
+        for (var i = 0; i < attrs.length; i++) names.push(attrs.item(i).name);
+        return [names.join(','), String(attrs[0] && attrs[0].value)].join(',');
+    }), 'ok:data-a,data-b,data-c,1');
+
+    // ── E. the Attr the map hands out is live ────────────────────────────────
+    eq('E1 the attribute the map holds is live with the element', safe(function () {
+        var box = host('<div data-k="v"></div>');
+        var attrs = box.firstChild.attributes;
+        var held = attrs.getNamedItem('data-k');
+        box.firstChild.setAttribute('data-k', 'w');
+        var throughMap = attrs.getNamedItem('data-k');
+        return [held.value, throughMap.value, held === throughMap].join(',');
+    }), 'ok:w,w,true');
+})();
+</script>
+<div>the attribute map's named access</div></body></html>
