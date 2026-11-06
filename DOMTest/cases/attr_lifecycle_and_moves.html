@@ -1,0 +1,104 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe138 — an attribute taken off, moved between elements and between documents</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the attribute taken off is detached, not destroyed ────────────────
+    eq('A1 removeAttributeNode detaches the Attr and its value survives', safe(function () {
+        var box = host('<div><p data-k="v">text</p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        el.removeAttributeNode(attr);
+        return [attr.value, String(attr.ownerElement), attr.name].join(',');
+    }), 'ok:v,null,data-k');
+
+    eq('A2 the detached attribute answers its own value when written', safe(function () {
+        var box = host('<div><p data-k="v">text</p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        el.removeAttributeNode(attr);
+        attr.value = 'changed';
+        return [attr.value, el.hasAttribute('data-k')].join(',');
+    }), 'ok:changed,false');
+
+    eq('A3 putting the detached attribute back reattaches it', safe(function () {
+        var box = host('<div><p data-k="v">text</p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        el.removeAttributeNode(attr);
+        el.setAttributeNode(attr);
+        return [attr.value, String(attr.ownerElement === el), el.hasAttribute('data-k')].join(',');
+    }), 'ok:v,true,true');
+
+    // ── B. moving an attached attribute is refused ───────────────────────────
+    eq('B1 setAttributeNode refuses one already on another element', safe(function () {
+        var box = host('<div><p id=a data-k="v"></p><p id=b></p></div>');
+        var a = box.querySelector('#a'), b = box.querySelector('#b');
+        var attr = a.getAttributeNode('data-k');
+        return safe(function () { b.setAttributeNode(attr); });
+    }), 'ok:ERR:InvalidModificationError:The attribute is in use on ano');
+
+    eq('B2 getAttributeNode by the name the parser stored', safe(function () {
+        var box = host('<div><p xlink:href="#a"></p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('xlink:href');
+        return [String(attr && attr.name), String(attr && attr.value),
+            String(attr && attr.namespaceURI)].join(',');
+    }), 'ok:xlink:href,#a,null');
+
+    // ── C. the attribute survives a move to another element ──────────────────
+    eq('C1 appendChild moves the attribute with the node', safe(function () {
+        var box = host('<div><p id=src data-k="v">text</p><p id=dst></p></div>');
+        var src = box.querySelector('#src'), dst = box.querySelector('#dst');
+        dst.appendChild(src);
+        return [String(dst.firstChild.getAttribute('data-k')), src.getAttribute('data-k')].join(',');
+    }), 'ok:v,v');
+
+    eq('C2 importNode copies the attributes', safe(function () {
+        var box = host('<div><p id=src data-k="v" class="c">text</p></div>');
+        var src = box.querySelector('#src');
+        var copy = document.importNode(src, true);
+        return [copy.getAttribute('data-k'), copy.getAttribute('class'), copy.childNodes.length].join(',');
+    }), 'ok:v,c,1');
+
+    // ── D. the Attr interface members ────────────────────────────────────────
+    eq('D1 an attribute carries its namespace halves', safe(function () {
+        var box = host('<div><p xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#a"></p></div>');
+        var el = box.firstChild.firstChild;
+        var attr = el.getAttributeNode('xlink:href');
+        return [attr.localName, String(attr.prefix), String(attr.namespaceURI)].join(',');
+    }), 'ok:xlink:href,null,null');
+
+    eq('D2 a plain attribute has no prefix and no namespace', safe(function () {
+        var box = host('<div><p data-k="v"></p></div>');
+        var attr = box.firstChild.firstChild.getAttributeNode('data-k');
+        return [attr.localName, String(attr.prefix), String(attr.namespaceURI)].join(',');
+    }), 'ok:data-k,null,null');
+
+    // ── E. cloneNode deep copies the attributes as separate objects ──────────
+    eq('E1 an attribute of a clone is its own object', safe(function () {
+        var box = host('<div><p data-k="v">text</p></div>');
+        var src = box.firstChild.firstChild;
+        var copy = src.cloneNode(true);
+        var srcAttr = src.getAttributeNode('data-k');
+        var copyAttr = copy.getAttributeNode('data-k');
+        return [String(copyAttr !== srcAttr), copyAttr.value, String(copyAttr.ownerElement === copy)].join(',');
+    }), 'ok:true,v,true');
+})();
+</script>
+<div>an attribute taken off and moved</div></body></html>
