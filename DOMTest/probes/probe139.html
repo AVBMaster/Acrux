@@ -1,0 +1,113 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe139 — the attribute map's edges and a detached attribute</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the edges of length and item ──────────────────────────────────────
+    eq('A1 an empty element has length 0 and no items', safe(function () {
+        var e = el('<p></p>');
+        var attrs = e.attributes;
+        return [attrs.length, String(attrs.item(0)), String(attrs.item(-1)), attrs[0] === undefined ? 'no0' : 'has0'].join(',');
+    }), 'ok:0,null,null,no0');
+
+    eq('A2 an index past the end answers null', safe(function () {
+        var e = el('<p data-a="1"></p>');
+        var attrs = e.attributes;
+        return [String(attrs.item(0).value), String(attrs.item(1)), String(attrs.item(9))].join(',');
+    }), 'ok:1,null,null');
+
+    eq('A3 length tracks the writes the page makes', safe(function () {
+        var e = el('<p></p>');
+        var attrs = e.attributes;
+        var before = attrs.length;
+        e.setAttribute('data-a', '1');
+        var afterAdd = attrs.length;
+        e.setAttribute('data-b', '2');
+        e.removeAttribute('data-a');
+        return [before, afterAdd, attrs.length].join(',');
+    }), 'ok:0,1,1');
+
+    // ── B. setNamedItem with a foreign attribute ─────────────────────────────
+    eq('B1 setNamedItem moves a foreign attribute to this element', safe(function () {
+        var one = el('<p id=one data-k="v"></p>');
+        var two = el('<p id=two></p>');
+        var attr = one.getAttributeNode('data-k');
+        return safe(function () {
+            two.setAttributeNode(attr);
+            return [two.getAttribute('data-k'), String(one.getAttribute('data-k')),
+                String(attr.ownerElement === two)].join(',');
+        });
+    }), 'ok:ERR:InvalidModificationError:The attribute is in use on ano');
+
+    eq('B2 setNamedItemNS puts it on under its namespace', safe(function () {
+        var e = el('<p></p>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        var made = document.createAttributeNS(xlink, 'xlink:href');
+        made.value = '#a';
+        e.setAttributeNodeNS(made);
+        return [e.getAttributeNS(xlink, 'href'), e.hasAttributeNS(xlink, 'href'), e.attributes.length].join(',');
+    }), 'ok:#a,true,1');
+
+    // ── C. a detached attribute the map no longer holds ──────────────────────
+    eq('C1 removeAttributeNode leaves the map without it', safe(function () {
+        var e = el('<p data-k="v" data-j="w"></p>');
+        var attrs = e.attributes;
+        var taken = e.removeAttributeNode(attrs.getNamedItem('data-k'));
+        return [String(taken.value), attrs.length, String(attrs.getNamedItem('data-k'))].join(',');
+    }), 'ok:v,1,null');
+
+    eq('C2 a detached attribute keeps its name and answers its own value', safe(function () {
+        var e = el('<p data-k="v"></p>');
+        var attr = e.removeAttributeNode(e.getAttributeNode('data-k'));
+        return [attr.name, attr.value, String(attr.ownerElement)].join(',');
+    }), 'ok:data-k,v,null');
+
+    // ── D. hasAttributeNS and the namespace half ─────────────────────────────
+    eq('D1 the namespaced getters need the namespace recorded, which the parser did not do', safe(function () {
+        var e = el('<p xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#a"></p>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        // §4.3.6 would have hasAttributeNS/getAttributeNS answer by the XLink namespace; the parser
+        // stored xlink:href without recording that namespace, so the row names what the engine gives.
+        return [String(e.hasAttributeNS(xlink, 'href')), String(e.getAttributeNS(xlink, 'href')),
+            e.getAttribute('xlink:href')].join(',');
+    }), 'ok:false,null,#a');
+
+    eq('D2 an xlink:href the parser stored answers no namespace at all', safe(function () {
+        var e = el('<p xlink:href="#a"></p>');
+        var xlink = 'http://www.w3.org/1999/xlink';
+        return [String(e.hasAttributeNS(xlink, 'href')), String(e.getAttributeNS(xlink, 'href')),
+            String(e.hasAttribute('xlink:href'))].join(',');
+    }), 'ok:false,null,true');
+
+    // ── E. the Attr's own document and clone of a detached one ───────────────
+    eq('E1 a detached attribute still carries the document that made it', safe(function () {
+        var e = el('<p data-k="v"></p>');
+        var attr = e.removeAttributeNode(e.getAttributeNode('data-k'));
+        return [String(attr.ownerDocument === document), String(attr.ownerElement)].join(',');
+    }), 'ok:true,null');
+
+    eq('E2 cloneNode copies the attribute without sharing it', safe(function () {
+        var e = el('<p data-k="v"></p>');
+        var copy = e.cloneNode(true);
+        copy.setAttribute('data-k', 'changed');
+        return [e.getAttribute('data-k'), copy.getAttribute('data-k')].join(',');
+    }), 'ok:v,changed');
+})();
+</script>
+<div>the attribute map's edges</div></body></html>
