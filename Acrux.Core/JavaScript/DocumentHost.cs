@@ -2184,6 +2184,17 @@ public class AttributeHost : IDomPrototypeHost
     public string baseURI => NodeBaseUri.For((Acrux.Core.Dom.Node?)_owner ?? _document);
     public object? ownerElement => _owner != null && !_released ? JsIntegrationService.WrapAny(_owner) : null;
 
+    /// <summary>DOM §4.4.1: an attribute carries the same position bitmask any node does, and its
+    /// relation to its own element is CONTAINS|FOLLOWING (20) from the element and
+    /// CONTAINED_BY|PRECEDING (10) from the attribute. The attribute is not a Node in the engine's
+    /// type tree, so it unwraps to its owner element and answers the comparison from there.</summary>
+    public int compareDocumentPosition(object? other)
+    {
+        var self = _owner ?? (Acrux.Core.Dom.Node?)_document;
+        if (self == null) return 0;
+        return ElementHost.NodePositionOf(self, ElementHost.UnwrapNode(other));
+    }
+
     /// <summary>DOM §4.3.3: an attribute belongs to a document whether or not an element holds it,
     /// and taking it off the element does not take it off the document — 'createAttribute' gives it
     /// the document that made it. It is the page's own 'document', not a second wrapper of it.</summary>
@@ -2220,6 +2231,7 @@ public class AttributeHost : IDomPrototypeHost
     }
 
     internal DomElement? NativeOwner => _owner;
+    internal DomDocument? NativeDocument => _document;
     internal bool IsAttached => _owner != null && !_released && _owner.HasAttribute(name);
 
     /// <summary>The attribute of an element, the same object every time while it is attached.</summary>

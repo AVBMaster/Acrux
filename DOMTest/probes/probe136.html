@@ -1,0 +1,111 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe136 — compareDocumentPosition bits and the tree-order comparisons</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var F = 0x04, P = 0x02, CONTAINS = 0x10, CONTAINED_BY = 0x08, DISC = 0x01, IMP = 0x20;
+
+    // ── A. the flags for the four tree positions ─────────────────────────────
+    eq('A1 a node compared with itself answers zero', safe(function () {
+        var box = host('<div id=a><p id=b>text</p></div>');
+        var a = box.querySelector('#a'), b = box.querySelector('#b');
+        return [a.compareDocumentPosition(a), b.compareDocumentPosition(b)].join(',');
+    }), 'ok:0,0');
+
+    eq('A2 an ancestor contains and follows', safe(function () {
+        var box = host('<div id=a><p id=b>text</p></div>');
+        var a = box.querySelector('#a'), b = box.querySelector('#b');
+        return [a.compareDocumentPosition(b), b.compareDocumentPosition(a)].join(',');
+    }), 'ok:' + (CONTAINS | F) + ',' + (CONTAINED_BY | P));
+
+    eq('A3 two siblings compare by their order', safe(function () {
+        var box = host('<div><i id=first>one</i><b id=second>two</b></div>');
+        var first = box.querySelector('#first'), second = box.querySelector('#second');
+        return [first.compareDocumentPosition(second), second.compareDocumentPosition(first)].join(',');
+    }), 'ok:' + F + ',' + P);
+
+    eq('A4 cousins under one ancestor compare through the ancestor', safe(function () {
+        var box = host('<div><p id=a1><b id=x>x</b></p><p id=a2><i id=y>y</i></p></div>');
+        var x = box.querySelector('#x'), y = box.querySelector('#y');
+        return [x.compareDocumentPosition(y), y.compareDocumentPosition(x)].join(',');
+    }), 'ok:' + F + ',' + P);
+
+    eq('A5 two nodes with no common root are disconnected', safe(function () {
+        var box = host('<div id=a>one</div>');
+        var z = document.createElement('i');
+        var a = box.querySelector('#a');
+        var back = a.compareDocumentPosition(z), fwd = z.compareDocumentPosition(a);
+        // Both carry DISCONNECTED | IMPLEMENTATION_SPECIFIC; the direction bit is set beside them.
+        return [(back & DISC) && (back & IMP) ? 'disc' : 'not-disc',
+            (back & F) && !(back & P), (fwd & DISC) && (fwd & IMP) && !!(fwd & P),
+            a.compareDocumentPosition(a)].join(',');
+    }), 'ok:disc,true,true,0');
+    // ── B. the Attr interface and a node compared with an attribute ──────────
+    eq('B1 an attribute carries its name, owner and the value it was written with', safe(function () {
+        var box = host('<div id=a data-k="v">text</div>');
+        var el = box.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        return [attr.name, attr.value, String(attr.ownerElement === el), attr.specified,
+            String(attr.nodeType), attr.nodeName].join(',');
+    }), 'ok:data-k,v,true,true,2,data-k');
+
+    eq('B2 a live attribute moves with the write the page makes', safe(function () {
+        var box = host('<div id=a data-k="v">text</div>');
+        var el = box.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        el.setAttribute('data-k', 'w');
+        return [attr.value, el.getAttribute('data-k')].join(',');
+    }), 'ok:w,w');
+
+    eq('B3 setAttributeNode returns the attribute it replaced', safe(function () {
+        var box = host('<div id=a data-k="old">text</div>');
+        var el = box.firstChild;
+        var before = el.getAttributeNode('data-k');
+        var made = document.createAttribute('data-k');
+        made.value = 'new';
+        var replaced = el.setAttributeNode(made);
+        return [replaced === before, replaced.value, el.getAttribute('data-k')].join(',');
+    }), 'ok:true,old,new');
+
+    eq('B4 removeAttributeNode hands back the one it took', safe(function () {
+        var box = host('<div id=a data-k="v">text</div>');
+        var el = box.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        var taken = el.removeAttributeNode(attr);
+        return [taken === attr, taken.value, String(el.hasAttribute('data-k'))].join(',');
+    }), 'ok:true,v,false');
+
+    // ── C. the comparison the specification names between a node and an attr ─
+    eq('C1 an Attr is not a Node and answers zero in both directions', safe(function () {
+        var box = host('<div id=a data-k="v">text</div>');
+        var el = box.firstChild;
+        var attr = el.getAttributeNode('data-k');
+        return [el.compareDocumentPosition(attr), attr.compareDocumentPosition(el)].join(',');
+    }), 'ok:0,0');
+
+    eq('C2 two attributes of disconnected elements answer disconnected in both directions', safe(function () {
+        var one = host('<div id=a data-k="v">text</div>');
+        var lone = document.createElement('div');
+        lone.innerHTML = '<span id=b data-k="w">text</span>';
+        var el = one.firstChild;
+        var attr = lone.firstChild.getAttributeNode('data-k');
+        var back = el.compareDocumentPosition(attr), fwd = attr.compareDocumentPosition(el);
+        return [String(back & DISC), String(back & IMP), String(fwd & DISC), String(fwd & IMP)].join(',');
+    }), 'ok:1,32,1,32');
+})();
+</script>
+<div>compareDocumentPosition</div></body></html>

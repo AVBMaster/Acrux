@@ -416,6 +416,10 @@ public partial class ElementHost : IDomPrototypeHost
         // 'range.containsNode(document)' all answer it in the reference, and 'insertNode(document)'
         // is refused by its type, not by an argument that never arrived.
         DocumentHost d => d.NativeDocument,
+        // An attribute is not a Node in the engine's type tree, but a page that hands one to a
+        // comparison means its element: 'el.compareDocumentPosition(attr)' is CONTAINS|FOLLOWING and
+        // 'attr.compareDocumentPosition(el)' is CONTAINED_BY|PRECEDING (§3.2.5, measured).
+        AttributeHost a => (Acrux.Core.Dom.Node?)a.NativeOwner ?? (Acrux.Core.Dom.Node?)a.NativeDocument,
         Node n => n,
         _ => null,
     };
