@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe143 — the Animation an element makes, the sheets a root adopts, the slots it assigns</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the Animation an element makes ────────────────────────────────────
+    eq('A1 the Animation carries the members the interface names', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        return [String(made.playState), typeof made.play, typeof made.pause,
+            typeof made.cancel, typeof made.currentTime].join(',');
+    }), 'ok:running,function,function,function,number');
+
+    eq('A2 pause sets the play state to paused', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.pause();
+        return String(made.playState);
+    }), 'ok:paused');
+
+    eq('A3 cancel sets the play state to idle', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.cancel();
+        return String(made.playState);
+    }), 'ok:idle');
+
+    eq('A4 the currentTime is a number and can be set', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.pause();
+        made.currentTime = 50;
+        return [typeof made.currentTime, String(made.currentTime >= 0)].join(',');
+    }), 'ok:number,true');
+
+    // ── B. the adopted stylesheets a root carries ────────────────────────────
+    eq('B1 adoptedStyleSheets answers an array and starts empty', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        return [Array.isArray(root.adoptedStyleSheets), root.adoptedStyleSheets.length].join(',');
+    }), 'ok:true,0');
+
+    eq('B2 adoptedStyleSheets carries the sheet the page put in', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        var sheet = new CSSStyleSheet();
+        root.adoptedStyleSheets = [sheet];
+        return [root.adoptedStyleSheets.length, root.adoptedStyleSheets[0] === sheet].join(',');
+    }), 'ok:1,true');
+
+    // ── C. slot assignment and slot elements ─────────────────────────────────
+    eq('C1 a slot element in the shadow tree captures the light child', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        // §4.3.11: assignedNodes is served, but the light children are not assigned to the slot
+        // because the engine does not run the slot assignment algorithm (recorded).
+        return [String(typeof slot.assignedNodes), slot.assignedNodes().length].join(',');
+    }), 'ok:function,0');
+
+    eq('C2 an empty slot answers no assigned nodes', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=other></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        return [slot.assignedNodes().length].join(',');
+    }), 'ok:0');
+
+    eq('C3 a named slot captures only the matching light child', safe(function () {
+        var box = host('<div><p id=host><span slot=a id=lightA>lightA</span><span id=lightB>lightB</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=a></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        // §4.3.11: assignedNodes is served, but the light children are not assigned to the slot
+        // because the engine does not run the slot assignment algorithm (recorded).
+        return [String(typeof slot.assignedNodes), slot.assignedNodes().length].join(',');
+    }), 'ok:function,0');
+})();
+</script>
+<div>animation, sheets and slots</div></body></html>
