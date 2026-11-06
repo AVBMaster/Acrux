@@ -1,0 +1,302 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe134b — records, live ranges and the names ES still owes</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 28); }
+    }
+    function eq(label, got, wantValue) {
+        var g = String(got), w = String(wantValue);
+        window.__T(label, g === w, 'got=[' + g + '] want=[' + w + ']');
+    }
+    function later(label, build, expected) {
+        var made = 'pending';
+        try {
+            Promise.resolve(build()).then(function (v) { made = v; },
+                function (e) { made = 'REJECTED:' + String(e && e.name); });
+        } catch (e) { made = 'THREW:' + String(e && e.name); }
+        setTimeout(function () {
+            window.__T(label, String(made) === String(expected),
+                'got=[' + String(made) + '] want=[' + String(expected) + ']');
+        }, 60);
+    }
+    function host(tag, html) {
+        var made = document.createElement(tag || 'div');
+        made.innerHTML = html === undefined ? '' : html;
+        root.appendChild(made);
+        return made;
+    }
+
+    // ── A. the names the language still owes a page ──────────────────────────
+    eq('A1 the upsert pair writes the default and then the answer', safe(function () {
+        var m = new Map([['a', 1]]);
+        var w = new WeakMap();
+        var key = {};
+        var made = [typeof m.upsert, typeof m.upsertComputed,
+            typeof WeakMap.prototype.upsert, typeof WeakMap.prototype.upsertComputed];
+        if (typeof m.upsert === 'function') {
+            made.push(m.upsert('b', 2), m.upsert('a', 9), m.get('a'), m.get('b'));
+            made.push(m.upsertComputed('c', function () { return 3; }), m.get('c'));
+        }
+        if (typeof w.upsert === 'function') {
+            made.push(w.upsert(key, 1), w.upsert(key, 2), w.get(key));
+        }
+        // The computed spelling writes what the callback returned — unless the callback took the entry
+        // away while it ran, in which case the map is left without it (§24.1.1 step for 'upsertComputed').
+        if (typeof m.upsertComputed === 'function') {
+            made.push(m.upsertComputed('a', function (old, name, map) {
+                map.delete(name);
+                return old + 10;
+            }), String(m.has('a')));
+        }
+        return made.join(',');
+    }), 'ok:function,function,function,function,2,1,1,2,3,3,1,1,1,11,false');
+
+    eq('A2 the flags a regular expression carries are all readable', safe(function () {
+        var bare = /a/;
+        var made = [typeof bare.hasIndices, String(bare.hasIndices),
+            String(new RegExp('a', 'd').hasIndices), String(/a/g.global),
+            String(/a/i.ignoreCase), String(/a/m.multiline), String(/a/s.dotAll),
+            String(/a/u.unicode), String(/a/y.sticky)];
+        return made.join(',');
+    }), 'ok:boolean,false,true,true,true,true,true,true,true');
+
+    eq('A3 the bytes a page encodes round-trip through the two spellings', safe(function () {
+        var bytes = new Uint8Array([1, 250, 255]);
+        var made = [typeof bytes.toHex, typeof bytes.toBase64,
+            typeof Uint8Array.fromHex, typeof Uint8Array.fromBase64];
+        if (typeof bytes.toHex === 'function') {
+            made.push(bytes.toHex(), Uint8Array.fromHex('01faff').length,
+                bytes.toBase64({ alphabet: 'base64url' }),
+                String(Uint8Array.fromBase64('Afr_', { alphabet: 'base64url' }).length), bytes.toBase64());
+        }
+        return made.join(',');
+    }), 'ok:function,function,function,function,01faff,3,Afr_,3,Afr/');
+
+    eq('A4 the cause a page gives an error is the value it reads back', safe(function () {
+        var why = new Error('why');
+        var made = [String(new Error('x').cause), new Error('x', { cause: why }).cause === why,
+            String(new TypeError('x', { cause: 5 }).cause), String(new AggregateError([1], 'x').cause),
+            new AggregateError([1], 'x', { cause: why }).cause === why,
+            Object.prototype.hasOwnProperty.call(new Error('x'), 'cause'),
+            Object.prototype.hasOwnProperty.call(new Error('x', { cause: 1 }), 'cause')];
+        return made.join(',');
+    }), 'ok:undefined,true,5,undefined,true,false,true');
+
+    eq('A5 the iterator helpers answer the sequence they were built for', safe(function () {
+        function* gen() { yield 1; yield 2; yield 3; }
+        var made = [gen().map(function (v) { return v * 2; }).toArray().join('-'),
+            gen().take(2).toArray().join('-'), gen().drop(1).toArray().join('-'),
+            gen().filter(function (v) { return v > 1; }).toArray().join('-'),
+            gen().flatMap(function (v) { return [v, v]; }).toArray().join('-'),
+            gen().reduce(function (a, b) { return a + b; }, 0),
+            Iterator.from([1, 2]).toArray().join('-'),
+            [...Iterator.concat([gen(), gen()]).map(function (v) { return v; })].join('-')];
+        return made.join('|');
+    }), 'ok:2-4-6|1-2|2-3|2-3|1-1-2-2-3-3|6|1-2|1-2-3-1-2-3');
+
+    // ── B. the records a mutation observer is told about (DOM §3.5) ──────────
+    later('B1 the two writes of one name are one record with the first old value', function () {
+        var box = host('div', '<p id=t class=one>text</p>');
+        var target = box.querySelector('#t');
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) {
+                seen.push([list[i].type, list[i].attributeName,
+                    String(list[i].oldValue)].join('/'));
+            }
+        });
+        observer.observe(target, { attributes: true, attributeOldValue: true });
+        target.setAttribute('class', 'two');
+        target.setAttribute('class', 'three');
+        target.setAttribute('id', 'u');
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                observer.disconnect();
+                resolve([seen.length, seen.join(',')].join('|'));
+            }, 10);
+        });
+    }, '2|attributes/class/one,attributes/id/t');
+
+    later('B2 one record per name the filter allowed and none it did not', function () {
+        var box = host('div', '<p id=t a=1 b=2 c=3></p>');
+        var target = box.querySelector('#t');
+        var names = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) names.push(list[i].attributeName);
+        });
+        observer.observe(target, { attributes: true, attributeFilter: ['a', 'c'] });
+        target.setAttribute('a', '9');
+        target.setAttribute('b', '9');
+        target.setAttribute('c', '9');
+        target.removeAttribute('a');
+        return new Promise(function (resolve) {
+            setTimeout(function () { observer.disconnect(); resolve(names.join(',')); }, 10);
+        });
+    }, 'a,c,a');
+
+    later('B3 the character data written twice is one record of the whole change', function () {
+        var box = host('div', '<p id=t>one</p>');
+        var text = box.querySelector('#t').firstChild;
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) {
+                seen.push(list[i].type + '/' + String(list[i].oldValue));
+            }
+        });
+        observer.observe(text, { characterData: true, characterDataOldValue: true });
+        text.data = 'two';
+        text.data = 'three';
+        return new Promise(function (resolve) {
+            setTimeout(function () { observer.disconnect(); resolve(seen.join(',')); }, 10);
+        });
+    }, 'characterData/one');
+
+    later('B4 the old value is only told when the page asked for it', function () {
+        var box = host('div', '<p id=t>one</p>');
+        var text = box.querySelector('#t').firstChild;
+        var target = box.querySelector('#t');
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) seen.push(String(list[i].oldValue));
+        });
+        observer.observe(text, { characterData: true });
+        observer.observe(target, { attributes: true });
+        text.data = 'two';
+        target.setAttribute('x', '1');
+        return new Promise(function (resolve) {
+            setTimeout(function () { observer.disconnect(); resolve(seen.join(',')); }, 10);
+        });
+    }, 'null,null');
+
+    later('B5 an added node and the same node taken away again answer nothing at all', function () {
+        var box = host('div');
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) {
+                seen.push(list[i].type + '/' + list[i].addedNodes.length + '/'
+                    + list[i].removedNodes.length);
+            }
+        });
+        observer.observe(box, { childList: true });
+        var a = document.createElement('span');
+        box.appendChild(a);
+        box.removeChild(a);
+        var b = document.createElement('em');
+        box.appendChild(b);
+        return new Promise(function (resolve) {
+            setTimeout(function () { observer.disconnect(); resolve(seen.join(',')); }, 10);
+        });
+    }, 'childList/1/0');
+
+    later('B6 the subtree flag tells the parent about the child it frames', function () {
+        var box = host('div', '<section><p id=deep>x</p></section>');
+        var deep = box.querySelector('#deep');
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) {
+                seen.push(list[i].type + '/' + list[i].target === list[i].target);
+            }
+        });
+        var order = [];
+        var second = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) order.push(list[i].type);
+        });
+        observer.observe(box, { childList: true, subtree: true });
+        second.observe(deep, { attributes: true });
+        deep.appendChild(document.createTextNode('y'));
+        deep.setAttribute('q', '1');
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                observer.disconnect(); second.disconnect();
+                resolve([seen.length, order.join(',')].join('|'));
+            }, 10);
+        });
+    }, '1|attributes');
+
+    later('B7 the records taken back are not told again at the checkpoint', function () {
+        var box = host('div');
+        var fired = 0;
+        var observer = new MutationObserver(function () { fired++; });
+        observer.observe(box, { childList: true });
+        box.appendChild(document.createElement('i'));
+        var held = observer.takeRecords();
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                observer.disconnect();
+                resolve([held.length, held[0].type, fired].join(','));
+            }, 10);
+        });
+    }, '1,childList,0');
+
+    later('B8 a node taken out first and written to afterwards leaves the observed subtree', function () {
+        var box = host('div', '<p id=gone>text</p>');
+        var gone = box.querySelector('#gone');
+        var seen = [];
+        var observer = new MutationObserver(function (list) {
+            for (var i = 0; i < list.length; i++) seen.push(list[i].type + '/' + String(list[i].target.parentNode));
+        });
+        observer.observe(box, { childList: true, subtree: true, attributes: true });
+        box.removeChild(gone);
+        gone.setAttribute('x', '1');
+        return new Promise(function (resolve) {
+            setTimeout(function () { observer.disconnect(); resolve(seen.join(',')); }, 10);
+        });
+    }, 'childList/[object HTMLDivElement]');
+
+    // ── C. the range the tree moves under (DOM §3.5, §3.3.10) ────────────────
+    // RED ON PURPOSE until the engine keeps a list of live ranges: §3.5 ends the split, the removal and
+    // the extraction by walking every live range whose boundary was inside the node that moved, and there
+    // is no such list to walk. These rows measure the gap; they are not part of the frozen suite.
+    later('C1 a node removed from the tree leaves the range at its common ancestor', function () {
+        var box = host('div', '<p id=p1>one</p><p id=p2>two</p>');
+        var p1 = box.querySelector('#p1'), p2 = box.querySelector('#p2');
+        var range = document.createRange();
+        range.setStart(p1.firstChild, 0);
+        range.setEnd(p2.firstChild, 3);
+        box.removeChild(p1);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve([range.startContainer === box, range.startOffset,
+                    range.endContainer === p2.firstChild, range.collapsed].join(','));
+            }, 10);
+        });
+    }, 'true,0,true,false');
+
+    later('C2 a split moves the boundary that was inside the tail', function () {
+        var box = host('div', '<p>abcdef</p>');
+        var text = box.firstChild.firstChild;
+        var range = document.createRange();
+        range.setStart(text, 4);
+        range.setEnd(text, 6);
+        var tail = text.splitText(2);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve([range.startContainer === tail, range.startOffset,
+                    range.endContainer === tail, range.endOffset,
+                    range.toString()].join(','));
+            }, 10);
+        });
+    }, 'true,2,true,4,ef');
+
+    later('C3 a range that selects a node is emptied by its removal', function () {
+        var box = host('div', '<p id=q>keep</p><b id=r>gone</b>');
+        var q = box.querySelector('#q'), r = box.querySelector('#r');
+        var range = document.createRange();
+        range.selectNode(r);
+        box.removeChild(r);
+        var other = document.createRange();
+        other.setStart(q.firstChild, 0); other.setEnd(q.firstChild, 4);
+        box.removeChild(q);
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve([range.collapsed, String(range.startContainer),
+                    other.collapsed, other.startOffset, other.endOffset].join(','));
+            }, 10);
+        });
+    }, 'true,[object HTMLDivElement],true,0,0');
+})();
+</script>
+<div>records and ranges</div></body></html>

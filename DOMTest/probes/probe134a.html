@@ -1,0 +1,67 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe134a — which names ES now answers</title></head><body>
+<script>
+(function () {
+    function has(path) {
+        var parts = path.split('.');
+        var base = window;
+        if (parts[0] === 'Object') { base = Object; parts = parts.slice(1); }
+        else if (parts[0] === 'Array') { base = Array; parts = parts.slice(1); }
+        else if (parts[0] === 'String') { base = String; parts = parts.slice(1); }
+        else if (parts[0] === 'Number') { base = Number; parts = parts.slice(1); }
+        else if (parts[0] === 'Math') { base = Math; parts = parts.slice(1); }
+        else if (parts[0] === 'JSON') { base = JSON; parts = parts.slice(1); }
+        else if (parts[0] === 'Promise') { base = Promise; parts = parts.slice(1); }
+        else if (parts[0] === 'RegExp') { base = RegExp; parts = parts.slice(1); }
+        else if (parts[0] === 'Error') { base = Error; parts = parts.slice(1); }
+        else if (parts[0] === 'Map') { base = Map; parts = parts.slice(1); }
+        else if (parts[0] === 'WeakMap') { base = WeakMap; parts = parts.slice(1); }
+        else if (parts[0] === 'Iterator') { base = Iterator; parts = parts.slice(1); }
+        else if (parts[0] === 'Atomics') { base = Atomics; parts = parts.slice(1); }
+        else if (parts[0] === 'Symbol') { base = Symbol; parts = parts.slice(1); }
+        else if (parts[0] === 'Intl') { base = Intl; parts = parts.slice(1); }
+        for (var i = 0; i < parts.length; i++) {
+            if (base == null) return 'MISSING-CHAIN';
+            base = base[parts[i]];
+        }
+        return base === undefined ? 'no' : (typeof base);
+    }
+    var names = ['Object.hasOwn', 'Object.groupBy', 'Object.prototype.toString.call(null)',
+        'Array.fromAsync', 'Array.groupBy', 'Array.prototype.at', 'Array.prototype.findLast',
+        'Array.prototype.findLastIndex', 'Array.prototype.toSorted', 'Array.prototype.toReversed',
+        'Array.prototype.toSpliced', 'Array.prototype.with', 'Array.prototype.group',
+        'Array.prototype.filterReject', 'String.prototype.at', 'String.prototype.replaceAll',
+        'String.prototype.isWellFormed', 'String.prototype.toWellFormed',
+        'Number.RangeError', 'Math.sumPrecise', 'Math.clamp', 'JSON.rawJSON', 'JSON.isRawJSON',
+        'Promise.withResolvers', 'Promise.try', 'Promise.withFail', 'RegExp.escape',
+        'Error.isError', 'AggregateError', 'Map.prototype.getOrInsert', 'Map.prototype.upsert',
+        'WeakMap.prototype.getOrInsert', 'WeakMap.prototype.getOrInsertComputed',
+        'Iterator', 'Iterator.prototype.map', 'Iterator.prototype.take', 'Iterator.prototype.toArray',
+        'Iterator.prototype.drop', 'Iterator.prototype.flatMap', 'Iterator.prototype.reduce',
+        'Iterator.prototype.forEach', 'Iterator.prototype.some', 'Iterator.prototype.every',
+        'Iterator.prototype.find', 'Iterator.concat', 'Iterator.zip', 'Iterator.zipKeyed',
+        'Iterator.from', 'Atomics.pause', 'Symbol.metadata', 'Symbol.dispose', 'Symbol.asyncDispose',
+        'Intl.Segmenter', 'Intl.DurationFormat', 'Intl.Locale', 'Intl.now', 'Intl.Collator',
+        'Temporal', 'Float16Array', 'SourceTextInfo', 'Uint8Array.prototype.base64UrlEncode',
+        'Object.prototype.groupBy', 'RegExp.prototype.hasIndices', 'Function.prototype.unThis',
+        'SuppressedError', 'AsyncIterator', 'AsyncIterable', 'Array.prototype.fromAsync',
+        'structuredClone', 'URLPattern', 'URL.parse', 'Object.prototype.__defineGetter__'];
+    var missing = [];
+    for (var i = 0; i < names.length; i++) {
+        var state = has(names[i]);
+        if (state === 'no' || state === 'MISSING-CHAIN') missing.push(names[i] + '=' + state);
+    }
+    var present = [];
+    for (var j = 0; j < names.length; j++) {
+        var st = has(names[j]);
+        if (st !== 'no' && st !== 'MISSING-CHAIN') present.push(names[j] + '=' + st);
+    }
+    window.__T('A1 what is missing', true, missing.join(', '));
+    window.__T('A2 what is present', true, present.join(', '));
+    window.__T('A3 regex flag support', true, [
+        (function(){ try { return 'd=' + new RegExp('a','d').hasIndices; } catch (e) { return 'd-throw:' + e.name; } })(),
+        (function(){ try { return 'v=' + new RegExp('[a-z&&b]','v').unicodeSets; } catch (e) { return 'v-throw:' + e.name; } })(),
+        (function(){ try { var m = /(?<a>x)/d.exec('x'); return m && m.indices ? 'indices-ok' : 'no-indices'; } catch (e) { return 'throw:'+e.name; } })()
+    ].join(' / '));
+})();
+</script>
+<div>sweep</div></body></html>

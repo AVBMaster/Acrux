@@ -5398,6 +5398,13 @@ public class JavaScriptEngine : IDisposable
                 }
 
                 function journalRecords(reg) {
+                    // DOM §3.5: a record is queued into the observer's own list, and the standard
+                    // merges a write that lands on a record of the same shape already at the end of it:
+                    // the attribute written twice is ONE record carrying the value it had before the
+                    // first write, the same for a run of text, and a child that arrives and is taken
+                    // away again inside one batch leaves no record at all. The drafts are merged here
+                    // and turned into records once the list is finished, because a delivered record is
+                    // the read-only view the page holds.
                     var out = [];
                     for (var i = 0; i < journal.length; i++) {
                         var held = journal[i];
@@ -5411,35 +5418,80 @@ public class JavaScriptEngine : IDisposable
                             if (!reg.options.attributes) continue;
                             var name = heldString(change[2]);
                             if (!filteredName(reg, name)) continue;
-                            out.push(makeRecord({
-                                type: 'attributes', target: node,
-                                addedNodes: [], removedNodes: [],
+                            queueRecord(out, {
+                                type: 'attributes', target: node, added: [], removed: [],
                                 previousSibling: null, nextSibling: null,
                                 attributeName: name,
                                 attributeNamespace: heldString(change[3]),
                                 oldValue: reg.options.attributeOldValue ? heldString(change[4]) : null
-                            }));
+                            });
                         } else if (kind === 'childList') {
                             if (!reg.options.childList) continue;
-                            out.push(makeRecord({
+                            queueRecord(out, {
                                 type: 'childList', target: node,
-                                addedNodes: change[5] || [], removedNodes: change[6] || [],
+                                added: (change[5] || []).slice(),
+                                removed: (change[6] || []).slice(),
                                 previousSibling: change[7] || null, nextSibling: change[8] || null,
                                 attributeName: null, attributeNamespace: null, oldValue: null
-                            }));
+                            });
                         } else if (kind === 'characterData') {
                             if (!reg.options.characterData) continue;
-                            out.push(makeRecord({
-                                type: 'characterData', target: node,
-                                addedNodes: [], removedNodes: [],
+                            queueRecord(out, {
+                                type: 'characterData', target: node, added: [], removed: [],
                                 previousSibling: null, nextSibling: null,
                                 attributeName: null, attributeNamespace: null,
                                 oldValue: reg.options.characterDataOldValue ? heldString(change[4]) : null
-                            }));
+                            });
                         }
                     }
                     reg.cursor = journalSequence;
-                    return out;
+                    var made = [];
+                    for (var k = 0; k < out.length; k++) made.push(recordFromDraft(out[k]));
+                    return made;
+                }
+
+                function queueRecord(out, draft) {
+                    var last = out.length ? out[out.length - 1] : null;
+                    if (!last) { out.push(draft); return; }
+                    if (draft.type === 'attributes' && last.type === 'attributes'
+                        && last.target === draft.target
+                        && last.attributeName === draft.attributeName
+                        && last.attributeNamespace === draft.attributeNamespace) return;
+                    if (draft.type === 'characterData' && last.type === 'characterData'
+                        && last.target === draft.target) return;
+                    if (draft.type === 'childList' && last.type === 'childList'
+                        && last.target === draft.target
+                        && last.previousSibling === draft.previousSibling
+                        && last.nextSibling === draft.nextSibling) {
+                        pushNodes(last, draft, 'added', 'removed');
+                        pushNodes(last, draft, 'removed', 'added');
+                        if (!last.added.length && !last.removed.length) out.pop();
+                        return;
+                    }
+                    out.push(draft);
+                }
+
+                // §3.5, 'push nodes to a record': a node that arrives and then goes again is simply
+                // gone from the account, and one that goes and comes back is not told twice.
+                function pushNodes(record, draft, listName, otherName) {
+                    var nodes = draft[listName];
+                    for (var i = 0; i < nodes.length; i++) {
+                        var node = nodes[i];
+                        var at = record[otherName].indexOf(node);
+                        if (at >= 0) { record[otherName].splice(at, 1); continue; }
+                        if (record[listName].indexOf(node) < 0) record[listName].push(node);
+                    }
+                }
+
+                function recordFromDraft(draft) {
+                    return makeRecord({
+                        type: draft.type, target: draft.target,
+                        addedNodes: draft.added, removedNodes: draft.removed,
+                        previousSibling: draft.previousSibling, nextSibling: draft.nextSibling,
+                        attributeName: draft.attributeName,
+                        attributeNamespace: draft.attributeNamespace,
+                        oldValue: draft.oldValue
+                    });
                 }
 
                 function makeCharDataRecord(reg, node, oldValue) {
@@ -9357,6 +9409,95 @@ public class JavaScriptEngine : IDisposable
             // The grouping the page asks for is Object.groupBy's, not a method on the array: the
             // 'Array.prototype.group' spelling was withdrawn from the specification and the reference
             // does not carry it (measured: 'typeof Array.prototype.group' is undefined).
+
+            // ES2025 §27.1.6.3: 'Iterator.concat' takes a list of iterables and yields the VALUES of
+            // each in turn. The engine handed back the iterables themselves — a list of one element per
+            // argument rather than the concatenation the operation names — so the values are walked here
+            // instead. The list is read and checked first, as the algorithm does, and the walking starts
+            // only when the page asks for the first result.
+            if (typeof Iterator === 'function' && typeof Iterator.concat === 'function'
+                && !Iterator.concat.__acruxConcatenates) {
+                (function () {
+                    function concat(items) {
+                        if (items === null || (items !== undefined && typeof items !== 'object')) {
+                            throw new TypeError('Iterator.concat requires a list of iterables');
+                        }
+                        var given = items === undefined ? [] : Array.prototype.slice.call(items);
+                        var iterables = [];
+                        for (var i = 0; i < given.length; i++) {
+                            var source = given[i];
+                            if (source === null || typeof source !== 'object'
+                                || typeof source[Symbol.iterator] !== 'function') {
+                                throw new TypeError('Iterator.concat requires a list of iterables');
+                            }
+                            iterables.push(source);
+                        }
+                        return (function* walk() {
+                            for (var k = 0; k < iterables.length; k++) {
+                                var step = iterables[k][Symbol.iterator]();
+                                var taken = step.next();
+                                while (!taken.done) {
+                                    yield taken.value;
+                                    taken = step.next();
+                                }
+                            }
+                        })();
+                    }
+                    try {
+                        Object.defineProperty(concat, 'name', { value: 'concat', configurable: true });
+                        Object.defineProperty(concat, 'length', { value: 1, configurable: true });
+                        Object.defineProperty(concat, '__acruxConcatenates', { value: true });
+                        Object.defineProperty(Iterator, 'concat', { value: concat, writable: true,
+                            enumerable: false, configurable: true });
+                    } catch (e) { }
+                })();
+            }
+
+            // ES2025 §24.1.1 'upsert' and 'upsertComputed' (and the WeakMap pair built on the same
+            // algorithm): the map is written only when the key was not there, and the value that comes
+            // back is the one the map holds afterwards — so the page learns what the entry ended up being
+            // rather than what it asked for. The computed spelling hands the callback the old value, the
+            // key and the map, writes what the callback returned, and leaves the map alone when the
+            // callback took the entry away while it ran.
+            (function () {
+                function upsert(key, value) {
+                    if (!this.has(key)) {
+                        this.set(key, value);
+                        return value;
+                    }
+                    return this.get(key);
+                }
+                function upsertComputed(key, upsertValue) {
+                    if (typeof upsertValue !== 'function') {
+                        throw new TypeError('upsertValue is not a function');
+                    }
+                    var had = this.has(key);
+                    var made = upsertValue(had ? this.get(key) : undefined, key, this);
+                    if (had && !this.has(key)) return made;
+                    this.set(key, made);
+                    return made;
+                }
+                function named(fn, name, arity) {
+                    try {
+                        Object.defineProperty(fn, 'name', { value: name, configurable: true });
+                        Object.defineProperty(fn, 'length', { value: arity, configurable: true });
+                    } catch (e) { }
+                    return fn;
+                }
+                [['Map', Map], ['WeakMap', WeakMap]].forEach(function (pair) {
+                    var ctor = pair[1];
+                    if (typeof ctor !== 'function' || !ctor.prototype) return;
+                    if (typeof ctor.prototype.upsert === 'function'
+                        && typeof ctor.prototype.upsertComputed === 'function') return;
+                    try {
+                        Object.defineProperty(ctor.prototype, 'upsert', { value: named(upsert, 'upsert', 2),
+                            writable: true, enumerable: false, configurable: true });
+                        Object.defineProperty(ctor.prototype, 'upsertComputed',
+                            { value: named(upsertComputed, 'upsertComputed', 2),
+                                writable: true, enumerable: false, configurable: true });
+                    } catch (e) { }
+                });
+            })();
 
             // ── The accessors an interface declares that the host does not model ─
             // A host object answers its own members first, so a getter installed on the interface's
