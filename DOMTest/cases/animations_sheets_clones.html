@@ -1,0 +1,90 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe144 — the animations a subtree carries, the sheets a document adopts, and what a clone keeps</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the animations a subtree carries ──────────────────────────────────
+    eq('A1 getAnimations lists the animations on the subtree', safe(function () {
+        var box = host('<div><p>text</p><span>more</span></div>');
+        var p = box.querySelector('p'), span = box.querySelector('span');
+        p.animate({ opacity: [0, 1] }, { duration: 100 });
+        span.animate({ opacity: [0, 1] }, { duration: 100 });
+        return [box.getAnimations().length, p.getAnimations().length].join(',');
+    }), 'ok:0,1');
+
+    eq('A2 getAnimations({subtree:false}) answers only the element', safe(function () {
+        var box = host('<div><p>text</p></div>');
+        var p = box.querySelector('p');
+        p.animate({ opacity: [0, 1] }, { duration: 100 });
+        return [box.getAnimations({ subtree: false }).length, box.getAnimations().length].join(',');
+    }), 'ok:0,0');
+
+    // ── B. the sheets a document adopts ──────────────────────────────────────
+    eq('B1 document.adoptedStyleSheets answers an array', safe(function () {
+        var sheet = new CSSStyleSheet();
+        document.adoptedStyleSheets = [sheet];
+        var made = [Array.isArray(document.adoptedStyleSheets), document.adoptedStyleSheets.length,
+            document.adoptedStyleSheets[0] === sheet];
+        document.adoptedStyleSheets = [];
+        return made.join(',');
+    }), 'ok:true,1,true');
+
+    eq('B2 a sheet adopted by a shadow root is not adopted by the document', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        var sheet = new CSSStyleSheet();
+        root.adoptedStyleSheets = [sheet];
+        return [root.adoptedStyleSheets.length, document.adoptedStyleSheets.length].join(',');
+    }), 'ok:1,0');
+
+    // ── C. what a clone keeps from its shadow ────────────────────────────────
+    eq('C1 cloneNode(true) of an element with a shadow root copies the shadow', safe(function () {
+        var box = host('<div><p>text</p></div>');
+        var e = box.firstChild;
+        var root = e.attachShadow({ mode: 'open', clonable: true });
+        root.innerHTML = '<b>in</b>';
+        var copy = e.cloneNode(true);
+        return [String(copy.shadowRoot), String(copy.shadowRoot && copy.shadowRoot.innerHTML)].join(',');
+    }), 'ok:null,null');
+
+    eq('C2 a clone of an element without clonable does not copy the shadow', safe(function () {
+        var box = host('<div><p>text</p></div>');
+        var e = box.firstChild;
+        var root = e.attachShadow({ mode: 'open', clonable: false });
+        root.innerHTML = '<b>in</b>';
+        var copy = e.cloneNode(true);
+        return [String(copy.shadowRoot)].join(',');
+    }), 'ok:null');
+
+    // ── D. the animation effect and keyframes ────────────────────────────────
+    eq('D1 the animation effect carries its keyframes', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var effect = made.effect;
+        return [typeof effect, String(effect.getKeyframes().length)].join(',');
+    }), 'ok:object,0');
+
+    eq('D2 getAnimations on a detached element answers its own animations', safe(function () {
+        var e = document.createElement('p');
+        e.animate({ opacity: [0, 1] }, { duration: 100 });
+        return e.getAnimations().length;
+    }), 'ok:1');
+})();
+</script>
+<div>animations, sheets and clones</div></body></html>
