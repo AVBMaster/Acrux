@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b318 colour computed notation</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');document.body.appendChild(host);
+const cases=[
+ 'lab(50% 20 -10)',
+ 'lab(from red 50% a b)',
+ 'lab(from red 50% 20 -10)',
+ 'lch(54.29 106.854 40.856)',
+ 'lch(from red l c h / 50%)',
+ 'lch(from red 54% 100 40 / 0.5)',
+ 'oklab(0.504777 0.0447402 -0.180308)',
+ 'color-mix(in oklab, red 30%, blue)',
+ 'color-mix(in srgb, red 30%, blue)',
+ 'color-mix(in oklch, red 30%, blue)',
+ 'color(srgb 1 0 0 / none)',
+ 'color(srgb 1 0 0)',
+ 'color(display-p3 1 0 0)',
+ 'color(xyz 0.2 0.1 0.05)',
+ 'color(from red r g b)',
+ 'lab(from red calc(l) calc(a) calc(b))'];
+const rows=[];
+for (const c of cases){
+const el=document.createElement('div'); host.appendChild(el);
+el.style.color=c;
+const spec=el.style.getPropertyValue('color');
+const comp=getComputedStyle(el).getPropertyValue('color');
+rows.push(c+' || spec='+spec+' || comp='+comp);
+el.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>

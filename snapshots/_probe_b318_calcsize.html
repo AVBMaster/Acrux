@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b318 calc-size arithmetic</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');host.style.width='600px';document.body.appendChild(host);
+const rows=[];
+const cases=[
+ ['width','calc-size(auto, size + 10px)',600],
+ ['width','calc-size(auto, size)',600],
+ ['width','calc-size(fit-content, size + 10px)',600],
+ ['width','calc-size(min-content, size + 10px)',600],
+ ['width','calc-size(max-content, size + 10px)',600],
+ ['width','calc-size(stretch, size + 10px)',600],
+ ['width','calc-size(100px, size + 10px)',600],
+ ['min-height','calc-size(auto, size + 1em)',600]];
+for (const [p,v,box] of cases){
+const d=document.createElement('div'); d.style.width=box+'px'; host.appendChild(d);
+d.style.setProperty(p,v);
+const comp=getComputedStyle(d).getPropertyValue(p);
+const used=document.getElementById('record');
+rows.push(p+'='+v+' || spec='+d.style.getPropertyValue(p)+' || comp='+comp);
+d.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>

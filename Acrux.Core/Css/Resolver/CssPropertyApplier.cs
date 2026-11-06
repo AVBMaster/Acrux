@@ -152,6 +152,27 @@ public static class CssPropertyApplier
             && !head.Equals("auto", StringComparison.OrdinalIgnoreCase)
             && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase))
             return Length.Parse(head) ?? AutoLength.Instance;
+        // A basis written as a length prices its own 'size' at that length, so the arithmetic around
+        // it can be read as one calc-sum here (CSS Values 4 §11.1, measured:
+        // 'width: calc-size(100px, size + 10px)' is 110px, where leaving the 'size' unread fell back
+        // to the auto size). A basis whose size only the layout knows — 'auto', 'stretch', or an
+        // intrinsic keyword measured against the box's own content — still needs that size, and
+        // keeps the auto size rather than being priced against a value this path does not have.
+        if (!head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+            && !ShorthandExpander.IsIntrinsicBasisKeyword(head))
+        {
+            var priced = Length.Parse(head) ?? AutoLength.Instance;
+            if (priced is not AutoLength)
+            {
+                var substituted = System.Text.RegularExpressions.Regex.Replace(
+                    expression, @"\bsize\b", priced.ToString(),
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var whole = substituted.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+                    ? substituted : "calc(" + substituted + ")";
+                if (Length.Parse(whole) is { } sum && sum is not AutoLength) return sum;
+            }
+        }
         // An expression that never says 'size' does not ask the question at all, so the call is
         // worth exactly what the expression says (measured: 'height: calc-size(auto, 20px)' is
         // 20px). Everything else needs the size the layout would have produced, which this path

@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b318 colour notation across properties</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');document.body.appendChild(host);
+const colors=['lab(50% 20 -10)','oklab(0.5 0.04 -0.18)','lch(54.29 106.854 40.856)','color(srgb 1 0 0)','color(display-p3 1 0 0)','color-mix(in oklab, red 30%, blue)','#f00','rgb(255,0,0)','red','transparent','rgb(1 2 3 / none)'];
+const props=['color','background-color','border-top-color','outline-color','text-decoration-color','caret-color','column-rule-color','fill'];
+const rows=[];
+for (const c of colors) for (const p of props){
+const el=document.createElement('div'); host.appendChild(el);
+el.style.color='#000';
+el.style.setProperty(p,c);
+const spec=el.style.getPropertyValue(p);
+const comp=getComputedStyle(el).getPropertyValue(p);
+rows.push(p+'='+c+' || spec='+spec+' || comp='+comp);
+el.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>
