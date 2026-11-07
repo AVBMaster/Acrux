@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('background-clip','border-box');
+t('background-clip','padding-box');
+t('background-clip','content-box');
+t('background-clip','text');
+t('background-clip','border-box, padding-box');
+t('background-clip','content-box, content-box');
+t('background-clip','bogus');
+t('background-clip','border');
+t('background-origin','border-box');
+t('background-origin','padding-box');
+t('background-origin','content-box');
+t('background-origin','border-box, border-box');
+t('background-origin','padding-box, content-box');
+t('background-origin','bogus');
+t('background-origin','text');
+t('background-clip','text, text');
+t('background-clip','text content-box');
+t('background-repeat','repeat, no-repeat');
+t('background-repeat','repeat-x, repeat-y');
+t('background-repeat','space, round');
+t('background-repeat','round space');
+t('background-attachment','scroll, local');
+t('background-attachment','local, fixed');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
