@@ -1869,7 +1869,11 @@ public static class CssValueGrammar
             var parts = SplitComponents(text);
             if (parts.Count == 3)
                 return ShorthandExpander.IsBackgroundPositionValue(parts[0] + " " + parts[1])
-                    && IsDimensionedLength(parts[2]);
+                    // The depth is a length, and the zero a page may write for it carries no unit
+                    // (measured: 'transform-origin: left top 0' is a value the reference engine
+                    // keeps and prices as '0px', where the unitless zero was dropped).
+                    && (parts[2].Trim().Equals("0", StringComparison.OrdinalIgnoreCase)
+                        || IsDimensionedLength(parts[2]));
             return ShorthandExpander.IsBackgroundPositionValue(text) && parts.Count != 4;
         },
         // §3.4: the three keywords or one non-negative length. 'auto' names the style and not the

@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b325 transform-origin four-component</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');host.style.width='300px';document.body.appendChild(host);
+const rows=[];
+const cases=[
+ ['right 10px bottom 20px'],
+ ['left 10px top 20px'],
+ ['left 10% top 20%'],
+ ['right 0 bottom 0'],
+ ['center center center'],
+ ['50% 50% 10px'],
+ ['right 10px bottom'],
+ ['left top 0'],
+ ['top left'],
+ ['bottom right']];
+for (const [v] of cases){
+const d=document.createElement('div'); d.style.width='300px'; d.style.height='50px'; host.appendChild(d);
+d.style.transformOrigin=v;
+const spec=d.style.transformOrigin;
+const comp=getComputedStyle(d).transformOrigin;
+rows.push(v+' || spec='+spec+' || comp='+comp);
+d.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>
