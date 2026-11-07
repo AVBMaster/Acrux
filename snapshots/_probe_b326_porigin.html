@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b326 perspective-origin fixed-width</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');host.style.width='300px';document.body.appendChild(host);
+const rows=[];
+const cases=['center','50% 50%','left top','right 10px bottom 20px','bogus'];
+for (const v of cases){
+const d=document.createElement('div'); d.style.width='300px'; d.style.height='50px'; host.appendChild(d);
+d.style.perspectiveOrigin=v;
+rows.push('perspective-origin='+v+' || comp='+getComputedStyle(d).perspectiveOrigin);
+d.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>

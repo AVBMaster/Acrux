@@ -2825,6 +2825,8 @@ public static class CssValueGrammar
         // (measured: 'scale: 1, 2' is dropped where 'scale: 1 2' stands).
         if (text.Contains(',')) return false;
         var words = SplitComponents(text);
+        // An empty value is no value: the reference engine drops 'scale()' and answers 'none'
+        // (measured), where this engine was giving it the identity matrix.
         if (words.Count is < 1 or > 3) return false;
         if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -2844,11 +2846,14 @@ public static class CssValueGrammar
     {
         if (text.Contains(',')) return false;
         var words = SplitComponents(text);
+        // An empty value is no value: the reference engine drops 'translate()' and answers 'none'
+        // (measured), so a call with no length is not the auto size this engine was giving it.
         if (words.Count is < 1 or > 3) return false;
         if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
             return true;
         foreach (var word in words)
         {
+            if (word.Length == 0) return false;
             if (IsMathFunctionCall(word, IsLengthOrPercentage)) continue;
             if (IsBoxLength(word) && !SaysAKeywordNotALength(word)) continue;
             return false;
@@ -4569,6 +4574,9 @@ public static class CssValueGrammar
             int open = part.IndexOf('(');
             if (open <= 0 || !part.EndsWith(")")) return false;
             if (!TransformFunctions.Contains(part[..open].ToLowerInvariant())) return false;
+            // A function with no arguments is no transform: the reference engine drops
+            // 'translate()' and 'scale()' and answers 'none' (measured, both).
+            if (part[(open + 1)..^1].Trim().Length == 0) return false;
         }
         return true;
     }
