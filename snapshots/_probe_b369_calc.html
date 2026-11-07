@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('width','calc(100px)');
+t('width','calc(100% - 20px)');
+t('width','calc(2 * 50px)');
+t('width','calc(100px + 2em)');
+t('width','calc(50% + 10px)');
+t('width','calc(min(100px, 50%) + 10px)');
+t('width','calc(max(100px, 50%) + 10px)');
+t('width','calc(clamp(100px, 50%, 200px) + 10px)');
+t('width','calc(calc(100px + 20px) * 2)');
+t('width','calc(100px / 3)');
+t('width','calc(0px)');
+t('width','calc(10px * 2 + 5px)');
+t('width','calc(1em + 2px)');
+t('width','calc(100vh - 50px)');
+t('width','calc(100vw - 50px)');
+t('width','calc(10px +)');
+t('width','calc(+10px)');
+t('width','calc(10px + )');
+t('width','calc(*10px)');
+t('width','calc(10px 20px)');
+t('width','calc(var(--x))');
+t('width','calc(1px + 2)');
+t('width','calc(100% * 2)');
+t('width','calc(1fr)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
