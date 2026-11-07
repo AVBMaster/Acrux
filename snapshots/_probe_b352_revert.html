@@ -1,0 +1,14 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// Is revert/revert-layer accepted and echoed?
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('display','revert');
+t('display','revert-layer');
+t('opacity','revert');
+t('color','revert-layer');
+t('position','revert');
+t('float','revert');
+t('z-index','revert');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

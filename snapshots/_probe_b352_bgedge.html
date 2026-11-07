@@ -1,0 +1,26 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const box=document.createElement('div');document.body.appendChild(box);box.style.background=v;out.push('background='+JSON.stringify(v)+' || sup='+CSS.supports('background',v)+' || echo='+JSON.stringify(box.style.background));box.remove();}
+t('red');
+t('url(a.png)');
+t('url(a.png) no-repeat');
+t('url(a.png) no-repeat center');
+t('url(a.png) no-repeat center / cover');
+t('url(a.png) no-repeat center / 100px 50px');
+t('url(a.png) center / cover no-repeat fixed border-box content-box');
+t('red url(a.png)');
+t('url(a.png) red');
+t('none');
+t('none none');
+t('transparent');
+t('linear-gradient(red,blue)');
+t('linear-gradient(red,blue) no-repeat center');
+t('space');
+t('space round');
+t('local');
+t('content-box');
+t('bogus');
+t('10px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
