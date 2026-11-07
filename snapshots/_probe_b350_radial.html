@@ -1,0 +1,14 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const box=document.createElement('div');document.body.appendChild(box);
+function t(v){box.style.cssText='';box.style.backgroundImage=v;out.push(v+' -> echo='+JSON.stringify(box.style.backgroundImage));}
+t('radial-gradient(ellipse at center, red, blue)');
+t('radial-gradient(circle, red, blue)');
+t('radial-gradient(ellipse, red, blue)');
+t('radial-gradient(red, blue)');
+t('radial-gradient(circle at top, red, blue)');
+t('radial-gradient(ellipse at top, red, blue)');
+box.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
