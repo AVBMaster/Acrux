@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// RTL margin/padding/border
+t('margin-inline','10px');
+t('margin-inline-start','5px');
+t('margin-inline-end','5px');
+t('padding-inline','10px');
+t('padding-inline-start','5px');
+t('padding-inline-end','5px');
+t('border-inline-start','1px solid red');
+t('border-inline-end','1px solid blue');
+t('inset-inline','10px');
+t('inset-inline-start','5px');
+t('inset-inline-end','5px');
+// text-align with RTL
+t('text-align','start');
+t('text-align','end');
+t('text-align','left');
+t('text-align','right');
+t('text-align','start end');
+t('text-align','bogus');
+// text-underline-position
+t('text-underline-position','auto');
+t('text-underline-position','from-font');
+t('text-underline-position','under');
+t('text-underline-position','left');
+t('text-underline-position','right');
+t('text-underline-position','under right');
+t('text-underline-position','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
