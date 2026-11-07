@@ -1,0 +1,43 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('grid-template-areas','none');
+t('grid-template-areas','"a a" "b b"');
+t('grid-template-areas','"a a"');
+t('grid-template-areas','"."');
+t('grid-template-areas','"a ."');
+t('grid-template-areas','bogus');
+t('grid-template-areas','"a" "b" "c"');
+t('grid-row','auto');
+t('grid-row','1 / 3');
+t('grid-row','span 2');
+t('grid-row','a / b');
+t('grid-row','span a');
+t('grid-row','bogus');
+t('grid-column','auto');
+t('grid-column','1 / 3');
+t('grid-column','span 2');
+t('grid-column','a / span 2');
+t('grid-column','bogus');
+t('grid-area','a');
+t('grid-area','1 / 2');
+t('grid-area','1 / 2 / 3 / 4');
+t('grid-area','span 2 / span 2');
+t('grid-area','auto');
+t('grid-area','bogus');
+t('grid-row-start','1');
+t('grid-row-start','span 2');
+t('grid-row-start','a');
+t('grid-row-start','bogus');
+t('grid-column-start','1');
+t('grid-column-start','span 2');
+t('grid-column-start','bogus');
+t('grid-row-end','3');
+t('grid-row-end','span 2');
+t('grid-row-end','bogus');
+t('grid-column-end','3');
+t('grid-column-end','span 2');
+t('grid-column-end','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
