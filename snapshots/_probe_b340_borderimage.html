@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><style>
+.bi{width:60px;height:40px;border:10px solid transparent;border-image-source:linear-gradient(red,blue);}
+</style><div class="bi" id=host></div><pre id=rec></pre><script>
+const out=[];
+const box=document.getElementById('host');
+function t(p,v){box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));}
+t('border-image-source','none');
+t('border-image-source','url(a.png)');
+t('border-image-source','linear-gradient(red,blue)');
+t('border-image-slice','10');
+t('border-image-slice','10 20');
+t('border-image-slice','10 fill');
+t('border-image-slice','50%');
+t('border-image-slice','bogus');
+t('border-image-width','auto');
+t('border-image-width','10px');
+t('border-image-width','10');
+t('border-image-width','50%');
+t('border-image-outset','0');
+t('border-image-outset','5px');
+t('border-image-outset','1.5');
+t('border-image-repeat','stretch');
+t('border-image-repeat','repeat');
+t('border-image-repeat','round');
+t('border-image-repeat','space');
+t('border-image-repeat','stretch repeat');
+t('border-image-repeat','bogus');
+t('border-image','none');
+t('border-image','url(a.png) 10');
+t('border-image','linear-gradient(red,blue) 10 / 10px stretch');
+t('border-image','bogus');
+box.style.setProperty('border-image-source','none');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

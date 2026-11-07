@@ -1,0 +1,12 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const box=document.createElement('div');document.body.appendChild(box);
+box.style.setProperty('border-image-repeat','stretch');
+out.push('after set: echo='+JSON.stringify(box.style.getPropertyValue('border-image-repeat'))+' n='+box.style.length+' it0='+JSON.stringify(box.style.item(0)));
+box.style.cssText='';
+box.style.setProperty('border-image-repeat','repeat');
+out.push('repeat: echo='+JSON.stringify(box.style.getPropertyValue('border-image-repeat')));
+box.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
