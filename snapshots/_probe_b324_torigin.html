@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b324 transform-origin fixed-width</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');host.style.width='300px';document.body.appendChild(host);
+const rows=[];
+const cases=[
+ ['transform-origin','center'],
+ ['transform-origin','50% 50%'],
+ ['transform-origin','left top'],
+ ['transform-origin','10px 20px'],
+ ['transform-origin','25% 75%']];
+for (const [p,v] of cases){
+const d=document.createElement('div'); d.style.width='300px'; d.style.height='50px'; host.appendChild(d);
+d.style.transformOrigin=v;
+rows.push('transform-origin='+v+' || comp='+getComputedStyle(d).transformOrigin);
+d.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>
