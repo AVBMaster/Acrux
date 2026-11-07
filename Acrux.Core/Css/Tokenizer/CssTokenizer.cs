@@ -512,7 +512,13 @@ public class CssTokenizer
                 sb.Append(Consume());
             }
         }
-        return CssParserToken.CreateBadUrl();
+        // The sheet ended before the url's ')': the address the run accumulated is still the url.
+        // CSS Syntax 3 §4.3.15 consumes an unterminated url to its EOF rather than discarding it,
+        // so an '@import url(a.css' with no ')' keeps the import (measured: the reference echoes
+        // '@import url("a.css");' where dropping the token lost the whole rule).
+        return sb.Length > 0
+            ? CssParserToken.CreateUrl(sb.ToString())
+            : CssParserToken.CreateBadUrl();
     }
 
     private void ConsumeBadUrlRemnants()

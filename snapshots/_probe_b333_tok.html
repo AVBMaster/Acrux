@@ -1,0 +1,12 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function rules(css){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);const r=st.sheet.cssRules;const res='n='+r.length+(r.length?' text='+JSON.stringify(r[0].cssText):'');st.remove();return res;}
+// is it the missing ')' on the url, or the missing ';'? test each axis
+out.push('url( ) closed, no semi  -> '+rules('@import url(a.css)'));
+out.push('url( unclosed           -> '+rules('@import url(a.css'));
+out.push('url closed + semi       -> '+rules('@import url(a.css);'));
+out.push('bare string unclosed    -> '+rules("@import 'a.css"));
+out.push('url( ) + media, no semi -> '+rules('@import url(a.css) screen'));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

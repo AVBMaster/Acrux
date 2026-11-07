@@ -1,0 +1,21 @@
+<!doctype html><html><head><style id=s0>
+@import url(a.css
+</style></head><body><pre id=rec></pre><script>
+const out=[];
+function probe(name, css){
+  const st=document.getElementById('s0');
+  st.textContent=css;
+  const r=st.sheet.cssRules;
+  out.push(name+' || n='+r.length+' || text='+JSON.stringify(r.length?r[0].cssText:'')+' || media='+JSON.stringify(r.length&&r[0].media?r[0].media.mediaText:null));
+  st.textContent='';
+}
+probe('unterminated url no-quote', '@import url(a.css');
+probe('unterminated url quoted', "@import url('a.css'");
+probe('unterminated bare @import', '@import');
+probe('unterminated @import space', '@import ');
+probe('terminated url', '@import url(a.css);');
+probe('unterminated media prelude', '@media screen {');
+probe('unterminated rule block', 'div { color: red');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
