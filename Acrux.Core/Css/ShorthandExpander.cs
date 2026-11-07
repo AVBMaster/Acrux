@@ -1556,7 +1556,15 @@ public static class ShorthandExpander
     /// dropped (measured).</summary>
     private static bool IsBackgroundSizeTerm(string token) =>
         IsKeyword(token, "auto") || IsKeyword(token, "cover") || IsKeyword(token, "contain")
-        || IsBackgroundPositionLength(token);
+        || IsBackgroundSizeLength(token);
+
+    /// <summary>A <c>&lt;length-percentage&gt;</c> of a <c>&lt;bg-size&gt;</c>: unlike the position
+    /// length it shares its grammar with, a negative one is not a size at all, so 'background-size:
+    /// -10px' is dropped and echoes the earlier value (measured, both engines).</summary>
+    private static bool IsBackgroundSizeLength(string token) =>
+        IsBackgroundPositionLength(token) &&
+        (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out var sizeNumber, out _)
+            || sizeNumber >= 0);
 
     /// <summary>&lt;bg-size&gt; is one or two &lt;length-percentage&gt;/auto terms, or the single
     /// 'cover'/'contain' that sizes the whole image — 'url(a) 10px / 30px 40px 50px' and
@@ -1574,7 +1582,7 @@ public static class ShorthandExpander
     /// box and therefore have no second term, so a pair is only auto and lengths (measured:
     /// 'auto cover' and 'contain auto' are both parse errors).</summary>
     private static bool IsBackgroundSizeAxisTerm(string token) =>
-        IsKeyword(token, "auto") || IsBackgroundPositionLength(token);
+        IsKeyword(token, "auto") || IsBackgroundSizeLength(token);
 
     /// <summary>The parts a 'font' shorthand carries. Everything is in the spelling the engine
     /// prints: keywords lower-cased, the line-height left out when it says nothing.</summary>

@@ -1823,7 +1823,14 @@ public static class CssValueText
             && !property.Equals("background-position", StringComparison.OrdinalIgnoreCase)
             && !property.Equals("perspective-origin", StringComparison.OrdinalIgnoreCase)
             && !property.Equals("transform-origin", StringComparison.OrdinalIgnoreCase)) return text;
-        if (text.Contains(',')) return text;
+        // Each layer is normalized on its own: the missing axis of '10px, 20px' is filled per
+        // layer, so it reads '10px center, 20px center' (measured).
+        if (text.Contains(','))
+        {
+            var layers = text.Split(',').Select(layer => layer.Trim()).ToArray();
+            var pairs = layers.Select(layer => ShorthandExpander.PositionPairText(layer) ?? layer).ToList();
+            return string.Join(", ", pairs);
+        }
         return ShorthandExpander.PositionPairText(text.Trim()) ?? text;
     }
 
