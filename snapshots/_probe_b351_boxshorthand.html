@@ -1,0 +1,58 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// padding
+t('padding','0');
+t('padding','10px');
+t('padding','10px 20px');
+t('padding','10px 20px 30px');
+t('padding','10px 20px 30px 40px');
+t('padding','-10px');
+t('padding','10%');
+t('padding','auto');
+t('padding','bogus');
+t('padding-top','10px');
+t('padding-top','10%');
+t('padding-top','auto');
+t('padding-left','-10px');
+t('padding-left','bogus');
+// margin
+t('margin','0');
+t('margin','auto');
+t('margin','10px');
+t('margin','10px auto');
+t('margin','10px 20px 30px 40px');
+t('margin','-10px');
+t('margin','10%');
+t('margin','bogus');
+t('margin-top','auto');
+t('margin-top','-10px');
+t('margin-top','bogus');
+// border
+t('border','none');
+t('border','1px solid red');
+t('border','solid');
+t('border','2px');
+t('border','red');
+t('border','bogus');
+t('border-width','1px');
+t('border-width','1px 2px');
+t('border-width','1px 2px 3px 4px');
+t('border-width','thin');
+t('border-width','bogus');
+t('border-style','solid');
+t('border-style','none');
+t('border-style','1px');
+t('border-style','bogus');
+t('border-color','red');
+t('border-color','red blue');
+t('border-color','bogus');
+t('border','1px solid red');
+t('border-top','1px solid red');
+t('border-top-width','1px');
+t('border-top-style','solid');
+t('border-top-color','red');
+t('border-top','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

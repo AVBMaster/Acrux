@@ -1316,11 +1316,14 @@ public static class CssValueGrammar
             => static text => IsScrollInset(text, 2, padding: true),
         CssPropertyId.ScrollMargin => static text => IsScrollInset(text, 4, padding: false),
         CssPropertyId.ScrollPadding => static text => IsScrollInset(text, 4, padding: true),
-        CssPropertyId.Margin or CssPropertyId.Padding
-            or CssPropertyId.Inset
+        CssPropertyId.Margin or CssPropertyId.Inset
             // The four-edge shorthands take one to four values and no more: a fifth is no
             // declaration at all (measured on 'margin:1px 1px 1px 1px 1px').
             => static text => IsLengthListUpTo(text, 4, "auto"),
+        // A padding takes one to four non-negative lengths and never 'auto': 'padding: auto' and
+        // 'padding: -10px' are no declaration (measured, b351 — the same four shapes written on
+        // 'margin' all stand, because 'auto' is a margin's word and a negative a margin's range).
+        CssPropertyId.Padding => static text => IsNonNegativeLengthListUpTo(text, 4),
         CssPropertyId.MarginBlock or CssPropertyId.MarginInline
             or CssPropertyId.InsetBlock or CssPropertyId.InsetInline
             => static text => IsLengthListUpTo(text, 2, "auto"),
@@ -5810,6 +5813,13 @@ public static class CssValueGrammar
     /// declaration (measured on 'margin').</summary>
     private static bool IsLengthListUpTo(string text, int max, params string[] keywords) =>
         SplitComponents(text).Count <= max && IsLengthList(text, keywords);
+
+    /// <summary>A padding shorthand: one to four values, each a non-negative length — 'auto' is
+    /// the word a margin takes and a padding has no such thing, and a negative is outside a
+    /// padding's range (measured, b351: 'padding: auto' and 'padding: -10px' are both dropped
+    /// where the same four shapes written on 'margin' all stand).</summary>
+    private static bool IsNonNegativeLengthListUpTo(string text, int max) =>
+        SplitComponents(text).Count <= max && IsLengthList(text) && !AnyNegativeTerm(text);
 
     private static bool IsLengthList(string text, params string[] keywords)
     {
