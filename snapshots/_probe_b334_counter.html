@@ -1,0 +1,51 @@
+<!doctype html><html><body><pre id=rec></pre><style>
+.lst{counter-reset: item;}
+.lst > li{counter-increment: item;}
+.lst > li::before{content: counter(item) ". ";}
+.out{counter-reset: ch;}
+.out::before{content: counters(ch, "-");}
+.out2{counter-reset: ch2 5;}
+.out2::before{content: counter(ch2);}
+</style>
+<div class="lst"><li>a</li><li>b</li><li>c</li></div>
+<div class="out"></div>
+<div class="out2"></div>
+<script>
+const out=[];
+const el=document.createElement('div');
+document.body.appendChild(el);
+function t(p,v){el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));}
+t('counter-reset','item');
+t('counter-reset','item 5');
+t('counter-reset','none');
+t('counter-reset','item item2');
+t('counter-reset','item -1');
+t('counter-reset','item 1.5');
+t('counter-reset','item, item2');
+t('counter-reset','item 3 item2 4');
+t('counter-increment','item');
+t('counter-increment','item 2');
+t('counter-increment','none');
+t('counter-increment','item -1');
+t('counter-increment','item 1.5');
+t('counter-set','item 3');
+t('counter-set','none');
+t('counter-set','item -1');
+t('content','counter(item)');
+t('content','counters(ch, "-")');
+t('content','"(" counter(item) ")"');
+t('content','none');
+t('content','normal');
+t('content','open-quote');
+t('content','"x" counter(item)');
+t('content','counter(item, upper-roman)');
+t('content','counter(item, decimal-leading-zero)');
+t('content','counter(item, bogus)');
+t('content','attr(data-x)');
+t('content','attr(data-x, fallback)');
+t('content','url(a.png)');
+t('content','open-quote close-quote');
+el.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
