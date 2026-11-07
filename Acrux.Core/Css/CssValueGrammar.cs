@@ -2236,12 +2236,17 @@ public static class CssValueGrammar
         // name falls, and an unknown name stands because the property may learn it later).
         CssPropertyId.TransitionProperty => static text =>
         {
-            var items = SplitTopLevel(text);
-            if (items.Count == 0) return false;
-            for (int i = 0; i < items.Count; i++)
+            // A comma-separated list of property names, each its own word. 'none' stands alone; any
+            // other identifier names a property and may share a list with its fellows, so 'opacity,
+            // all' is a two-layer list (measured, both engines).
+            var layers = SplitTopLevel(text, ',');
+            if (layers.Count == 0) return false;
+            for (int i = 0; i < layers.Count; i++)
             {
-                var word = items[i].Trim();
-                if (IsOneOf(word, "all", "none")) return items.Count == 1;
+                var words = SplitComponents(layers[i]);
+                if (words.Count != 1) return false;
+                var word = words[0].Trim();
+                if (IsOneOf(word, "none")) return layers.Count == 1;
                 // A feature is named, and a digit names nothing however identifier-shaped its
                 // characters are (measured: 'transition-property: 1' and 'will-change: 1' fall).
                 if (!IsIdentifierLike(word) || char.IsAsciiDigit(word[0])) return false;
