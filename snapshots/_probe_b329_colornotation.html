@@ -1,0 +1,41 @@
+<!doctype html><html><body><div id="host"></div><script>
+function build(){
+const host=document.getElementById('host');
+const rows=[];
+const cases=[
+ ["color","color-mix(in srgb, red, blue)"],
+ ["color","color-mix(in srgb, red 25%, blue)"],
+ ["color","color-mix(in oklab, red, blue)"],
+ ["color","color-mix(in lab, white, black)"],
+ ["color","color-mix(in oklch, red, blue)"],
+ ["color","color-mix(in hsl, red, blue)"],
+ ["color","color-mix(in hwb, red, blue)"],
+ ["color","color-mix(in srgb-linear, red, blue)"],
+ ["color","color-mix(in xyz, red, blue)"],
+ ["color","color(display-p3 1 0 0)"],
+ ["color","color(srgb 1 0.5 0)"],
+ ["color","lab(50% 40 59.5)"],
+ ["color","oklab(0.5 0.1 0.1)"],
+ ["color","lch(50% 70 40)"],
+ ["color","oklch(0.5 0.1 40)"],
+ ["background-color","color-mix(in srgb, red, blue)"],
+ ["border-color","color-mix(in srgb, red 50%, blue)"],
+ ["outline-color","color-mix(in oklab, red, blue)"],
+ ["text-decoration-color","color-mix(in srgb, red, blue)"],
+ ["column-rule-color","color-mix(in srgb, red, blue)"],
+];
+for(let i=0;i<cases.length;i++){
+ const el=document.createElement('div');
+ host.appendChild(el);
+ el.style.setProperty(cases[i][0], cases[i][1]);
+ rows.push(i+'|'+cases[i][0]+'|'+cases[i][1]
+   +'|echo='+el.style.getPropertyValue(cases[i][0])
+   +'|comp='+getComputedStyle(el).getPropertyValue(cases[i][0]));
+ el.remove();
+}
+document.body.insertAdjacentHTML('beforeend','<pre id="record" style="font:10px monospace"></pre>');
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>
