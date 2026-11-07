@@ -1,0 +1,29 @@
+<!doctype html><html><head><style>
+.box{width:200px;font:16px/1 serif;}
+</style></head><body><pre id=rec></pre>
+<div id=host></div>
+<script>
+const text="the quick brown fox jumps over the lazy dog again and again";
+const modes=["normal","wrap","balance","stable","pretty"];
+const out=[];
+for(const m of modes){
+  const d=document.createElement('div');
+  d.className='box';
+  d.style.textWrap=m;
+  d.textContent=text;
+  document.getElementById('host').appendChild(d);
+  const r=d.getBoundingClientRect();
+  // count rendered lines via the client rects of a range over the text
+  const range=document.createRange();
+  range.selectNodeContents(d);
+  const rects=range.getClientRects();
+  let lines=0,lastTop=null;
+  for(const rc of rects){ if(lastTop===null||rc.top>lastTop+1){lines++;lastTop=rc.top;} }
+  out.push(m+' || sup='+CSS.supports('text-wrap',m)+' || echo='+JSON.stringify(d.style.textWrap)
+    +' || comp='+JSON.stringify(getComputedStyle(d).textWrap)
+    +' || h='+Math.round(r.height)+' || w='+Math.round(r.width)+' || lines='+lines);
+  d.remove();
+}
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

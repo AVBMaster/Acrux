@@ -1,0 +1,23 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));el.remove();}
+// #302 multicolumn column-width shaping shrink-to-fit
+t('column-width','200px');
+t('columns','200px');
+// #305 width/height from used value in fixed-point grid (calc with odd fractions)
+t('width','calc(100% / 3)');
+t('height','calc(100% / 7)');
+t('width','calc(1px / 3)');
+// #309 declaration keeps digits (a declaration, not a length)
+t('transition-duration','1.50s');
+t('animation-delay','0.500s');
+// #310 box family echo rounding of a seven-decimal tie
+t('width','0.00000015px');
+t('width','2.50000005px');
+// flex-shrink / flex-basis edges
+t('flex-shrink','0');
+t('flex-basis','0%');
+t('flex','0 1 auto');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

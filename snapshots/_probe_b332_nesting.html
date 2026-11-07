@@ -1,0 +1,16 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function nest(css){const s=new CSSStyleSheet();try{s.replaceSync(css);}catch(e){return 'THROW '+e.name;}const r=s.cssRules;return 'n='+r.length+' | '+JSON.stringify(Array.from(r).map(x=>x.cssText));}
+out.push('nested class            -> '+nest('.a{color:red;.b{color:blue}}'));
+out.push('nested & selector       -> '+nest('.a{color:red;&:hover{color:blue}}'));
+out.push('nested element          -> '+nest('.a{color:red;span{color:blue}}'));
+out.push('nested & alone          -> '+nest('.a{&:hover{color:blue}}'));
+out.push('nested & suffix         -> '+nest('.a{&-x{color:blue}}'));
+out.push('nested @media           -> '+nest('.a{color:red;@media screen{color:blue}}'));
+out.push('nested deep             -> '+nest('.a{.b{.c{color:red}}}'));
+out.push('nested pseudo           -> '+nest('.a{&::before{content:"x"}}'));
+out.push('@nest explicit          -> '+nest('.a{color:red;@nest &:hover{color:blue}}'));
+out.push('nested multi &          -> '+nest('.a{&:hover &{color:blue}}'));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
