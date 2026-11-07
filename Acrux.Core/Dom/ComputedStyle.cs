@@ -383,6 +383,24 @@ public class PixelLength : Length
     public override string ToString() => $"{Value}px";
 }
 
+/// <summary>A 'calc-size()' whose basis is 'auto' or 'stretch', so its size is only known once
+/// layout has run. The call is carried whole rather than resolved: its constant terms are priced in
+/// the element's own font at apply time and the word 'size' stays a term, and the property's own
+/// printer spells it back (measured: 'min-height: calc-size(auto, size + 1em)' computes
+/// 'calc-size(auto, 16px + size)'). The axes whose size an empty box takes from its content answer
+/// a number instead (measured: the same call on 'width' computes '616px' for a 600px box).</summary>
+public class CalcSizeLength : AutoLength
+{
+    public string Basis { get; }
+    public string Expression { get; }
+    public CalcSizeLength(string basis, string expression)
+    {
+        Basis = basis;
+        Expression = expression;
+    }
+    public override string ToString() => $"calc-size({Basis}, {Expression})";
+}
+
 public class EmLength : Length
 {
     public float Value { get; }

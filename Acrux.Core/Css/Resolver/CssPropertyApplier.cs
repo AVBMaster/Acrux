@@ -114,8 +114,8 @@ public static class CssPropertyApplier
     /// prefixed spelling constrain nothing, so they lay out as 'auto' does — but they are three
     /// different words on the computed surface, and which of them a property takes is decided by
     /// that property's grammar, not here.</summary>
-    private static Length ParseSizingValue(string value) =>
-        SizingKeywordLength.For(value) ?? ParseCalcSizeValue(value) ?? Length.Parse(value);
+    private static Length ParseSizingValue(ComputedStyle style, string value) =>
+        SizingKeywordLength.For(value) ?? ParseCalcSizeValue(style, value) ?? Length.Parse(value);
 
     public static void ApplyScrollbarColors(ComputedStyle style, string value)
     {
@@ -143,7 +143,7 @@ public static class CssPropertyApplier
     /// width a box with no 'width' was given), and every other call leaves the box with that same
     /// size rather than with nothing (measured: 'calc-size(auto, size + 20px)' is 20px where the
     /// arithmetic is priced — the arithmetic around 'size' is the gap #316 records).</summary>
-    private static Length? ParseCalcSizeValue(string value)
+    private static Length? ParseCalcSizeValue(ComputedStyle style, string value)
     {
         if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) < 0) return null;
         if (!CssValueGrammar.TrySplitCalcSize(value.Trim(), out var head, out var expression))
@@ -187,7 +187,34 @@ public static class CssPropertyApplier
                 ? expression : "calc(" + expression + ")";
             return Length.Parse(whole) ?? AutoLength.Instance;
         }
-        return AutoLength.Instance;
+        // An 'auto' or 'stretch' basis leaves the word 'size' standing, so the call is carried whole
+        // with its constant terms priced in this element's own font and 'size' left as a term
+        // (measured: 'min-height: calc-size(auto, size + 1em)' computes 'calc-size(auto, 16px +
+        // size)', and 'min-width' / a 'fit-content'/'stretch' basis the same way). Only the
+        // expression is priced — the whole call is rebuilt from the basis beside it, so the printed
+        // form is 'calc-size(auto, 16px + size)' and not a call nested inside itself.
+        return new CalcSizeLength(head, PriceCalcSizeConstants(expression, style));
+    }
+
+    /// <summary>Price the constant terms of a 'calc-size()' expression in this element's own font
+    /// (CSS Values 4 §11.1), leaving the word 'size' and any percentage for the computed surface:
+    /// 'size + 1em' becomes '16px + size' and '1em + 4px + size' becomes '16px + 4px + size'
+    /// (measured, both). What comes back is an expression the printer reads back unchanged.</summary>
+    private static string PriceCalcSizeConstants(string expression, ComputedStyle style)
+    {
+        float root = style.RootFontSize > 0 ? style.RootFontSize : 16f;
+        var tokens = SplitTopLevelWords(expression);
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+            if (!token.Contains("em", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Length.Parse(token) is not { } fontRelative) continue;
+            var px = fontRelative.ToPixels(style.FontSize > 0 ? style.FontSize : 16f, root,
+                style.ComputedViewportWidth, style.ComputedViewportHeight);
+            if (float.IsNaN(px)) continue;
+            tokens[i] = Acrux.Core.Dom.Animations.CssValueTokenizer.Num(px) + "px";
+        }
+        return string.Join(" ", tokens);
     }
 
     public static void Apply(ComputedStyle style, string name, string value)
@@ -213,20 +240,20 @@ public static class CssPropertyApplier
     {
         switch (name)
         {
-            case "width": style.Width = ParseSizingValue(value); break;
-            case "height": style.Height = ParseSizingValue(value); break;
-            case "min-width": style.MinWidth = ParseSizingValue(value); break;
-            case "min-height": style.MinHeight = ParseSizingValue(value); break;
-            case "max-width": style.MaxWidth = ParseSizingValue(value); break;
-            case "max-height": style.MaxHeight = ParseSizingValue(value); break;
+            case "width": style.Width = ParseSizingValue(style, value); break;
+            case "height": style.Height = ParseSizingValue(style, value); break;
+            case "min-width": style.MinWidth = ParseSizingValue(style, value); break;
+            case "min-height": style.MinHeight = ParseSizingValue(style, value); break;
+            case "max-width": style.MaxWidth = ParseSizingValue(style, value); break;
+            case "max-height": style.MaxHeight = ParseSizingValue(style, value); break;
             // Logical sizing properties map to the physical ones for the
             // horizontal writing modes the engine supports (CSS Logical §1.2).
-            case "inline-size": style.Width = ParseSizingValue(value); break;
-            case "block-size": style.Height = ParseSizingValue(value); break;
-            case "min-inline-size": style.MinWidth = ParseSizingValue(value); break;
-            case "min-block-size": style.MinHeight = ParseSizingValue(value); break;
-            case "max-inline-size": style.MaxWidth = ParseSizingValue(value); break;
-            case "max-block-size": style.MaxHeight = ParseSizingValue(value); break;
+            case "inline-size": style.Width = ParseSizingValue(style, value); break;
+            case "block-size": style.Height = ParseSizingValue(style, value); break;
+            case "min-inline-size": style.MinWidth = ParseSizingValue(style, value); break;
+            case "min-block-size": style.MinHeight = ParseSizingValue(style, value); break;
+            case "max-inline-size": style.MaxWidth = ParseSizingValue(style, value); break;
+            case "max-block-size": style.MaxHeight = ParseSizingValue(style, value); break;
             case "display": ApplyDisplay(style, value); break;
             case "position": style.Position = ParsePosition(value); break;
             case "float": style.Float = ParseFloat(value); break;

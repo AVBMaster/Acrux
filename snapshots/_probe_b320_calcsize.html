@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>b320 calc-size block-axis minimum printer</title></head>
+<body>
+<pre id="record" style="font:10px/1.35 monospace;white-space:pre-wrap"></pre>
+<script>
+const host=document.createElement('div');host.style.width='600px';document.body.appendChild(host);
+const rows=[];
+const cases=[
+ ['min-height','calc-size(auto, size)'],
+ ['min-height','calc-size(auto, size + 1em)'],
+ ['min-height','calc-size(auto, 1em + size)'],
+ ['min-height','calc-size(auto, size + 2px)'],
+ ['min-height','calc-size(auto, size * 2)'],
+ ['min-height','calc-size(auto, size + 1em + 4px)'],
+ ['min-height','calc-size(auto, 1em)'],
+ ['min-height','calc-size(auto, size - 1em)'],
+ ['min-width','calc-size(auto, size + 1em)'],
+ ['min-height','calc-size(100px, size + 1em)'],
+ ['min-height','calc-size(fit-content, size + 1em)'],
+ ['min-height','calc-size(stretch, size + 1em)'],
+ ['min-height','calc-size(auto, size + 50%)'],
+ ['min-height','calc-size(auto, 50%)']];
+for (const [p,v] of cases){
+const d=document.createElement('div'); d.style.width='600px'; host.appendChild(d);
+d.style.setProperty(p,v);
+const spec=d.style.getPropertyValue(p);
+const comp=getComputedStyle(d).getPropertyValue(p);
+rows.push(p+'|'+v+'|spec='+spec+'|comp='+comp);
+d.remove();}
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+</script></body></html>
