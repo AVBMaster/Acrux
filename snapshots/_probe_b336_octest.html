@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// fresh element per row, exactly as the sweep does
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));el.remove();}
+// reproduce sweep order: outline shorthand runs before outline-color longhand
+t('outline','1px solid red');
+t('outline-color','red');
+t('outline-color','currentcolor');
+t('outline-color','invert');
+t('outline-color','bogus');
+// also test on a fresh element that only sets outline-color
+const el=document.createElement('div');document.body.appendChild(el);
+el.style.setProperty('outline-color','red');
+out.push('ONLY outline-color=red: echo='+JSON.stringify(el.style.getPropertyValue('outline-color'))+' comp='+JSON.stringify(getComputedStyle(el).getPropertyValue('outline-color')));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

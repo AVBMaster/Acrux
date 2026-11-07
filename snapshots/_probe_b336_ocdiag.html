@@ -1,0 +1,13 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const el=document.createElement('div');document.body.appendChild(el);
+const o=[];
+el.style.setProperty('outline-color','red'); o.push('set outline-color=red: echo='+JSON.stringify(el.style.getPropertyValue('outline-color'))+' n='+el.style.length+' it0='+JSON.stringify(el.style.item(0)));
+el.style.cssText='outline-color: red'; o.push('cssText outline-color: red: echo='+JSON.stringify(el.style.getPropertyValue('outline-color')));
+el.style.cssText='outline-color: currentcolor'; o.push('cssText currentcolor: echo='+JSON.stringify(el.style.getPropertyValue('outline-color')));
+el.style.cssText='outline-color: rgb(1,2,3)'; o.push('cssText rgb: echo='+JSON.stringify(el.style.getPropertyValue('outline-color')));
+el.style.cssText='outline: 1px solid red'; o.push('outline shorthand: echo oc='+JSON.stringify(el.style.getPropertyValue('outline-color')));
+el.style.cssText='outline-width: 2px'; o.push('outline-width: echo='+JSON.stringify(el.style.getPropertyValue('outline-width')));
+el.style.cssText='outline-style: solid'; o.push('outline-style: echo='+JSON.stringify(el.style.getPropertyValue('outline-style')));
+document.getElementById('rec').textContent=o.join('\n');
+console.log(o.join('\n'));
+</script></body></html>

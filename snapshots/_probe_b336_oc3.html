@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));el.remove();}
+// outline shorthand family in sweep order first (each own element)
+t('outline','1px solid red'); t('outline','none'); t('outline','thin dotted');
+t('outline-width','2px'); t('outline-width','thin'); t('outline-width','medium'); t('outline-width','thick');
+t('outline-style','solid'); t('outline-style','none'); t('outline-style','auto');
+// now the outline-color rows exactly as the sweep
+t('outline-color','red');
+t('outline-color','currentcolor');
+t('outline-color','invert');
+t('outline-color','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

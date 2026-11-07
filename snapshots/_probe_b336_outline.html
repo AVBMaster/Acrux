@@ -1,0 +1,48 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const el=document.createElement('div');
+document.body.appendChild(el);
+function t(p,v){el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));}
+// outline family
+t('outline','1px solid red');
+t('outline','none');
+t('outline','thin dotted');
+t('outline-width','2px');
+t('outline-width','thin');
+t('outline-width','medium');
+t('outline-width','thick');
+t('outline-width','auto');
+t('outline-width','bogus');
+t('outline-style','solid');
+t('outline-style','dashed');
+t('outline-style','dotted');
+t('outline-style','double');
+t('outline-style','groove');
+t('outline-style','ridge');
+t('outline-style','inset');
+t('outline-style','outset');
+t('outline-style','none');
+t('outline-style','hidden');
+t('outline-style','auto');
+t('outline-style','bogus');
+t('outline-color','red');
+t('outline-color','currentcolor');
+t('outline-color','invert');
+t('outline-color','bogus');
+t('outline-offset','3px');
+t('outline-offset','-2px');
+t('outline-offset','bogus');
+// box-shadow / text-shadow
+t('box-shadow','none');
+t('box-shadow','1px 1px 2px black');
+t('box-shadow','inset 1px 1px red');
+t('box-shadow','1px 1px 2px 3px black');
+t('box-shadow','bogus');
+t('text-shadow','none');
+t('text-shadow','1px 1px black');
+t('text-shadow','1px 1px 2px rgba(0,0,0,0.5)');
+t('text-shadow','bogus');
+el.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

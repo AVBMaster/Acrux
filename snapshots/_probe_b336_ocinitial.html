@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));el.remove();}
+// colour longhands that are refused: does the reference echo the initial?
+t('outline-color','invert');
+t('outline-color','bogus');
+t('border-top-color','bogus');
+t('background-color','bogus');
+t('color','bogus');
+t('caret-color','bogus');
+t('column-rule-color','bogus');
+t('text-decoration-color','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

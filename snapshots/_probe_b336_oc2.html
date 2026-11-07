@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id=rec></pre><style>.h{outline:2px solid red;}</style>
+<div class="h" id="host"></div>
+<script>
+const out=[];
+// Case 1: fresh child of a red-outline host
+const host=document.getElementById('host');
+const a=document.createElement('div'); host.appendChild(a);
+a.style.setProperty('outline-color','currentcolor');
+out.push('child of red-outline host: echo='+JSON.stringify(a.style.getPropertyValue('outline-color'))+' comp='+JSON.stringify(getComputedStyle(a).getPropertyValue('outline-color')));
+const a2=document.createElement('div'); host.appendChild(a2);
+a2.style.setProperty('outline-color','red');
+out.push('child set red: echo='+JSON.stringify(a2.style.getPropertyValue('outline-color')));
+const a3=document.createElement('div'); host.appendChild(a3);
+a3.style.setProperty('outline-color','invert');
+out.push('child invert: echo='+JSON.stringify(a3.style.getPropertyValue('outline-color'))+' sup='+CSS.supports('outline-color','invert'));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
