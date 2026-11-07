@@ -4976,7 +4976,10 @@ public static class CssValueGrammar
             var words = SplitComponents(part);
             if (words.Count == 1)
             {
-                if (IsIntegerWord(words[0]) || (IsIdentifierLike(words[0])
+                // A line numbered zero is no line at all (CSS Grid 1 §8.2, measured: both engines
+                // drop 'grid-row: 0'), so only a non-zero integer or a name stands alone.
+                if (IsGridIndexWord(words[0]) || (IsIdentifierLike(words[0])
+                    && !IsIntegerWord(words[0])
                     && !words[0].Equals("span", StringComparison.OrdinalIgnoreCase))) continue;
                 return false;
             }
