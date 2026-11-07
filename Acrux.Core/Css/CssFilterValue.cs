@@ -112,8 +112,19 @@ public static class CssFilterValue
         var parts = new List<string>(items.Count);
         foreach (var item in items)
         {
-            if (!CssValueTokenizer.TryReadFunction(item, out var rawName, out var argsText)
-                || !rawName.Trim().Equals("drop-shadow", StringComparison.OrdinalIgnoreCase)
+            if (!CssValueTokenizer.TryReadFunction(item, out var rawName, out var argsText))
+            { parts.Add(item); continue; }
+            var name = rawName.Trim().ToLowerInvariant();
+            // A fraction function whose argument is a bare number above one is clamped to one on the
+            // specified surface too, the same answer the computed value gives (measured: 'filter:
+            // opacity(2)' reads back 'opacity(1)'). A percentage keeps the '%' the page wrote — the
+            // computed surface normalises it, but the echo does not (measured: 'opacity(50%)').
+            if (FractionFunctions.Contains(name) && !HasTopLevelComma(argsText))
+            {
+                var clamped = ClampedSpecifiedAmount(name, argsText);
+                if (clamped != null) { parts.Add(clamped); continue; }
+            }
+            if (!rawName.Trim().Equals("drop-shadow", StringComparison.OrdinalIgnoreCase)
                 || HasTopLevelComma(argsText))
             { parts.Add(item); continue; }
             var args = SplitArgumentTokens(argsText);
@@ -243,6 +254,24 @@ public static class CssFilterValue
         if (char.ToLowerInvariant(unit[0]) != '%') return null;
         number /= 100;
         return number < 0 ? null : number;
+    }
+
+    /// <summary>A fraction-function argument clamped at one and printed as the page wrote it:
+    /// a bare number above one reads '1' (measured: 'filter: opacity(2)' reads 'opacity(1)'),
+    /// while a percentage keeps the '%' the page wrote because the echo does not normalise it
+    /// (measured: 'filter: opacity(50%)' reads 'opacity(50%)', not 'opacity(0.5)'). Null when
+    /// the argument is not one of those two spellings, which leaves the item as written.</summary>
+    private static string? ClampedSpecifiedAmount(string name, string argsText)
+    {
+        var args = SplitArgumentTokens(argsText);
+        if (args.Count > 1) return null;
+        var token = args.Count == 0 ? null : args[0];
+        if (string.IsNullOrEmpty(token)) return $"{name}(1)";
+        if (!CssValueTokenizer.TrySplitUnit(token.Trim(), out var number, out var unit)) return null;
+        if (unit.Length == 0) return number < 0 ? null : $"{name}({Num(Math.Min(number, 1))})";
+        if (char.ToLowerInvariant(unit[0]) == '%' && number >= 0)
+            return $"{name}({CssValueTokenizer.Num(number)}%)";
+        return null;
     }
 
     /// <summary>A <c>&lt;length&gt;</c> resolved to pixels, or <c>null</c> when the token is

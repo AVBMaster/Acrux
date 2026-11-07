@@ -2178,10 +2178,14 @@ public static class CssFloatKeywords
     {
         switch (value.Trim().ToLowerInvariant())
         {
+            case "none": result = FloatType.None; return true;
             case "left": result = FloatType.Left; return true;
             case "right": result = FloatType.Right; return true;
             case "inline-start": result = FloatType.InlineStart; return true;
             case "inline-end": result = FloatType.InlineEnd; return true;
+            // 'none' is 'float''s own initial and a declaration the reference engine keeps
+            // (measured: 'float: none' reads back 'none' and computes 'none', where the engine
+            // used to drop it and answer the empty string).
             default: result = FloatType.None; return false;
         }
     }
