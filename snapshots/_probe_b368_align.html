@@ -1,0 +1,48 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// align-self / justify-self
+t('align-self','auto');
+t('align-self','stretch');
+t('align-self','flex-start');
+t('align-self','flex-end');
+t('align-self','center');
+t('align-self','baseline');
+t('align-self','bogus');
+t('justify-self','auto');
+t('justify-self','stretch');
+t('justify-self','flex-start');
+t('justify-self','center');
+t('justify-self','baseline');
+t('justify-self','bogus');
+// place-self shorthand
+t('place-self','auto');
+t('place-self','center');
+t('place-self','center center');
+t('place-self','stretch start');
+t('place-self','bogus');
+// align-content
+t('align-content','normal');
+t('align-content','stretch');
+t('align-content','flex-start');
+t('align-content','flex-end');
+t('align-content','center');
+t('align-content','space-between');
+t('align-content','space-around');
+t('align-content','space-evenly');
+t('align-content','bogus');
+// justify-items
+t('justify-items','auto');
+t('justify-items','stretch');
+t('justify-items','center');
+t('justify-items','baseline');
+t('justify-items','bogus');
+// place-content
+t('place-content','normal');
+t('place-content','center');
+t('place-content','center center');
+t('place-content','space-between center');
+t('place-content','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
