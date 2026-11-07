@@ -1,0 +1,108 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe145 — the token list, the CSS helpers, the dataset and the adjacent HTML</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. DOMTokenList ───────────────────────────────────────────────────────
+    function name(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return e.name; }
+    }
+
+    eq('A1 add, contains, remove and the value they leave', safe(function () {
+        var box = host('<p class="one"></p>');
+        var list = box.firstChild.classList;
+        list.add('two');
+        var added = [list.contains('one'), list.contains('two'), list.contains('three'), list.value];
+        list.remove('one');
+        var removed = [list.contains('one'), list.value];
+        return [added.join(','), removed.join(',')].join('|');
+    }), 'ok:true,true,false,one two|false,two');
+
+    eq('A2 toggle answers the state it leaves the token in', safe(function () {
+        var box = host('<p class="a"></p>');
+        var list = box.firstChild.classList;
+        var first = list.toggle('b');
+        var second = list.toggle('b');
+        return [first, second, String(list.contains('b'))].join(',');
+    }), 'ok:true,false,false');
+
+    eq('A3 toggle with force overrides the state', safe(function () {
+        var box = host('<p class="a"></p>');
+        var list = box.firstChild.classList;
+        return [list.toggle('b', true), list.toggle('b', true), list.toggle('b', false)].join(',');
+    }), 'ok:true,true,false');
+
+    eq('A4 replace returns whether it replaced', safe(function () {
+        var box = host('<p class="a b"></p>');
+        var list = box.firstChild.classList;
+        var replaced = list.replace('a', 'c');
+        var notFound = list.replace('z', 'd');
+        return [replaced, notFound, list.value].join(',');
+    }), 'ok:true,false,b c');
+
+    eq('A5 the list iterates its tokens', safe(function () {
+        var box = host('<p class="a b c"></p>');
+        var list = box.firstChild.classList;
+        var items = [];
+        for (var i = 0; i < list.length; i++) items.push(list.item(i));
+        return [list.length, items.join(',')].join(',');
+    }), 'ok:3,a,b,c');
+
+    // ── B. CSS.escape and CSS.supports ───────────────────────────────────────
+    eq('B1 CSS.escape escapes the characters that need escaping', safe(function () {
+        return [CSS.escape('a b'), CSS.escape('a>b'), CSS.escape('1a'), CSS.escape('-a')].join(',');
+    }), 'ok:a\\ b,a\\>b,\\31 a,-a');
+
+    eq('B2 CSS.supports answers the property-value pair', safe(function () {
+        return [String(CSS.supports('display', 'flex')), String(CSS.supports('color', 'red')),
+            String(CSS.supports('display', 'not-a-value'))].join(',');
+    }), 'ok:true,true,false');
+
+    eq('B3 CSS.supports answers a condition string', safe(function () {
+        return [String(CSS.supports('(display: flex)')), String(CSS.supports('(display: not-a-value)'))].join(',');
+    }), 'ok:true,false');
+
+    // ── C. Element.dataset ────────────────────────────────────────────────────
+    eq('C1 dataset maps the data-* attributes', safe(function () {
+        var box = host('<p data-user-name="value"></p>');
+        var ds = box.firstChild.dataset;
+        return [ds.userName, String('userName' in ds), String(ds.nonExistent)].join(',');
+    }), 'ok:value,true,undefined');
+
+    eq('C2 writing dataset writes the attribute', safe(function () {
+        var box = host('<p></p>');
+        var ds = box.firstChild.dataset;
+        ds.someKey = 'value';
+        return [box.firstChild.getAttribute('data-some-key'), ds.someKey].join(',');
+    }), 'ok:value,value');
+
+    // ── D. insertAdjacentHTML ─────────────────────────────────────────────────
+    eq('D1 insertAdjacentHTML puts the markup at each position', safe(function () {
+        var box = host('<p><b>mid</b></p>');
+        var el = box.firstChild;
+        el.insertAdjacentHTML('beforebegin', '<i>a</i>');
+        el.insertAdjacentHTML('afterbegin', '<i>b</i>');
+        el.insertAdjacentHTML('beforeend', '<i>c</i>');
+        el.insertAdjacentHTML('afterend', '<i>d</i>');
+        return box.innerHTML;
+    }), 'ok:<i>a</i><p><i>b</i><b>mid</b><i>c</i></p><i>d</i>');
+
+})();
+</script>
+<div>token list, CSS helpers, dataset, adjacent HTML</div></body></html>
