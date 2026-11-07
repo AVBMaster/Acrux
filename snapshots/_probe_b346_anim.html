@@ -1,0 +1,28 @@
+<!doctype html><html><head><style>
+@keyframes slide {from{transform:translateX(0)}to{transform:translateX(100px)}}
+@keyframes fade {0%{opacity:1}100%{opacity:0}}
+</style></head><body><pre id=rec></pre><div id=host></div><script>
+const out=[];
+const el=document.createElement('div');
+document.getElementById('host').appendChild(el);
+el.style.cssText='animation: slide 1s linear forwards';
+out.push('animation slide 1s: echo='+JSON.stringify(el.style.animation)+' animName='+JSON.stringify(el.style.animationName)+' dur='+JSON.stringify(el.style.animationDuration));
+el.style.cssText='animation-name: slide; animation-duration: 2s; animation-iteration-count: infinite; animation-direction: alternate; animation-fill-mode: both; animation-play-state: paused';
+out.push('longhands: n='+JSON.stringify(el.style.animationName)+' d='+JSON.stringify(el.style.animationDuration)+' iter='+JSON.stringify(el.style.animationIterationCount)+' dir='+JSON.stringify(el.style.animationDirection)+' fill='+JSON.stringify(el.style.animationFillMode)+' play='+JSON.stringify(el.style.animationPlayState));
+el.style.cssText='animation-duration: 0.5s; animation-timing-function: ease-in-out; animation-delay: 1s';
+out.push('timing: dur='+JSON.stringify(el.style.animationDuration)+' tf='+JSON.stringify(el.style.animationTimingFunction)+' delay='+JSON.stringify(el.style.animationDelay));
+el.style.cssText='animation: slide 1s linear 2s 3 alternate both paused';
+out.push('full shorthand: echo='+JSON.stringify(el.style.animation));
+// negative delay
+el.style.cssText='animation-delay: -0.5s';
+out.push('neg delay: '+JSON.stringify(el.style.animationDelay));
+// animation with no name
+el.style.cssText='animation: 1s ease-in';
+out.push('no name: echo='+JSON.stringify(el.style.animation));
+// bogus
+el.style.cssText='animation: bogus';
+out.push('bogus: echo='+JSON.stringify(el.style.animation));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+el.remove();
+</script></body></html>
