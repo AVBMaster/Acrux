@@ -1,0 +1,40 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('z-index','auto');
+t('z-index','0');
+t('z-index','10');
+t('z-index','-1');
+t('z-index','1.5');
+t('z-index','bogus');
+t('opacity','1');
+t('opacity','0');
+t('opacity','0.5');
+t('opacity','-1');
+t('opacity','2');
+t('opacity','bogus');
+t('top','10px');
+t('top','auto');
+t('top','50%');
+t('bottom','10px');
+t('left','10px');
+t('right','auto');
+t('inset','10px');
+t('inset','10px 20px');
+t('inset','10px 20px 30px 40px');
+t('inset','auto');
+t('inset','bogus');
+t('inset-block','10px');
+t('inset-block','10px 20px');
+t('inset-inline','auto');
+t('inset-block-start','5px');
+t('inset-inline-end','5px');
+t('position','static');
+t('position','relative');
+t('position','absolute');
+t('position','fixed');
+t('position','sticky');
+t('position','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
