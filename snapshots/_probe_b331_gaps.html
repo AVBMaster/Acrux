@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.setProperty(p,v);out.push(p+'='+v+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+getComputedStyle(el).getPropertyValue(p));el.remove();}
+// #159: declaration keeps the digits the page wrote
+t('width','10.50px');
+t('width','0.500px');
+t('margin-left','1.2300px');
+t('padding-top','2.50em');
+t('border-width','1.50px');
+t('letter-spacing','0.500em');
+// #160: box family echo rounding of a seven-decimal tie
+t('width','1.0000001px');
+t('width','0.0000001px');
+t('width','10.1234567px');
+t('margin-left','1.00000005px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

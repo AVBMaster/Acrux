@@ -1,0 +1,21 @@
+<!doctype html><html><head><style id=s>
+@import url(a.css
+</style></head><body><pre id=rec></pre><script>
+const out=[];
+const cases=[
+ "@import url(a.css",
+ "@import url('a.css'",
+ "@import",
+ "@import url(a.css",
+];
+for(let i=0;i<cases.length;i++){
+ const st=document.createElement('style');
+ st.textContent=cases[i];
+ document.head.appendChild(st);
+ const r=st.sheet.cssRules;
+ out.push(i+' | '+JSON.stringify(cases[i])+' | n='+r.length+' | text='+JSON.stringify(r.length?r[0].cssText:''));
+ st.remove();
+}
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

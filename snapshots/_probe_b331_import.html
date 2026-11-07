@@ -1,0 +1,25 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const sheets=[];
+function mk(css){const s=new CSSStyleSheet();s.replaceSync(css);return s;}
+const cases=[
+ "@import url(a.css)",
+ "@import url(a.css) screen",
+ "@import 'a.css'",
+ '@import "a.css"',
+ "@import url(a.css), url(b.css)",
+ "@import url(a.css) screen and (min-width:400px)",
+ "@import",
+ "@import url(a.css",
+ "@import url('a.css'",
+];
+for(let i=0;i<cases.length;i++){
+ const s=mk(cases[i]);
+ const r=s.cssRules;
+ out.push(i+' | '+JSON.stringify(cases[i])
+   +' | n='+r.length
+   +' | text='+JSON.stringify(r.length?r[0].cssText:''));
+}
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function rs(css){const s=new CSSStyleSheet();s.replaceSync(css);const r=s.cssRules;return 'n='+r.length+' | '+JSON.stringify(Array.from(r).map(x=>x.cssText));}
+out.push('plain style rule      -> '+rs('div{color:red}'));
+out.push('two style rules       -> '+rs('a{color:red}b{color:blue}'));
+out.push('at-media              -> '+rs('@media screen{div{color:red}}'));
+out.push('at-import             -> '+rs('@import url(a.css)'));
+out.push('at-namespace          -> '+rs('@namespace svg url(http://www.w3.org/2000/svg)'));
+out.push('style+import          -> '+rs('div{color:red}@import url(a.css)'));
+out.push('bad + style           -> '+rs('}}}bad{{div{color:red}'));
+out.push('empty                 -> '+rs(''));
+out.push('keyframes             -> '+rs('@keyframes a{from{opacity:0}}'));
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

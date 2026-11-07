@@ -281,11 +281,28 @@ public class CssStyleSheetHost : IDomPrototypeHost
                 "Failed to execute 'replaceSync' on 'CSSStyleSheet': "
                 + "Can't call replaceSync on non-constructed CSSStyleSheets.", "NotAllowedError");
         _constructed.ChildRules.Clear();
-        _constructed.AddRuleRange(ParseSheet(text));
+        // A constructed sheet cannot carry an '@import' (CSS Constructed Stylesheets §2.4): the
+        // reference engine drops it, with or without a media condition, and keeps every other
+        // at-rule — '@media', '@namespace' and '@keyframes' all survive (measured, b331). A
+        // wholesale replacement is not an error the way insertRule is; the import just keeps
+        // nothing. The style rules around it are untouched.
+        _constructed.AddRuleRange(KeepNonImportRules(ParseSheet(text)));
         // A wholesale replacement takes the new text's declarations as the sheet's own, so a rule
         // inserted afterwards is settled against them and not against an empty map.
         Acrux.Core.Css.Tokenizer.CssParserImpl.ApplySheetNamespaces(_constructed);
         Invalidate();
+    }
+
+    /// <summary>A wholesale-replacement text with its '@import' rules removed (CSS Constructed
+    /// Stylesheets §2.4): the one at-rule a constructed sheet cannot carry, dropped wherever it
+    /// appears, while every other rule — style, media, namespace, keyframes — is kept.</summary>
+    private static List<StyleRuleBase> KeepNonImportRules(List<StyleRuleBase> rules)
+    {
+        var kept = new List<StyleRuleBase>();
+        foreach (var rule in rules)
+            if (rule is not StyleRuleImport)
+                kept.Add(rule);
+        return kept;
     }
 
     private StyleSheetContents WritableSheet =>
