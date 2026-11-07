@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('writing-mode','horizontal-tb');
+t('writing-mode','vertical-rl');
+t('writing-mode','vertical-lr');
+t('writing-mode','sideways-rl');
+t('writing-mode','sideways-lr');
+t('writing-mode','horizontal-tb sideways-lr');
+t('writing-mode','tb');
+t('writing-mode','tb-rl');
+t('writing-mode','rl');
+t('writing-mode','lr-tb');
+t('writing-mode','bogus');
+t('text-orientation','mixed');
+t('text-orientation','upright');
+t('text-orientation','sideways');
+t('text-orientation','bogus');
+t('direction','ltr');
+t('direction','rtl');
+t('direction','bogus');
+t('unicode-bidi','normal');
+t('unicode-bidi','embed');
+t('unicode-bidi','isolate');
+t('unicode-bidi','bidi-override');
+t('unicode-bidi','isolate-override');
+t('unicode-bidi','plaintext');
+t('unicode-bidi','bogus');
+t('text-combine-upright','none');
+t('text-combine-upright','all');
+t('text-combine-upright','digits');
+t('text-combine-upright','bogus');
+t('line-break-word','normal');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
