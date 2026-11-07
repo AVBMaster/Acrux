@@ -2598,6 +2598,13 @@ public static class CssValueText
     private static readonly string[] AutoKeyword = { "auto" };
     private static readonly string[] SpanAndAutoKeywords = { "span", "auto" };
 
+    /// <summary>The four words 'text-rendering' takes (CSS Fonts 4 §6.12), which the reference
+    /// engine prints lower-cased — even the camel case the author wrote is folded (measured, b361:
+    /// 'optimizeSpeed' echoes 'optimizespeed'). 'auto' is already in the bare-ident fold, but the
+    /// three camel-case words need an explicit list to lose their capitals.</summary>
+    private static readonly string[] TextRenderingKeywords =
+        { "auto", "optimizespeed", "optimizelegibility", "geometricprecision" };
+
     /// <summary>The predefined counter styles of CSS Lists 3 §4.3, spelled the one way the engine
     /// spells every enum keyword (see <see cref="Acrux.Core.Dom.CssEnumFormatter"/>), so the list is
     /// derived from the enum and cannot drift from it. 'Symbol', 'String' and 'Custom' are storage
@@ -2663,6 +2670,10 @@ public static class CssValueText
             or "top" or "right" or "bottom" or "left"
             or "scroll-margin" or "place-content" or "place-items" or "place-self")
             return AutoKeyword;
+        // CSS Fonts 4 §6.12: 'text-rendering' is a keyword and prints lower-cased, so even the
+        // camel case the author wrote ('optimizeSpeed', 'OPTIMIZELEGIBILITY') is folded (measured,
+        // b361: the reference echoes 'optimizespeed' / 'optimizelegibility' / 'geometricprecision').
+        if (name == "text-rendering") return TextRenderingKeywords;
         return null;
     }
 
