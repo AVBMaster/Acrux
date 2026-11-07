@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('border-radius','0');
+t('border-radius','10px');
+t('border-radius','10px 20px');
+t('border-radius','10px 20px 30px');
+t('border-radius','10px 20px 30px 40px');
+t('border-radius','50%');
+t('border-radius','10px / 20px');
+t('border-radius','10px 20px / 30px 40px');
+t('border-radius','10px 20px 30px 40px / 50px 60px 70px 80px');
+t('border-radius','50% / 50%');
+t('border-radius','-10px');
+t('border-radius','bogus');
+t('border-radius','10px 20px 30px 40px 50px');
+t('border-top-left-radius','10px');
+t('border-top-left-radius','10px 20px');
+t('border-top-left-radius','50%');
+t('border-top-left-radius','bogus');
+t('border-top-left-radius','-10px');
+t('border-radius','inherit');
+t('border-radius','initial');
+t('border-radius','unset');
+t('border-radius','auto');
+t('border-radius','calc(10px + 5px)');
+t('border-radius','0px 0px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
