@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// The six measured forms from b350
+t('radial-gradient(ellipse at center, red, blue)');
+t('radial-gradient(circle, red, blue)');
+t('radial-gradient(ellipse, red, blue)');
+t('radial-gradient(red, blue)');
+t('radial-gradient(circle at top, red, blue)');
+t('radial-gradient(ellipse at top, red, blue)');
+// Explicit-size forms
+t('radial-gradient(circle closest-side, red, blue)');
+t('radial-gradient(circle farthest-corner, red, blue)');
+t('radial-gradient(circle closest-side at center, red, blue)');
+t('radial-gradient(ellipse 100px 50px, red, blue)');
+t('radial-gradient(ellipse 100px 50px at 20px 30px, red, blue)');
+t('radial-gradient(circle 100px at top, red, blue)');
+t('radial-gradient(circle closest-side at top, red, blue)');
+// Positions and axes
+t('radial-gradient(at center, red, blue)');
+t('radial-gradient(at top, red, blue)');
+t('radial-gradient(circle at center center, red, blue)');
+t('radial-gradient(circle at 20px 30px, red, blue)');
+t('radial-gradient(circle at right bottom, red, blue)');
+// Repeating
+t('repeating-radial-gradient(ellipse at center, red, blue)');
+t('repeating-radial-gradient(circle at top, red, blue)');
+// Case folding of arguments
+t('radial-gradient(CIRCLE at TOP, RED, BLUE)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

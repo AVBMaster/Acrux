@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> sup='+CSS.supports('background-image',v)+' echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// invalid single-length-ellipse form
+t('radial-gradient(ellipse 100px, red, blue)');
+t('radial-gradient(ellipse 50%, red, blue)');
+t('radial-gradient(circle 100px 50px, red, blue)');
+// farthest-corner + position
+t('radial-gradient(circle farthest-corner at top, red, blue)');
+t('radial-gradient(farthest-corner at top, red, blue)');
+t('radial-gradient(ellipse farthest-corner at top, red, blue)');
+// default size no shape, just position
+t('radial-gradient(at center, red, blue)');
+t('radial-gradient(ellipse at center, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -2389,6 +2389,8 @@ public static class CssValueText
         var lowered = name.ToLowerInvariant();
         var inner = fold(word[(open + 1)..^1]);
         if (lowered == "color-mix") inner = CanonicalColorMix(inner);
+        if (lowered == "radial-gradient" || lowered == "repeating-radial-gradient")
+            inner = CanonicalRadialGradient(inner);
         // A function name is ASCII case-insensitive on the way in, but the CSSOM prints the few
         // that carry a capital in their canonical spelling — the transform family above all, so
         // 'TRANSLATEZ(10px)' reads back 'translateZ(10px)' and not 'translatez(10px)' (measured).
@@ -2500,6 +2502,86 @@ public static class CssValueText
 
         var kept = args.Where(a => a.Trim().Length > 0).Select(a => a.Trim()).ToList();
         return string.Join(", ", kept);
+    }
+
+    /// <summary>
+    /// Print a radial gradient's <c>&lt;ending-shape&gt; || &lt;size&gt;? &amp;&amp; at &lt;position&gt;</c>
+    /// prologue the way the reference engine does (all measured):
+    /// • <c>ellipse</c> is the default shape and is always elided.
+    /// • <c>circle</c> is kept — unless its size is an explicit single length, which already
+    ///   implies a circle, so the shape word goes too (<c>circle 100px</c> → <c>100px</c>).
+    /// • <c>farthest-corner</c> is the default size and is always elided; the other size
+    ///   keywords and any explicit length are kept.
+    /// • <c>at center</c> (and <c>at center center</c>) is the default position and is elided;
+    ///   any other position is expanded to its two axes (<c>at top</c> → <c>at center top</c>).
+    /// A prologue where every part is a default leaves nothing to say, so the stops become the
+    /// whole value (<c>ellipse at center</c> → <c>radial-gradient(red, blue)</c>).
+    /// Stopping-colour arguments after the first top-level comma are left untouched.
+    /// </summary>
+    private static string CanonicalRadialGradient(string inner)
+    {
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return inner;
+
+        var prologue = args[0].Trim();
+        if (prologue.Length == 0) return inner;
+        var tokens = SplitTopLevelWords(prologue);
+
+        // The 'at <position>' group, if the prologue carries one.
+        int atIndex = -1;
+        for (int i = 0; i < tokens.Count; i++)
+            if (tokens[i].Equals("at", StringComparison.OrdinalIgnoreCase)) { atIndex = i; break; }
+
+        // The words before 'at' are the shape and the size, in either order.
+        string shape = string.Empty;   // 'circle' or '' (ellipse is always elided)
+        var sizeTokens = new List<string>();
+        for (int i = 0; i < (atIndex >= 0 ? atIndex : tokens.Count); i++)
+        {
+            var tok = tokens[i].ToLowerInvariant();
+            if (tok == "circle") shape = "circle";
+            else if (tok == "ellipse") { /* the default shape: never said */ }
+            else sizeTokens.Add(tokens[i]);
+        }
+
+        // A size is either a size keyword or one or two lengths. A single length is the one
+        // case that implies the circle shape, so it takes the shape word with it.
+        bool sizeIsSingleLength = sizeTokens.Count == 1 && IsLengthOrPercentageToken(sizeTokens[0]);
+
+        // Build the canonical two-axis position, or '' for the default center.
+        string posText = string.Empty;
+        if (atIndex >= 0 && atIndex + 1 < tokens.Count)
+        {
+            var posValue = string.Join(" ", tokens.GetRange(atIndex + 1, tokens.Count - atIndex - 1));
+            posText = ShorthandExpander.PositionPairText(posValue) ?? posValue.ToLowerInvariant();
+        }
+        bool isDefaultCenter = posText.Equals("center", StringComparison.OrdinalIgnoreCase)
+                            || posText.Equals("center center", StringComparison.OrdinalIgnoreCase);
+
+        // Assemble what survives.
+        var parts = new List<string>();
+        // circle survives unless a single-length size has already implied it.
+        if (shape.Length > 0 && !sizeIsSingleLength) parts.Add(shape);
+        foreach (var size in sizeTokens)
+            // farthest-corner is the default size and is never said.
+            if (!size.Equals("farthest-corner", StringComparison.OrdinalIgnoreCase))
+                parts.Add(size);
+        if (posText.Length > 0 && !isDefaultCenter) parts.Add("at " + posText);
+
+        // Nothing left to say — the stops become the whole value. Returning an empty first
+        // argument would leave a stray comma, so drop the argument entirely.
+        if (parts.Count == 0) args.RemoveAt(0);
+        else args[0] = string.Join(" ", parts);
+        return string.Join(", ", args.Select(a => a.Trim()));
+    }
+
+    /// <summary>True for a token that is a length or a percentage — the size a radial gradient
+    /// may give as an explicit measure rather than one of the four named keywords.</summary>
+    private static bool IsLengthOrPercentageToken(string token)
+    {
+        if (token.Length == 0) return false;
+        if (token[^1] == '%') return true;
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
+            && unit.Length > 0 && ShorthandExpander.IsLengthUnit(unit);
     }
 
     /// <summary>The component with its trailing percentage removed, and the share it carried (-1

@@ -1,0 +1,25 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// size keywords, all four
+t('radial-gradient(circle farthest-corner, red, blue)');
+t('radial-gradient(circle farthest-side, red, blue)');
+t('radial-gradient(circle closest-side, red, blue)');
+t('radial-gradient(circle closest-corner, red, blue)');
+t('radial-gradient(ellipse farthest-corner, red, blue)');
+t('radial-gradient(ellipse farthest-side, red, blue)');
+t('radial-gradient(ellipse closest-side, red, blue)');
+t('radial-gradient(ellipse closest-corner, red, blue)');
+// length sizes
+t('radial-gradient(circle 100px, red, blue)');
+t('radial-gradient(circle 100px at top, red, blue)');
+t('radial-gradient(ellipse 100px, red, blue)');
+t('radial-gradient(ellipse 100px 50px, red, blue)');
+// shape + size + position
+t('radial-gradient(circle farthest-side at top, red, blue)');
+t('radial-gradient(ellipse closest-side at top, red, blue)');
+// shape keyword + explicit size (should be invalid, but what does the engine do)
+t('radial-gradient(circle 100px 50px, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
