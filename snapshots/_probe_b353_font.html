@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const box=document.createElement('div');document.body.appendChild(box);box.style.font=v;out.push('font='+JSON.stringify(v)+' || sup='+CSS.supports('font',v)+' || echo='+JSON.stringify(box.style.font));box.remove();}
+t('16px serif');
+t('bold 16px serif');
+t('italic bold 16px serif');
+t('italic small-caps bold condensed 16px/1.5 serif');
+t('16px/1.5 serif');
+t('16px/20px serif');
+t('medium serif');
+t('bold serif');
+t('serif');
+t('caption');
+t('icon');
+t('menu');
+t('message-box');
+t('small-caption');
+t('status-bar');
+t('inherit');
+t('bogus');
+t('16px');
+t('bold 16px');
+t('16px serif, sans-serif');
+t('oblique 16px serif');
+t('small-caps 16px serif');
+t('condensed 16px serif');
+t('500 16px serif');
+t('semi-condensed 16px serif');
+t('expanded 16px serif');
+t('ultra-condensed 16px serif');
+t('16px/normal serif');
+t('100% serif');
+t('0 serif');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
