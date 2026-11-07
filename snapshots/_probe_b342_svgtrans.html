@@ -1,0 +1,65 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// SVG properties (applied to a div, not an SVG element)
+t('fill','red');
+t('fill','none');
+t('fill','url(#grad)');
+t('fill','bogus');
+t('fill-opacity','1');
+t('fill-opacity','0.5');
+t('fill-opacity','0');
+t('fill-opacity','bogus');
+t('fill-rule','nonzero');
+t('fill-rule','evenodd');
+t('fill-rule','bogus');
+t('stroke','red');
+t('stroke','none');
+t('stroke-width','1');
+t('stroke-width','2px');
+t('stroke-width','0');
+t('stroke-width','bogus');
+t('stroke-linecap','butt');
+t('stroke-linecap','round');
+t('stroke-linecap','square');
+t('stroke-linecap','bogus');
+t('stroke-linejoin','miter');
+t('stroke-linejoin','round');
+t('stroke-linejoin','bevel');
+t('stroke-linejoin','bogus');
+t('stroke-opacity','1');
+t('stroke-opacity','0.5');
+t('stroke-dasharray','none');
+t('stroke-dasharray','5,3');
+t('stroke-dasharray','bogus');
+t('stroke-dashoffset','0');
+t('stroke-dashoffset','5px');
+t('stroke-dashoffset','bogus');
+// transition longhands
+t('transition-property','all');
+t('transition-property','opacity');
+t('transition-property','none');
+t('transition-property','color, opacity');
+t('transition-property','bogus');
+t('transition-duration','0s');
+t('transition-duration','0.3s');
+t('transition-duration','1s, 2s');
+t('transition-duration','-1s');
+t('transition-duration','bogus');
+t('transition-timing-function','ease');
+t('transition-timing-function','linear');
+t('transition-timing-function','ease-in-out');
+t('transition-timing-function','cubic-bezier(0.5, 0, 0.5, 1)');
+t('transition-timing-function','steps(4)');
+t('transition-timing-function','bogus');
+t('transition-delay','0s');
+t('transition-delay','0.5s');
+t('transition-delay','-1s');
+t('transition-delay','bogus');
+t('transition','all 0.3s ease');
+t('transition','opacity 1s, color 0.5s');
+t('transition','none');
+t('transition','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
