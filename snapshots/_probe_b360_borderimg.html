@@ -1,0 +1,20 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const box=document.createElement('div');document.body.appendChild(box);box.style.borderImage=v;out.push('border-image='+JSON.stringify(v)+' || sup='+CSS.supports('border-image',v)+' || echo='+JSON.stringify(box.style.borderImage));box.remove();}
+t('none');
+t('url(a.png)');
+t('url(a.png) 27');
+t('url(a.png) 27 / 27px');
+t('url(a.png) 27 / 27px / 5px');
+t('url(a.png) 27 round');
+t('url(a.png) 27 / 27px round');
+t('url(a.png) 27 / 27px / 5px round');
+t('url(a.png) 27 9 / 27px 9 / 5px 3 stretch round');
+t('linear-gradient(red,blue) 27 fill');
+t('linear-gradient(red,blue) 27 / 10px repeat space');
+t('none 27');
+t('bogus');
+t('url(a.png) bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
