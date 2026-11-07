@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// column-rule shorthand component order
+t('column-rule','1px solid red');
+t('column-rule','solid red 1px');
+t('column-rule','red solid 1px');
+t('column-rule','thin dotted blue');
+t('column-rule','thick');
+t('column-rule','double');
+t('column-rule','blue');
+t('column-rule','2px groove green');
+t('column-rule','none');
+// list-style component order
+t('list-style','square inside');
+t('list-style','inside square');
+t('list-style','url(a.png) square');
+t('list-style','square url(a.png)');
+t('list-style','inside');
+t('list-style','none outside url(a.png)');
+// text-decoration component order
+t('text-decoration','underline dotted red');
+t('text-decoration','red underline dotted');
+t('text-decoration','dotted red underline');
+t('text-decoration','overline wavy blue');
+// outline component order
+t('outline','solid green 2px');
+t('outline','green solid 2px');
+t('outline','2px green solid');
+t('outline','dotted');
+t('outline','green');
+t('outline','2px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

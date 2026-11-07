@@ -2093,13 +2093,44 @@ public static class CssValueText
     private static string CanonicalizeColumnRule(string text, string property)
     {
         if (!property.Equals("column-rule", StringComparison.OrdinalIgnoreCase)) return text;
-        var parts = new List<string>();
+        string? width = null, style = null, color = null;
         foreach (var word in SplitTopLevelWords(text))
         {
             var p = word.ToLowerInvariant();
-            if (p is "medium" or "none" or "currentcolor") continue;
-            parts.Add(word);
+            // A width keyword or a length: 'thin'/'medium'/'thick' are the width's keywords, and a
+            // bare number is the width the page wrote (measured: '1px', '2px').
+            if (p is "thin" or "medium" or "thick")
+            {
+                width ??= word;
+                continue;
+            }
+            if (p is "solid" or "dotted" or "dashed" or "double" or "groove" or "ridge"
+                or "inset" or "outset")
+            {
+                style ??= word;
+                continue;
+            }
+            if (p is "currentcolor")
+            {
+                color ??= word;
+                continue;
+            }
+            if (Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(p, out var number, out var unit)
+                && (unit.Length > 0 || number == 0))
+            {
+                width ??= word;
+                continue;
+            }
+            color ??= word;
         }
+        var parts = new List<string>();
+        // A component that is its longhand's initial is dropped (measured: 'medium none
+        // currentcolor' echoes 'medium'), but a style that is 'none' is still kept when the width
+        // is also non-initial (measured: 'none 27' keeps 'none' in the border-image form; for
+        // column-rule 'none' alone echoes 'medium').
+        if (width != null) parts.Add(width);
+        if (style != null && style.ToLowerInvariant() != "none") parts.Add(style);
+        if (color != null) parts.Add(color);
         if (parts.Count == 0) parts.Add("medium");
         return string.Join(" ", parts);
     }
