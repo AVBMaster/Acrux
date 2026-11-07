@@ -1,0 +1,66 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// table properties
+t('border-collapse','separate');
+t('border-collapse','collapse');
+t('border-collapse','bogus');
+t('border-spacing','0');
+t('border-spacing','5px');
+t('border-spacing','5px 10px');
+t('border-spacing','bogus');
+t('table-layout','auto');
+t('table-layout','fixed');
+t('table-layout','bogus');
+t('caption-side','top');
+t('caption-side','bottom');
+t('caption-side','bogus');
+t('empty-cells','show');
+t('empty-cells','hide');
+t('empty-cells','bogus');
+// list properties
+t('list-style-type','disc');
+t('list-style-type','circle');
+t('list-style-type','square');
+t('list-style-type','decimal');
+t('list-style-type','lower-roman');
+t('list-style-type','upper-alpha');
+t('list-style-type','none');
+t('list-style-type','bogus');
+t('list-style-position','outside');
+t('list-style-position','inside');
+t('list-style-position','bogus');
+t('list-style-image','none');
+t('list-style-image','url(a.png)');
+t('list-style-image','bogus');
+t('list-style','none');
+t('list-style','square inside');
+t('list-style','decimal url(a.png)');
+t('list-style','bogus');
+// multicol
+t('column-count','1');
+t('column-count','3');
+t('column-count','auto');
+t('column-count','0');
+t('column-count','bogus');
+t('column-width','auto');
+t('column-width','200px');
+t('column-width','bogus');
+t('column-gap','normal');
+t('column-gap','20px');
+t('column-gap','bogus');
+t('column-rule','1px solid red');
+t('column-rule','none');
+t('column-rule','bogus');
+t('column-span','none');
+t('column-span','all');
+t('column-span','bogus');
+t('column-fill','balance');
+t('column-fill','auto');
+t('column-fill','bogus');
+t('columns','100px 3');
+t('columns','auto');
+t('columns','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
