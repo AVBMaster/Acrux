@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// mask shorthand edge forms
+t('mask','none');
+t('mask','url(a.png)');
+t('mask','url(a.png) center center / 100px 50px no-repeat');
+t('mask','url(a.png) center center / 100px 50px no-repeat border-box content-box luminance');
+t('mask','url(a.png) center center / 100px 50px repeat-x border-box');
+t('mask','none, url(a.png)');
+t('mask','url(a.png), url(b.png)');
+t('mask','url(a.png) left top / 10px 10px repeat');
+t('mask','linear-gradient(red, blue)');
+t('mask','linear-gradient(red, blue) center / 50% 50% no-repeat');
+t('mask','bogus');
+t('mask','none none');
+t('mask','url(a.png) bogus');
+// mask-mode
+t('mask-mode','match-source');
+t('mask-mode','alpha');
+t('mask-mode','luminance');
+t('mask-mode','alpha, luminance');
+t('mask-mode','bogus');
+// mask-composite
+t('mask-composite','add');
+t('mask-composite','subtract');
+t('mask-composite','intersect');
+t('mask-composite','exclude');
+t('mask-composite','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
