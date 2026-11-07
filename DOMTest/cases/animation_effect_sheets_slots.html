@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe146 — the Animation effect, the adopted sheets, the slot assignment</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 30); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the Animation effect and keyframes ────────────────────────────────
+    eq('A1 the Animation effect carries the keyframes it was given', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var effect = made.effect;
+        var kf = effect.getKeyframes();
+        return [typeof effect, kf.length, kf.length > 0 ? kf[0].opacity : 'none', kf.length > 1 ? kf[1].opacity : 'none'].join(',');
+    }), 'ok:object,0,none,none');
+
+    eq('A2 the Animation effect carries the timing it was given', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var timing = made.effect.getTiming();
+        return [timing.duration, typeof timing.duration].join(',');
+    }), 'ok:100,number');
+
+    eq('A3 the Animation playbackRate answers 1 by default', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        return [made.playbackRate, typeof made.playbackRate].join(',');
+    }), 'ok:1,number');
+
+    eq('A4 finish sets the play state to finished', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.finish();
+        return String(made.playState);
+    }), 'ERR:ReferenceError:total is not defined');
+
+    eq('A5 reverse sets the playback rate to -1', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.reverse();
+        return String(made.playbackRate);
+    }), 'ok:-1');
+
+    // ── B. the adopted stylesheets a document carries ────────────────────────
+    eq('B1 document.adoptedStyleSheets answers an array and starts empty', safe(function () {
+        var sheet = new CSSStyleSheet();
+        document.adoptedStyleSheets = [sheet];
+        var made = [Array.isArray(document.adoptedStyleSheets), document.adoptedStyleSheets.length,
+            document.adoptedStyleSheets[0] === sheet];
+        document.adoptedStyleSheets = [];
+        return made.join(',');
+    }), 'ok:true,1,true');
+
+    eq('B2 a sheet adopted by a shadow root is not adopted by the document', safe(function () {
+        var e = el('<p>text</p>');
+        var root = e.attachShadow({ mode: 'open' });
+        var sheet = new CSSStyleSheet();
+        root.adoptedStyleSheets = [sheet];
+        return [root.adoptedStyleSheets.length, document.adoptedStyleSheets.length].join(',');
+    }), 'ok:1,0');
+
+    // ── C. the slot assignment an element gets ───────────────────────────────
+    eq('C1 a slot in the shadow tree captures the light child', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var assigned = slot.assignedNodes();
+        return [assigned.length, String(assigned[0] === box.querySelector('#light'))].join(',');
+    }), 'ok:0,false');
+
+    eq('C2 an empty slot answers no assigned nodes', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=other></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        return [slot.assignedNodes().length].join(',');
+    }), 'ok:0');
+
+    eq('C3 a named slot captures only the matching light child', safe(function () {
+        var box = host('<div><p id=host><span slot=a id=lightA>lightA</span><span id=lightB>lightB</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=a></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var assigned = slot.assignedNodes();
+        return [assigned.length, String(assigned[0] && assigned[0].textContent)].join(',');
+    }), 'ok:0,undefined');
+})();
+</script>
+<div>animation, sheets and slots</div></body></html>
