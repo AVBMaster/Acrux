@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// flex-grow/shrink order when both named
+t('flex','0 1 auto');
+t('flex','1 0 auto');
+t('flex','0 0 0px');
+t('flex','2 1 0%');
+t('flex','0 1 0%');
+t('flex','1 0 0px');
+// flex-basis special values
+t('flex-basis','inherit');
+t('flex-basis','initial');
+t('flex-basis','unset');
+t('flex-grow','initial');
+t('flex-shrink','initial');
+t('flex-grow','unset');
+// order and flex item
+t('order','0');
+t('order','-1');
+t('order','1');
+t('order','99999');
+t('order','-99999');
+t('order','bogus');
+// flex-shrink: 0
+t('flex-shrink','0');
+t('flex-shrink','bogus');
+// flex-grow: 0
+t('flex-grow','0');
+t('flex-grow','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
