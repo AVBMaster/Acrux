@@ -1691,9 +1691,11 @@ public static class CssValueGrammar
         // 'auto' is either. A second of either, or a count below one, drops the whole declaration.
         CssPropertyId.Columns => IsColumnsValue,
         CssPropertyId.ColumnCount => IsColumnCountValue,
-        // CSS UI 4 §4.3: 'caret-shape' is exactly one keyword, and this reference engine takes only
-        // 'auto', 'bar' and 'block' — 'underline' and 'none' are refused (measured via CSS.supports).
-        CssPropertyId.CaretShape => static text => IsOneOf(text, "auto", "bar", "block"),
+        // CSS UI 4 §4.3: 'caret-shape' is exactly one keyword — 'auto', 'bar', 'block' or
+        // 'underscore'. Measured via CSS.supports: the reference engine takes all four now ('underscore'
+        // was refused the first time this was measured and has since been added), and 'underline' and
+        // 'none' are still refused.
+        CssPropertyId.CaretShape => static text => IsOneOf(text, "auto", "bar", "block", "underscore"),
         // CSS Text Decoration 4 §3.2: a vertical choice and an optional horizontal one. The parse
         // that stores it is also the grammar — 'alphabetic', 'auto left', a repeated kind or an
         // unknown word all drop the declaration (measured against the reference engine).

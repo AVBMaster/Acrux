@@ -340,7 +340,7 @@ public static class CssPropertyApplier
             // CSS UI 4 §4.3: 'caret-shape' is the keyword pair, and a platform that draws one
             // caret still keeps the authored one for the computed surface and for scripts.
             case "caret-shape": { var caretShape = value.Trim().ToLowerInvariant();
-                    if (caretShape is "auto" or "bar" or "block") style.CaretShape = caretShape; break; }
+                    if (caretShape is "auto" or "bar" or "block" or "underscore") style.CaretShape = caretShape; break; }
             // CSS Scroll Snap 1 §6.1: the two four-sided scroll insets, whose initial is zero and
             // which take negative lengths but no percentages.
             case "scroll-margin-top": SetScrollInset(style, value, 0); break;

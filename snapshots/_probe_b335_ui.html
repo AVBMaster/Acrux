@@ -1,0 +1,57 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const el=document.createElement('div');
+document.body.appendChild(el);
+function t(p,v){el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(el.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(el).getPropertyValue(p)));}
+// touch-action
+t('touch-action','auto');
+t('touch-action','none');
+t('touch-action','pan-x');
+t('touch-action','pan-y');
+t('touch-action','manipulation');
+t('touch-action','pinch-zoom');
+t('touch-action','pan-x pan-y');
+t('touch-action','bogus');
+// user-select
+t('user-select','auto');
+t('user-select','none');
+t('user-select','text');
+t('user-select','all');
+t('user-select','contain');
+t('user-select','bogus');
+// appearance
+t('appearance','none');
+t('appearance','auto');
+t('appearance','textfield');
+t('appearance','bogus');
+// cursor
+t('cursor','auto');
+t('cursor','pointer');
+t('cursor','crosshair');
+t('cursor','move');
+t('cursor','not-allowed');
+t('cursor','grab');
+t('cursor','grabbing');
+t('cursor','url(a.png), pointer');
+t('cursor','bogus');
+// resize
+t('resize','none');
+t('resize','both');
+t('resize','horizontal');
+t('resize','vertical');
+t('resize','block');
+t('resize','inline');
+t('resize','bogus');
+// caret-color / caret-shape
+t('caret-color','auto');
+t('caret-color','red');
+t('caret-color','transparent');
+t('caret-shape','auto');
+t('caret-shape','bar');
+t('caret-shape','block');
+t('caret-shape','underscore');
+t('caret-shape','bogus');
+el.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
