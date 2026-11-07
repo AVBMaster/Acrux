@@ -1,0 +1,28 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('background-position','center');
+t('background-position','left top');
+t('background-position','right bottom');
+t('background-position','left center');
+t('background-position','center right');
+t('background-position','top right');
+t('background-position','bottom left');
+t('background-position','0 0');
+t('background-position','0% 0%');
+t('background-position','100% 100%');
+t('background-position','50%');
+t('background-position','10px');
+t('background-position','10px 20px');
+t('background-position','left 10px bottom');
+t('background-position','right 10px bottom 20px');
+t('background-position','left 10px top 20px');
+t('background-position','right 20px top 10px');
+t('background-position','bottom 10px right 20px');
+t('background-position','left 10% bottom 10%');
+t('background-position','calc(50% - 10px) center');
+t('background-position','bogus');
+t('background-position','10px 20px 30px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
