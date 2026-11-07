@@ -1,0 +1,12 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const cases=[["max-height","calc-size(auto, size)"],["max-height","calc-size(auto,20px)"],["max-width","calc-size(auto, size)"],["max-height","calc-size(50px, size)"],["min-height","calc-size(auto, size)"]];
+for(const [p,v] of cases){
+ const el=document.createElement('div');
+ document.body.appendChild(el);
+ el.style.setProperty(p,v);
+ out.push(p+'='+v+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p))+' n='+el.style.length);
+ el.remove();
+}
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

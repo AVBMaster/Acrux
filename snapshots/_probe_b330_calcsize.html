@@ -1,0 +1,44 @@
+<!doctype html><html><body><div id="host"></div><script>
+function build(){
+const host=document.getElementById('host');
+const rows=[];
+const cases=[
+ ["width","calc-size(100px, size)"],
+ ["width","calc-size(auto, size)"],
+ ["width","calc-size(auto, size + 20px)"],
+ ["width","calc-size(100px, size + 10px)"],
+ ["width","calc-size(auto, 20px)"],
+ ["width","calc-size(auto, size * 2)"],
+ ["height","calc-size(auto, size)"],
+ ["height","calc-size(auto, size + 20px)"],
+ ["height","calc-size(50px, size + 10px)"],
+ ["height","calc-size(auto, 20px)"],
+ ["min-height","calc-size(auto, size + 1em)"],
+ ["min-width","calc-size(auto, size + 1em)"],
+ ["max-height","calc-size(auto, size + 1em)"],
+ ["max-width","calc-size(auto, size + 1em)"],
+ ["max-height","calc-size(auto, 20px)"],
+ ["min-height","calc-size(50px, size)"],
+ ["min-width","calc-size(50px, size)"],
+ ["max-height","calc-size(50px, size)"],
+ ["max-width","calc-size(50px, size)"],
+ ["min-height","calc-size(auto, size)"],
+ ["min-width","calc-size(auto, size)"],
+ ["max-height","calc-size(auto, size)"],
+ ["max-width","calc-size(auto, size)"],
+];
+for(let i=0;i<cases.length;i++){
+ const el=document.createElement('div');
+ host.appendChild(el);
+ el.style.setProperty(cases[i][0], cases[i][1]);
+ rows.push(i+'|'+cases[i][0]+'|'+cases[i][1]
+   +'|echo='+el.style.getPropertyValue(cases[i][0])
+   +'|comp='+getComputedStyle(el).getPropertyValue(cases[i][0]));
+ el.remove();
+}
+document.body.insertAdjacentHTML('beforeend','<pre id="record" style="font:10px monospace"></pre>');
+document.getElementById('record').textContent=rows.join('\n');
+console.log(rows.join('\n'));
+}
+build();
+</script></body></html>

@@ -253,6 +253,12 @@ public static class CssValueGrammar
         if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             if (!PropertyTakesCalcSize(id)) return false;
+            // On a maximum a call that asks for the layout's own size is no value at all: the
+            // reference engine drops it (measured, b330 — see MaxAxisCalcSizeAsksLayout), so the
+            // echo stays empty and the maximum answers 'none'. This is the one reader such a
+            // declaration passes, so refusing it here is what makes every surface agree.
+            bool onMaximum = id is CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
+                or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize;
             int at = IndexOfCalcSize(value, 0);
             while (at >= 0)
             {
@@ -260,6 +266,7 @@ public static class CssValueGrammar
                 int close = MatchingClose(value, open);
                 if (close < 0) return false;
                 if (!IsCalcSizeCall(value[at..(close + 1)], out _)) return false;
+                if (onMaximum && MaxAxisCalcSizeAsksLayout(value[at..(close + 1)])) return false;
                 at = IndexOfCalcSize(value, close + 1);
             }
             return true;
@@ -1278,9 +1285,10 @@ public static class CssValueGrammar
                 "-webkit-fill-available", "-webkit-fit-content"),
         CssPropertyId.MaxWidth or CssPropertyId.MaxHeight
             or CssPropertyId.MaxInlineSize or CssPropertyId.MaxBlockSize
-            => static text => IsNonNegativeSingleLength(text,
-                "none", "min-content", "max-content", "fit-content", "stretch",
-                "-webkit-fill-available", "-webkit-fit-content"),
+            => static text => !MaxAxisCalcSizeAsksLayout(text)
+                && IsNonNegativeSingleLength(text,
+                    "none", "min-content", "max-content", "fit-content", "stretch",
+                    "-webkit-fill-available", "-webkit-fit-content"),
         // CSS Scroll Snap 1 §6.1, measured side by side: a margin side is a length and nothing
         // else — 'auto' and '50%' are both dropped — while a padding side is a length, a percentage
         // or the word 'auto', which is what it prints back for the zero the word means. A longhand
@@ -4263,6 +4271,22 @@ public static class CssValueGrammar
             return false;
         head = head.ToLowerInvariant();
         return true;
+    }
+
+    /// <summary>Whether a 'calc-size()' value on a maximum is the layout's own size — a basis of
+    /// 'auto'/'stretch' (or an intrinsic keyword). The reference engine drops every such call on a
+    /// maximum, with or without the word 'size' in the expression: 'max-height:
+    /// calc-size(auto, size)', 'calc-size(auto, size + 1em)' and 'calc-size(auto, 20px)' all echo
+    /// '' and compute 'none', while a definite basis stays symbolic ('calc-size(50px, size)').
+    /// Refusing it here makes both surfaces agree, because the grammar is the one reader a
+    /// declaration has to pass before anything stores it (measured, b330).</summary>
+    private static bool MaxAxisCalcSizeAsksLayout(string text)
+    {
+        if (text.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) < 0) return false;
+        if (!TrySplitCalcSize(text.Trim(), out var head, out var _)) return false;
+        return head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            || head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+            || ShorthandExpander.IsIntrinsicBasisKeyword(head);
     }
 
     /// <summary>The properties whose whole value is a size, which are the ones 'calc-size()' is

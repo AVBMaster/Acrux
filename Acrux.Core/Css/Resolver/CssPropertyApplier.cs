@@ -113,9 +113,31 @@ public static class CssPropertyApplier
     /// <summary>One value of the sizing family (CSS Sizing 3 §5.1/§6.2). 'none', 'stretch' and its
     /// prefixed spelling constrain nothing, so they lay out as 'auto' does — but they are three
     /// different words on the computed surface, and which of them a property takes is decided by
-    /// that property's grammar, not here.</summary>
+    /// that property's grammar, not here. The axis matters to 'calc-size()': the reference engine
+    /// resolves a call on the content axes but constrains with it on the min/max axes, so the
+    /// property this value belongs to is read alongside it.</summary>
     private static Length ParseSizingValue(ComputedStyle style, string value) =>
-        SizingKeywordLength.For(value) ?? ParseCalcSizeValue(style, value) ?? Length.Parse(value);
+        ParseSizingValue(style, value, CalcSizeAxis.Content);
+
+    private static Length ParseSizingValue(ComputedStyle style, string value, CalcSizeAxis axis) =>
+        SizingKeywordLength.For(value) ?? ParseCalcSizeValue(style, value, axis) ?? Length.Parse(value);
+
+    /// <summary>Whether a 'calc-size()' value on a maximum asks for the layout's own size — a basis
+    /// of 'auto'/'stretch' (or an intrinsic keyword) with 'size' left standing in the expression.
+    /// The reference engine drops such a declaration outright: the maximum answers 'none' and the
+    /// echo is empty, so the caller must not apply it (measured, b330).</summary>
+    private static bool MaxAxisCalcSizeAsksLayout(string value) =>
+        value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) >= 0
+        && CssValueGrammar.TrySplitCalcSize(value.Trim(), out var head, out var expression)
+        && (head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            || head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+            || ShorthandExpander.IsIntrinsicBasisKeyword(head))
+        && expression.Contains("size", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Which sizing axis a 'calc-size()' sits on. The reference engine reads a call
+    /// differently on each (measured, b330): a length basis is priced into a number on the content
+    /// axes but carried whole on the min/max axes, and an 'auto'-basis call is resolved on the
+    /// content axes, kept on the min axes and dropped on the max axes.</summary>
+    internal enum CalcSizeAxis { Content, Minimum, Maximum }
 
     public static void ApplyScrollbarColors(ComputedStyle style, string value)
     {
@@ -143,21 +165,41 @@ public static class CssPropertyApplier
     /// width a box with no 'width' was given), and every other call leaves the box with that same
     /// size rather than with nothing (measured: 'calc-size(auto, size + 20px)' is 20px where the
     /// arithmetic is priced — the arithmetic around 'size' is the gap #316 records).</summary>
-    private static Length? ParseCalcSizeValue(ComputedStyle style, string value)
+    private static Length? ParseCalcSizeValue(ComputedStyle style, string value, CalcSizeAxis axis)
     {
         if (value.IndexOf("calc-size(", StringComparison.OrdinalIgnoreCase) < 0) return null;
         if (!CssValueGrammar.TrySplitCalcSize(value.Trim(), out var head, out var expression))
             return null;
+        // On the constraining axes the reference engine never resolves the word 'size' to a number.
+        // A minimum keeps the whole call symbolic and prices its font-relative constants in this
+        // element's own font (measured, b330: 'min-height: calc-size(auto, size + 1em)' keeps
+        // 'size' and prices '1em' to '16px'; 'min-height: calc-size(50px, size)' stays
+        // 'calc-size(50px, size)') — a definite basis is not resolved on a minimum. A maximum whose
+        // basis is the layout's own size is no value at all: the reference drops it (echo '',
+        // comp 'none'), while a maximum with a definite basis stays symbolic
+        // ('max-height: calc-size(50px, size)').
+        if (axis is CalcSizeAxis.Minimum or CalcSizeAxis.Maximum)
+        {
+            bool basisNeedsLayout = head.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                || head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+                || ShorthandExpander.IsIntrinsicBasisKeyword(head);
+            if (axis is CalcSizeAxis.Maximum && basisNeedsLayout)
+                return AutoLength.Instance;
+            return new CalcSizeLength(head, PriceCalcSizeConstants(expression, style));
+        }
+        // On the content axes a call whose whole expression says nothing more than 'size' is worth
+        // exactly the size written in front of the comma when that basis is a length (measured:
+        // 'width: calc-size(100px, size)' is 100px); an 'auto'/'stretch'/intrinsic basis is the
+        // size the layout produces, which this path resolves below.
         if (expression.Equals("size", StringComparison.OrdinalIgnoreCase)
             && !head.Equals("auto", StringComparison.OrdinalIgnoreCase)
-            && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase))
+            && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
+            && !ShorthandExpander.IsIntrinsicBasisKeyword(head))
             return Length.Parse(head) ?? AutoLength.Instance;
         // A basis written as a length prices its own 'size' at that length, so the arithmetic around
         // it can be read as one calc-sum here (CSS Values 4 §11.1, measured:
         // 'width: calc-size(100px, size + 10px)' is 110px, where leaving the 'size' unread fell back
-        // to the auto size). A basis whose size only the layout knows — 'auto', 'stretch', or an
-        // intrinsic keyword measured against the box's own content — still needs that size, and
-        // keeps the auto size rather than being priced against a value this path does not have.
+        // to the auto size).
         if (!head.Equals("auto", StringComparison.OrdinalIgnoreCase)
             && !head.Equals("stretch", StringComparison.OrdinalIgnoreCase)
             && !ShorthandExpander.IsIntrinsicBasisKeyword(head))
@@ -175,24 +217,18 @@ public static class CssPropertyApplier
         }
         // An expression that never says 'size' does not ask the question at all, so the call is
         // worth exactly what the expression says (measured: 'height: calc-size(auto, 20px)' is
-        // 20px). Everything else needs the size the layout would have produced, which this path
-        // does not have yet — the box keeps that size rather than being collapsed to nothing
-        // (measured against the reference engine's 'calc-size(auto, size + 20px)' = 20px, which is
-        // gap #316's arithmetic).
+        // 20px).
         if (!expression.Contains("size", StringComparison.OrdinalIgnoreCase))
         {
-            // The expression is a calc-sum, so it is read as one (CSS Values 4 §11.1): '20px' is the
-            // length, '100% - 20px' is the share the layout prices.
             var whole = expression.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
                 ? expression : "calc(" + expression + ")";
             return Length.Parse(whole) ?? AutoLength.Instance;
         }
-        // An 'auto' or 'stretch' basis leaves the word 'size' standing, so the call is carried whole
-        // with its constant terms priced in this element's own font and 'size' left as a term
-        // (measured: 'min-height: calc-size(auto, size + 1em)' computes 'calc-size(auto, 16px +
-        // size)', and 'min-width' / a 'fit-content'/'stretch' basis the same way). Only the
-        // expression is priced — the whole call is rebuilt from the basis beside it, so the printed
-        // form is 'calc-size(auto, 16px + size)' and not a call nested inside itself.
+        // An 'auto'/'stretch'/intrinsic basis leaves the word 'size' standing on the content axes,
+        // so the call is carried whole with its constant terms priced in this element's own font
+        // and 'size' left as a term. Only the expression is priced — the whole call is rebuilt
+        // from the basis beside it, so the printed form is 'calc-size(auto, 16px + size)' and not
+        // a call nested inside itself.
         return new CalcSizeLength(head, PriceCalcSizeConstants(expression, style));
     }
 
@@ -242,18 +278,26 @@ public static class CssPropertyApplier
         {
             case "width": style.Width = ParseSizingValue(style, value); break;
             case "height": style.Height = ParseSizingValue(style, value); break;
-            case "min-width": style.MinWidth = ParseSizingValue(style, value); break;
-            case "min-height": style.MinHeight = ParseSizingValue(style, value); break;
-            case "max-width": style.MaxWidth = ParseSizingValue(style, value); break;
-            case "max-height": style.MaxHeight = ParseSizingValue(style, value); break;
+            case "min-width": style.MinWidth = ParseSizingValue(style, value, CalcSizeAxis.Minimum); break;
+            case "min-height": style.MinHeight = ParseSizingValue(style, value, CalcSizeAxis.Minimum); break;
+            case "max-width":
+                if (MaxAxisCalcSizeAsksLayout(value)) break;
+                style.MaxWidth = ParseSizingValue(style, value, CalcSizeAxis.Maximum); break;
+            case "max-height":
+                if (MaxAxisCalcSizeAsksLayout(value)) break;
+                style.MaxHeight = ParseSizingValue(style, value, CalcSizeAxis.Maximum); break;
             // Logical sizing properties map to the physical ones for the
             // horizontal writing modes the engine supports (CSS Logical §1.2).
             case "inline-size": style.Width = ParseSizingValue(style, value); break;
             case "block-size": style.Height = ParseSizingValue(style, value); break;
-            case "min-inline-size": style.MinWidth = ParseSizingValue(style, value); break;
-            case "min-block-size": style.MinHeight = ParseSizingValue(style, value); break;
-            case "max-inline-size": style.MaxWidth = ParseSizingValue(style, value); break;
-            case "max-block-size": style.MaxHeight = ParseSizingValue(style, value); break;
+            case "min-inline-size": style.MinWidth = ParseSizingValue(style, value, CalcSizeAxis.Minimum); break;
+            case "min-block-size": style.MinHeight = ParseSizingValue(style, value, CalcSizeAxis.Minimum); break;
+            case "max-inline-size":
+                if (MaxAxisCalcSizeAsksLayout(value)) break;
+                style.MaxWidth = ParseSizingValue(style, value, CalcSizeAxis.Maximum); break;
+            case "max-block-size":
+                if (MaxAxisCalcSizeAsksLayout(value)) break;
+                style.MaxHeight = ParseSizingValue(style, value, CalcSizeAxis.Maximum); break;
             case "display": ApplyDisplay(style, value); break;
             case "position": style.Position = ParsePosition(value); break;
             case "float": style.Float = ParseFloat(value); break;
