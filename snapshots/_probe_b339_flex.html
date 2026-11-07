@@ -1,0 +1,58 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// flex container longhands
+t('display','flex');
+t('display','inline-flex');
+t('flex-direction','row');
+t('flex-direction','row-reverse');
+t('flex-direction','column');
+t('flex-direction','column-reverse');
+t('flex-direction','bogus');
+t('flex-wrap','nowrap');
+t('flex-wrap','wrap');
+t('flex-wrap','wrap-reverse');
+t('flex-wrap','bogus');
+t('flex-flow','row');
+t('flex-flow','row wrap');
+t('flex-flow','column-reverse wrap-reverse');
+t('flex-flow','bogus');
+t('justify-content','flex-start');
+t('justify-content','flex-end');
+t('justify-content','center');
+t('justify-content','space-between');
+t('justify-content','space-around');
+t('justify-content','space-evenly');
+t('justify-content','bogus');
+t('align-content','stretch');
+t('align-content','flex-start');
+t('align-content','center');
+t('align-content','space-between');
+t('align-content','bogus');
+t('align-items','stretch');
+t('align-items','flex-start');
+t('align-items','baseline');
+t('align-items','center');
+t('align-items','bogus');
+// flex item longhands
+t('flex-grow','0');
+t('flex-grow','1');
+t('flex-grow','2.5');
+t('flex-grow','-1');
+t('flex-grow','bogus');
+t('flex-shrink','0');
+t('flex-shrink','1');
+t('flex-shrink','-1');
+t('flex-shrink','bogus');
+t('flex-basis','auto');
+t('flex-basis','0');
+t('flex-basis','100px');
+t('flex-basis','content');
+t('flex-basis','bogus');
+t('order','0');
+t('order','1');
+t('order','-1');
+t('order','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
