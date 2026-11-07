@@ -5295,12 +5295,18 @@ public static class CssValueGrammar
             if (words.Count == 0) return false;
             if (words.Count > 1)
             {
-                if (!IsPercentageWord(words[^1])) return false;
+                // The percentage is a share of the mix and cannot exceed the whole (measured:
+                // 'color-mix(in srgb, red 120%, blue)' is dropped).
+                if (!IsPercentageWord(words[^1]) || !IsNonNegativeCount(words[^1].TrimEnd('%'))
+                    || double.Parse(words[^1].TrimEnd('%'), CultureInfo.InvariantCulture) > 100)
+                    return false;
                 words.RemoveAt(words.Count - 1);
             }
             if (!IsWellFormedColor(string.Join(" ", words))) return false;
         }
-        return parts.Count - first >= 1;
+        // Exactly two colours are mixed (measured: 'color-mix(in srgb, red)' and
+        // 'color-mix(in srgb, red, blue, green)' are each dropped).
+        return parts.Count - first == 2;
     }
 
     /// <summary>Split a colour function's arguments at the slash that opens its alpha, refusing a

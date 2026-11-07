@@ -609,6 +609,10 @@ public static class ColorParser
         var (c1, p1) = ParseColorMixArg(tokens[..split], context);
         var (c2, p2) = ParseColorMixArg(tokens[(split + 1)..], context);
 
+        // A second comma is a third colour, which the grammar refuses (measured:
+        // 'color-mix(in srgb, red, blue, green)' is dropped, not read as red mixed with nothing).
+        if (IndexTopLevel(tokens[(split + 1)..], ',') >= 0) return null;
+
         // A missing percentage is whatever makes the pair sum to 100%.
         if (p1 < 0 && p2 < 0) { p1 = p2 = 0.5f; }
         else if (p1 < 0) p1 = 1f - p2;
