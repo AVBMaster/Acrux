@@ -1,0 +1,59 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// logical margin/padding
+t('margin-inline','10px');
+t('margin-inline','10px 20px');
+t('margin-inline','auto');
+t('margin-block','10px');
+t('margin-inline-start','5px');
+t('margin-inline-end','5px');
+t('margin-block-start','5px');
+t('margin-block-end','5px');
+t('padding-inline','10px');
+t('padding-inline','10px 20px');
+t('padding-block','10px');
+t('padding-inline-start','5px');
+t('padding-inline-end','5px');
+t('padding-block-start','5px');
+t('padding-block-end','5px');
+// logical border
+t('border-inline','1px solid red');
+t('border-inline-start','1px solid red');
+t('border-inline-start-width','2px');
+t('border-inline-start-style','solid');
+t('border-inline-start-color','red');
+t('border-inline-end','1px solid red');
+t('border-block','1px solid red');
+t('border-block-start','1px solid red');
+t('border-block-start-width','2px');
+t('border-block-start-style','solid');
+t('border-block-start-color','red');
+t('border-block-end','1px solid red');
+// logical inset
+t('inset-inline','10px');
+t('inset-inline','10px 20px');
+t('inset-block','10px');
+t('inset-inline-start','5px');
+t('inset-inline-end','5px');
+t('inset-block-start','5px');
+t('inset-block-end','5px');
+// logical size
+t('inline-size','100px');
+t('inline-size','auto');
+t('inline-size','50%');
+t('block-size','100px');
+t('block-size','auto');
+t('min-inline-size','50px');
+t('max-inline-size','100px');
+t('min-block-size','50px');
+t('max-block-size','100px');
+// bogus
+t('margin-inline','bogus');
+t('padding-inline','bogus');
+t('border-inline','bogus');
+t('inset-inline','bogus');
+t('inline-size','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
