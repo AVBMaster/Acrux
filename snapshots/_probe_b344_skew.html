@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+const box=document.createElement('div');document.body.appendChild(box);
+function t(v){box.style.cssText='';box.style.transform=v;out.push(v+' -> echo='+JSON.stringify(box.style.transform));}
+t('skewX(30deg)');
+t('skewY(30deg)');
+t('skewX(30deg) skewY(20deg)');
+t('skewx(30deg)');
+t('SKewY(30deg)');
+t('rotateX(45deg)');
+t('scaleX(2) scaleY(3)');
+t('translateX(10px) translateY(20px)');
+t('rotateZ(45deg)');
+box.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

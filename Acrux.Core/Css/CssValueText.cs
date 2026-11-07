@@ -2373,6 +2373,7 @@ public static class CssValueText
         ["rotatedx"] = "rotateX", ["rotatedy"] = "rotateY", ["rotatedz"] = "rotateZ",
         ["scalex"] = "scaleX", ["scaley"] = "scaleY", ["scalez"] = "scaleZ",
         ["translatex"] = "translateX", ["translatey"] = "translateY", ["translatez"] = "translateZ",
+        ["skewx"] = "skewX", ["skewy"] = "skewY",
         ["rotate3d"] = "rotate3d", ["scale3d"] = "scale3d", ["translate3d"] = "translate3d",
         ["matrix3d"] = "matrix3d",
     };
