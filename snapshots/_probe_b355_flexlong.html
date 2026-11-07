@@ -1,0 +1,34 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('flex','none');
+t('flex','auto');
+t('flex','1');
+t('flex','1 1 auto');
+t('flex','1 1 0');
+t('flex','0 0 auto');
+t('flex','1 1 100px');
+t('flex','2 3 10%');
+t('flex','1 2');
+t('flex','1 1');
+t('flex','bogus');
+t('flex','1 1 1 1');
+t('flex-basis','min-content');
+t('flex-basis','max-content');
+t('flex-basis','fit-content(100px)');
+t('flex-basis','calc(100px + 2em)');
+t('flex-basis','0px');
+t('flex-basis','0%');
+t('flex-basis','bogus');
+t('flex-grow','0.5');
+t('flex-grow','100');
+t('flex-shrink','0.5');
+t('flex-grow','1e2');
+t('flex-shrink','1e2');
+t('order','-999');
+t('order','999');
+t('order','1.5');
+t('order','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
