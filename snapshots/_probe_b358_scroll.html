@@ -1,0 +1,42 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+// scroll-margin family
+t('scroll-margin','0');
+t('scroll-margin','10px');
+t('scroll-margin','10px 20px');
+t('scroll-margin','10px 20px 30px 40px');
+t('scroll-margin-top','10px');
+t('scroll-margin-top','auto');
+t('scroll-margin-top','bogus');
+t('scroll-margin-inline','10px');
+t('scroll-margin-block','10px');
+t('scroll-margin-inline-start','5px');
+// scroll-padding family
+t('scroll-padding','0');
+t('scroll-padding','10px');
+t('scroll-padding','10px 20px');
+t('scroll-padding','10px 20px 30px 40px');
+t('scroll-padding-top','10px');
+t('scroll-padding-top','auto');
+t('scroll-padding-top','bogus');
+t('scroll-padding-inline','10px');
+t('scroll-padding-block','10px');
+t('scroll-padding-inline-start','5px');
+// scrollbar-gutter
+t('scrollbar-gutter','auto');
+t('scrollbar-gutter','stable');
+t('scrollbar-gutter','stable both-edges');
+t('scrollbar-gutter','bogus');
+// scrollbar-width (non-standard but in some engines)
+t('scrollbar-width','auto');
+t('scrollbar-width','thin');
+t('scrollbar-width','none');
+t('scrollbar-width','bogus');
+// scrollbar-color
+t('scrollbar-color','auto');
+t('scrollbar-color','red blue');
+t('scrollbar-color','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
