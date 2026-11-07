@@ -1,0 +1,41 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('border-top','1px solid red');
+t('border-top','solid red');
+t('border-top','thick double');
+t('border-top','none');
+t('border-top','bogus');
+t('border-top-width','thin');
+t('border-top-width','medium');
+t('border-top-width','thick');
+t('border-top-width','1px');
+t('border-top-width','0');
+t('border-top-width','auto');
+t('border-top-width','bogus');
+t('border-top-style','solid');
+t('border-top-style','hidden');
+t('border-top-style','double');
+t('border-top-style','dotted');
+t('border-top-style','dashed');
+t('border-top-style','bogus');
+t('border-top-color','red');
+t('border-top-color','transparent');
+t('border-top-color','currentcolor');
+t('border-top-color','bogus');
+t('border-left-color','red');
+t('border-left-color','transparent');
+t('border-left-color','bogus');
+t('border-bottom-style','solid');
+t('border-bottom-style','bogus');
+t('border-right-width','2px');
+t('border-right-width','bogus');
+// radius longhands
+t('border-top-left-radius','5px');
+t('border-top-left-radius','50%');
+t('border-top-left-radius','10px 20px');
+t('border-top-left-radius','bogus');
+t('border-top-left-radius','-5px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
