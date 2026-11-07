@@ -1,0 +1,40 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const box=document.createElement('div');document.body.appendChild(box);box.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' || sup='+CSS.supports(p,v)+' || echo='+JSON.stringify(box.style.getPropertyValue(p))+' || comp='+JSON.stringify(getComputedStyle(box).getPropertyValue(p)));box.remove();}
+t('box-shadow','none');
+t('box-shadow','1px 1px');
+t('box-shadow','1px 1px black');
+t('box-shadow','1px 1px 2px');
+t('box-shadow','1px 1px 2px 3px');
+t('box-shadow','1px 1px 2px 3px black');
+t('box-shadow','inset 1px 1px');
+t('box-shadow','inset 1px 1px black');
+t('box-shadow','1px 1px black inset');
+t('box-shadow','black 1px 1px');
+t('box-shadow','red 1px 1px');
+t('box-shadow','rgba(0,0,0,0.5) 1px 1px 2px');
+t('box-shadow','1px -1px black');
+t('box-shadow','-1px -1px black');
+t('box-shadow','none, 1px 1px black');
+t('box-shadow','1px 1px black, 2px 2px red');
+t('box-shadow','bogus');
+t('box-shadow','1px 1px 2px 3px 4px');
+t('box-shadow','1px');
+t('box-shadow','black');
+t('box-shadow','1px black');
+t('text-shadow','none');
+t('text-shadow','1px 1px');
+t('text-shadow','1px 1px black');
+t('text-shadow','1px 1px 2px');
+t('text-shadow','1px 1px 2px black');
+t('text-shadow','black 1px 1px');
+t('text-shadow','red 1px 1px 2px');
+t('text-shadow','1px -1px black');
+t('text-shadow','1px 1px black, 2px 2px red');
+t('text-shadow','bogus');
+t('text-shadow','1px 1px 2px 3px');
+t('text-shadow','black');
+t('text-shadow','1px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

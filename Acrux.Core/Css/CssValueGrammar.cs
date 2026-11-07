@@ -3686,7 +3686,11 @@ public static class CssValueGrammar
         foreach (var layer in layers)
         {
             var trimmed = layer.Trim();
-            // 'none' is the initial of both shadow properties and is a value of its own.
+            // 'none' is the initial of both shadow properties, but only as the single value: a
+            // list that carries 'none' beside another shadow is no declaration at all (measured,
+            // b365: 'box-shadow: none, 1px 1px black' is refused while 'box-shadow: none' stands).
+            if (layers.Count > 1 && trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return false;
             if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
             if (trimmed.Length == 0 || !IsShadowLayer(trimmed, allowInset, maxLengths)) return false;
         }
