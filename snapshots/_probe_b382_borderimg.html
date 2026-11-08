@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// border-image with a gradient source
+t('border-image','linear-gradient(#fff, blue) 30');
+t('border-image','linear-gradient(red, blue) 30 / 10px');
+t('border-image-source','linear-gradient(#fff, blue)');
+// mask-image with a gradient
+t('mask-image','linear-gradient(#fff, transparent)');
+t('mask-image','radial-gradient(circle at center, #fff, transparent)');
+// list-style-image with a gradient
+t('list-style-image','linear-gradient(#fff, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

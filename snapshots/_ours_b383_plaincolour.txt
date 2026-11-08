@@ -1,0 +1,5 @@
+background-color="#fff" echo="rgb(255, 255, 255)"
+color="hsl(120, 100%, 50%)" echo="rgb(0, 255, 0)"
+border-color="rgb(1, 2, 3)" echo="rgb(1, 2, 3)"
+outline-color="#ABCDEF" echo="rgb(171, 205, 239)"
+background-color="rgba(0, 0, 0, 0.5)" echo="rgba(0, 0, 0, 0.5)"
