@@ -1,0 +1,51 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// text layout
+t('letter-spacing','normal');
+t('letter-spacing','2px');
+t('letter-spacing','0.1em');
+t('word-spacing','normal');
+t('word-spacing','4px');
+t('line-height','normal');
+t('line-height','1.5');
+t('line-height','20px');
+t('line-height','150%');
+t('text-align','left');
+t('text-align','center');
+t('text-align','justify');
+t('text-align','start');
+t('text-align','end');
+t('text-align','bogus');
+t('text-indent','20px');
+t('text-indent','10%');
+t('white-space','normal');
+t('white-space','nowrap');
+t('white-space','pre');
+t('white-space','pre-wrap');
+t('white-space','pre-line');
+t('white-space','break-spaces');
+t('white-space','bogus');
+t('word-break','normal');
+t('word-break','break-all');
+t('word-break','keep-all');
+t('overflow-wrap','normal');
+t('overflow-wrap','break-word');
+t('overflow-wrap','anywhere');
+t('text-transform','none');
+t('text-transform','uppercase');
+t('text-transform','lowercase');
+t('text-transform','capitalize');
+t('text-transform','full-width');
+t('vertical-align','baseline');
+t('vertical-align','sub');
+t('vertical-align','super');
+t('vertical-align','top');
+t('vertical-align','middle');
+t('vertical-align','10px');
+t('vertical-align','50%');
+t('direction','ltr');
+t('direction','rtl');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
