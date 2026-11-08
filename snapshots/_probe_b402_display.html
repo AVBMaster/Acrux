@@ -1,0 +1,52 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// display values
+t('display','block');
+t('display','inline');
+t('display','inline-block');
+t('display','flow-root');
+t('display','flex');
+t('display','grid');
+t('display','table');
+t('display','table-cell');
+t('display','contents');
+t('display','none');
+t('display','list-item');
+t('display','ruby');
+// individual transform properties
+t('translate','none');
+t('translate','10px 20px');
+t('translate','50%');
+t('rotate','none');
+t('rotate','45deg');
+t('scale','none');
+t('scale','2');
+t('scale','1.5 0.5');
+t('transform-origin','center');
+t('transform-origin','0 0');
+t('transform-origin','50% 50%');
+t('transform-origin','left top');
+// contain / content-visibility
+t('contain','none');
+t('contain','strict');
+t('contain','content');
+t('contain','size');
+t('contain','inline-size');
+t('contain','layout');
+t('contain','style');
+t('contain','paint');
+t('content-visibility','visible');
+t('content-visibility','hidden');
+t('content-visibility','auto');
+// scroll
+t('scroll-behavior','auto');
+t('scroll-behavior','smooth');
+t('overscroll-behavior','auto');
+t('overscroll-behavior','contain');
+t('overscroll-behavior','none');
+t('scrollbar-gutter','auto');
+t('scrollbar-gutter','stable');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
