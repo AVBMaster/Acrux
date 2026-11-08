@@ -1,0 +1,41 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// @layer
+t('@layer','a');
+t('@layer','a, b');
+t('@layer','a.b');
+// color-scheme
+t('color-scheme','normal');
+t('color-scheme','light');
+t('color-scheme','dark');
+t('color-scheme','light dark');
+t('color-scheme','only light');
+t('color-scheme','bogus');
+// forced-colors
+t('forced-color-adjust','auto');
+t('forced-color-adjust','none');
+t('forced-color-adjust','preserve-parent-color');
+// print
+t('print-color-adjust','economy');
+t('print-color-adjust','exact');
+// color-mix
+t('color-mix-in-props','in srgb, red, blue');
+// :has() support
+const hasSupport = CSS.supports('selector(:has(a))');
+out.push('CSS.supports(selector(:has(a))) -> '+hasSupport);
+// :is() support
+const isSupport = CSS.supports('selector(:is(a))');
+out.push('CSS.supports(selector(:is(a))) -> '+isSupport);
+// @container query support
+const containerSupport = CSS.supports('container-type: inline-size');
+out.push('CSS.supports(container-type: inline-size) -> '+containerSupport);
+// @supports query
+const supportsSupport = CSS.supports('(display: grid)');
+out.push('CSS.supports((display: grid)) -> '+supportsSupport);
+// @media query
+const mediaSupport = matchMedia('(min-width: 100px)').matches;
+out.push('matchMedia(min-width: 100px) -> '+mediaSupport);
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

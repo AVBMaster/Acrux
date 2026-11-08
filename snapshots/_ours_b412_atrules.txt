@@ -1,0 +1,20 @@
+@layer="a" sup=false echo=""
+@layer="a, b" sup=false echo=""
+@layer="a.b" sup=false echo=""
+color-scheme="normal" sup=true echo="normal"
+color-scheme="light" sup=true echo="light"
+color-scheme="dark" sup=true echo="dark"
+color-scheme="light dark" sup=true echo="light dark"
+color-scheme="only light" sup=true echo="light only"
+color-scheme="bogus" sup=true echo="bogus"
+forced-color-adjust="auto" sup=true echo="auto"
+forced-color-adjust="none" sup=true echo="none"
+forced-color-adjust="preserve-parent-color" sup=true echo="preserve-parent-color"
+print-color-adjust="economy" sup=true echo="economy"
+print-color-adjust="exact" sup=true echo="exact"
+color-mix-in-props="in srgb, red, blue" sup=false echo=""
+CSS.supports(selector(:has(a))) -> true
+CSS.supports(selector(:is(a))) -> true
+CSS.supports(container-type: inline-size) -> true
+CSS.supports((display: grid)) -> true
+matchMedia(min-width: 100px) -> true
