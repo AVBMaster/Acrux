@@ -1,0 +1,77 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// font shorthand decomposition
+t('font','16px Arial');
+t('font','bold 16px Arial');
+t('font','italic bold 16px/1.5 Arial');
+t('font','normal normal 400 16px/1.2 serif');
+t('font','bogus');
+// font shorthand with system keywords
+t('font','caption');
+t('font','icon');
+t('font','menu');
+t('font','message-box');
+t('font','small-caption');
+t('font','status-bar');
+// text-align values
+t('text-align','left');
+t('text-align','right');
+t('text-align','center');
+t('text-align','justify');
+t('text-align','start');
+t('text-align','end');
+t('text-align','match-parent');
+t('text-align','bogus');
+// vertical-align
+t('vertical-align','baseline');
+t('vertical-align','sub');
+t('vertical-align','super');
+t('vertical-align','top');
+t('vertical-align','text-top');
+t('vertical-align','middle');
+t('vertical-align','bottom');
+t('vertical-align','text-bottom');
+t('vertical-align','10px');
+t('vertical-align','50%');
+// word-spacing / letter-spacing
+t('word-spacing','normal');
+t('word-spacing','2px');
+t('word-spacing','-2px');
+t('letter-spacing','normal');
+t('letter-spacing','1px');
+t('letter-spacing','-1px');
+// line-height
+t('line-height','normal');
+t('line-height','1.5');
+t('line-height','20px');
+t('line-height','200%');
+t('line-height','bogus');
+// white-space
+t('white-space','normal');
+t('white-space','nowrap');
+t('white-space','pre');
+t('white-space','pre-wrap');
+t('white-space','pre-line');
+t('white-space','break-spaces');
+t('white-space','bogus');
+// text-indent
+t('text-indent','0');
+t('text-indent','20px');
+t('text-indent','10%');
+t('text-indent','-20px');
+// text-shadow
+t('text-shadow','none');
+t('text-shadow','1px 1px 2px black');
+t('text-shadow','0 0 0 transparent');
+// direction
+t('direction','ltr');
+t('direction','rtl');
+// unicode-bidi
+t('unicode-bidi','normal');
+t('unicode-bidi','embed');
+t('unicode-bidi','bidi-override');
+t('unicode-bidi','isolate');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
