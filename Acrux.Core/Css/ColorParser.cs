@@ -781,32 +781,84 @@ public static class ColorParser
     }
 
     /// <summary>Evaluate a channel slot in that channel's specified units, so that
-    /// 'calc(l + 20)' adds twenty the way the author wrote it.</summary>
+    /// 'calc(l + 20)' adds twenty the way the author wrote it. A relative-color calc()
+    /// carries the full four-operator arithmetic (CSS Color 5 §5.2.2), so it needs
+    /// multiplication/division precedence, not just the add/subtract sum this used to
+    /// be: 'calc(r * 0.5)' is half the channel, which the sum read as a bare 'r' times
+    /// nothing and answered zero.</summary>
     private static float EvaluateChannelExpr(string token, string space, int index, in ColorChannels ch)
     {
         string text = token.Trim();
         var calc = Regex.Match(text, @"^calc\s*\((.*)\)$", RegexOptions.IgnoreCase);
         if (calc.Success) text = calc.Groups[1].Value;
 
-        float total = 0;
-        int sign = 1;
-        int start = 0;
-        for (int i = 0; i <= text.Length; i++)
+        int pos = 0;
+        float value = ParseRelColorAddSub(text, space, index, ch, ref pos);
+        return value;
+    }
+
+    private static float ParseRelColorAddSub(string text, string space, int index, in ColorChannels ch, ref int pos)
+    {
+        float total = ParseRelColorMulDiv(text, space, index, ch, ref pos);
+        while (pos < text.Length)
         {
-            bool boundary = i == text.Length || text[i] == '+' || text[i] == '-';
-            if (!boundary) continue;
-            if (i > start)
-            {
-                string term = text[start..i].Trim();
-                if (term.Length > 0) total += sign * ParseChannelTerm(term, space, index, ch);
-            }
-            if (i < text.Length)
-            {
-                sign = text[i] == '-' ? -1 : 1;
-                start = i + 1;
-            }
+            char op = text[pos];
+            if (op != '+' && op != '-') break;
+            pos++;
+            float rhs = ParseRelColorMulDiv(text, space, index, ch, ref pos);
+            total = op == '+' ? total + rhs : total - rhs;
         }
         return total;
+    }
+
+    private static float ParseRelColorMulDiv(string text, string space, int index, in ColorChannels ch, ref int pos)
+    {
+        // A leading sign belongs to its operand: 'calc(-r)' and 'calc(-1 * r)'.
+        float sign = 1;
+        while (pos < text.Length && (text[pos] == '+' || text[pos] == '-'))
+        {
+            if (text[pos] == '-') sign = -sign;
+            pos++;
+        }
+        float total = sign * ParseRelColorFactor(text, space, index, ch, ref pos);
+        while (pos < text.Length)
+        {
+            char op = text[pos];
+            if (op != '*' && op != '/') break;
+            pos++;
+            float rhs = ParseRelColorFactor(text, space, index, ch, ref pos);
+            if (op == '*') total *= rhs;
+            else if (rhs != 0) total /= rhs;
+            else return 0;
+        }
+        return total;
+    }
+
+    private static float ParseRelColorFactor(string text, string space, int index, in ColorChannels ch, ref int pos)
+    {
+        // A nested calc() or a parenthesised group: recurse on its inside.
+        if (pos < text.Length && text[pos] == '(')
+        {
+            int depth = 0, start = pos;
+            for (; pos < text.Length; pos++)
+            {
+                if (text[pos] == '(') depth++;
+                else if (text[pos] == ')')
+                {
+                    depth--;
+                    if (depth == 0) { pos++; break; }
+                }
+            }
+            string inner = text[(start + 1)..(pos - 1)];
+            int innerPos = 0;
+            return ParseRelColorAddSub(inner, space, index, ch, ref innerPos);
+        }
+        int termStart = pos;
+        while (pos < text.Length && text[pos] != '+' && text[pos] != '-' && text[pos] != '*' && text[pos] != '/'
+               && text[pos] != '(' && text[pos] != ')')
+            pos++;
+        string term = text[termStart..pos].Trim();
+        return term.Length == 0 ? 0 : ParseChannelTerm(term, space, index, ch);
     }
 
     private static float ParseChannelTerm(string term, string space, int index, in ColorChannels ch)

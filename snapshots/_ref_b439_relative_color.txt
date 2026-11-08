@@ -1,0 +1,28 @@
+# Edge reference. SEMANTIC matches (calc now applies, values equal within rounding):
+#   rel-rgb-calc: Edge color(srgb 0.5 0 0) == ours rgb(128,0,0)  [the calc fix]
+#   rel-rgb/hsl/hwb: Edge color(srgb 0.203922 0.596078 0.858824) == ours rgb(52,152,219)
+#   mix-basic: Edge color(srgb 0.5 0 0.5) == ours rgb(128,0,128)
+#   mix-pct: Edge color(srgb 0.25 0 0.75) == ours rgb(64,0,191)
+#   rel-currentcolor: both black. mix-bogus-space: both rgb(0,0,0).
+# KNOWN DIVERGENCE (#116, out of scope): Edge keeps colour-space notation
+#   (color(srgb ...), lab(...), oklch(...)) for relative-colour + colour-mix results;
+#   we fold every one to rgb()/rgba(). Values match, notation does not.
+# raw Edge:
+rel-rgb color=color(srgb 0.203922 0.596078 0.858824)
+rel-rgb-alpha color=color(srgb 0.203922 0.596078 0.858824 / 0.5)
+rel-rgb-calc color=color(srgb 0.5 0 0)
+rel-hsl color=color(srgb 0.203922 0.596079 0.858824)
+rel-hwb color=color(srgb 0.203922 0.596079 0.858824)
+rel-lab color=lab(59.4949 -12.0924 -43.1371)
+rel-oklch color=oklch(0.653078 0.134677 242.694)
+rel-currentcolor color=color(srgb 0 0 0)
+rel-none color=color(srgb none 0.596078 0.858824)
+mix-basic color=color(srgb 0.5 0 0.5)
+mix-pct color=color(srgb 0.25 0 0.75)
+mix-oklab color=oklab(0.539974 0.0962086 -0.0928316)
+mix-alpha color=color(srgb 0.334204 0 0.665796 / 0.75098)
+mix-bogus-space color=rgb(0, 0, 0)
+bg-rel background-color=color(srgb 0.0666667 0.133333 0.2)
+SUP rgb(from #3498db r g b) = Y
+SUP color-mix(in srgb,red,blue) = Y
+SUP hwb(from #000 h w b) = Y
