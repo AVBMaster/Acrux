@@ -1,0 +1,26 @@
+<!doctype html><html><body>
+<ul id=u><li id=a>1</li><li id=b class=x>2</li><li id=c>3</li></ul>
+<input id=i type=checkbox checked><input id=j disabled><a id=k href="#">k</a>
+<div id=d tabindex=0></div>
+<pre id=rec></pre>
+<script>
+const out=[];
+function q(sel){let n=0;try{n=document.querySelectorAll(sel).length}catch(e){n='ERR:'+e.name}out.push(sel+' -> '+n);}
+// structural pseudo-classes
+q('li:first-child'); q('li:last-child'); q('li:nth-child(2)');
+q('li:nth-child(odd)'); q('li:nth-child(3n+1)');
+q('li:nth-last-child(1)'); q('li:only-child');
+q('li:nth-of-type(2)'); q('li:first-of-type');
+q(':root'); q(':empty');
+// negation / matches / has
+q('li:not(.x)'); q('li:not(#a)'); q(':is(li.x)'); q(':where(li)');
+// attribute
+q('input[checked]'); q('input[type=checkbox]'); q('a[href]');
+// UI state
+q('input:checked'); q('input:disabled'); q('input:enabled');
+q('a:link'); q('a:any-link');
+// link to element presence
+q('#u > li'); q('#u li'); q('li + li'); q('li ~ li');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

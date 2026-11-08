@@ -1,0 +1,27 @@
+li:first-child -> 1
+li:last-child -> 1
+li:nth-child(2) -> 1
+li:nth-child(odd) -> 2
+li:nth-child(3n+1) -> 1
+li:nth-last-child(1) -> 1
+li:only-child -> 0
+li:nth-of-type(2) -> 1
+li:first-of-type -> 1
+:root -> 1
+:empty -> 5
+li:not(.x) -> 2
+li:not(#a) -> 2
+:is(li.x) -> 1
+:where(li) -> 3
+input[checked] -> 1
+input[type=checkbox] -> 1
+a[href] -> 1
+input:checked -> 1
+input:disabled -> 1
+input:enabled -> 1
+a:link -> 1
+a:any-link -> 1
+#u > li -> 3
+#u li -> 3
+li + li -> 2
+li ~ li -> 2
