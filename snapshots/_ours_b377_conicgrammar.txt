@@ -1,0 +1,8 @@
+conic-gradient(from 10deg 20deg, red, blue) -> sup=false echo=""
+conic-gradient(from red, blue) -> sup=false echo=""
+conic-gradient(from, red, blue) -> sup=false echo=""
+conic-gradient(at, red, blue) -> sup=false echo=""
+conic-gradient(from 10deg from 20deg, red, blue) -> sup=false echo=""
+conic-gradient(10deg, red, blue) -> sup=false echo=""
+conic-gradient(circle, red, blue) -> sup=false echo=""
+conic-gradient(from 10deg at, red, blue) -> sup=false echo=""

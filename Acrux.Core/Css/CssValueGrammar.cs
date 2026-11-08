@@ -924,6 +924,9 @@ public static class CssValueGrammar
                    || name.Equals("-webkit-radial-gradient", StringComparison.OrdinalIgnoreCase)
                    || name.Equals("-webkit-repeating-radial-gradient", StringComparison.OrdinalIgnoreCase);
         if (radial) return RadialPrologueIsValid(token, open);
+        bool conic = name.Equals("conic-gradient", StringComparison.OrdinalIgnoreCase)
+                  || name.Equals("repeating-conic-gradient", StringComparison.OrdinalIgnoreCase);
+        if (conic) return ConicPrologueIsValid(token, open);
         foreach (var image in ImageFunctionNames)
             if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
@@ -994,6 +997,70 @@ public static class CssValueGrammar
     /// prologue carries, and telling them apart is what §3.2's circle rule needs.</summary>
     private static bool IsRadialSizeWord(string word) =>
         word.Length > 0 && (IsPlainLength(word) || word[^1] == '%');
+
+    /// <summary>CSS Images 3 §5.1: a conic gradient's prologue is at most one <c>from</c>
+    /// &lt;angle&gt; and one <c>at</c> &lt;position&gt;, and a conic has no ending shape — so
+    /// 'circle' is refused. Measured against the reference engine: 'from 10deg 20deg' (two
+    /// angles), 'from red' (a colour for the angle), 'from' alone, 'at' alone, 'from 10deg from
+    /// 20deg' (two froms), 'from 10deg at' (at with no position), a bare '10deg' (the angle
+    /// without 'from'), and 'circle' are each refused; 'from 90deg at top' reads. The stops after
+    /// the first top-level comma are not this function's business.</summary>
+    private static bool ConicPrologueIsValid(string token, int open)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return true;
+        var inner = token[(open + 1)..^1];
+        var firstComma = TopLevelComma(inner);
+        var prologue = (firstComma < 0 ? inner : inner[..firstComma]).Trim();
+        if (prologue.Length == 0) return true;
+        var words = SplitComponents(prologue);
+        // Only a first word that begins a prologue — 'from', 'at', a shape keyword or a bare
+        // angle — makes this argument a prologue. Scanning every word would misread a colour
+        // stop that carries a position ('red 0deg') as a malformed prologue, so the decision is
+        // made on the first word alone: a first word that is none of those is the first colour
+        // stop ('conic-gradient(red, blue)', 'conic-gradient(red 0deg, …)') and not our business.
+        var first = words[0].ToLowerInvariant();
+        bool hasPrologue = first is "from" or "at" or "circle" or "ellipse" || IsConicAngle(words[0]);
+        if (!hasPrologue) return true;
+
+        bool seenFrom = false, seenAngle = false, seenAt = false;
+        for (int i = 0; i < words.Count; i++)
+        {
+            var w = words[i];
+            if (w.Equals("from", StringComparison.OrdinalIgnoreCase))
+            {
+                // 'from' needs exactly one angle after it, and only one 'from' may appear.
+                if (seenFrom || i + 1 >= words.Count || seenAngle) return false;
+                seenFrom = true;
+                if (!IsConicAngle(words[++i])) return false;
+                seenAngle = true;
+                continue;
+            }
+            if (w.Equals("at", StringComparison.OrdinalIgnoreCase))
+            {
+                // 'at' needs a position after it, and only one 'at' may appear. Any number of
+                // words may make that position ('20px 30px', 'center top'), so consume the rest.
+                if (seenAt || i + 1 >= words.Count) return false;
+                seenAt = true;
+                continue;
+            }
+            if (seenAt) continue; // a position word after 'at'
+            // A bare angle without 'from', or a shape keyword ('circle'), is refused.
+            if (IsConicAngle(w) || w.Equals("circle", StringComparison.OrdinalIgnoreCase)
+                || w.Equals("ellipse", StringComparison.OrdinalIgnoreCase)) return false;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The angle 'from' takes: a plain angle or a math function. A bare number is not an
+    /// angle, so 'conic-gradient(from 90, red)' is refused.</summary>
+    private static bool IsConicAngle(string token)
+    {
+        if (IsMathFunctionCall(token, _ => true)) return true;
+        if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
+            return false;
+        return unit.ToLowerInvariant() is "deg" or "grad" or "rad" or "turn";
+    }
 
     /// <summary>The index of the first comma in |text| that is not inside a function or a
     /// parenthesised group, or -1 when there is none.</summary>
