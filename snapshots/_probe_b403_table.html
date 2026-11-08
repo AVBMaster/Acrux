@@ -1,0 +1,45 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// table layout
+t('table-layout','auto');
+t('table-layout','fixed');
+t('border-collapse','separate');
+t('border-collapse','collapse');
+t('border-spacing','0');
+t('border-spacing','2px');
+t('border-spacing','2px 5px');
+t('empty-cells','show');
+t('empty-cells','hide');
+t('caption-side','top');
+t('caption-side','bottom');
+// box decoration
+t('box-shadow','none');
+t('box-shadow','2px 2px 2px red');
+t('box-shadow','inset 0 0 5px blue');
+t('box-shadow','2px 2px red, -2px -2px blue');
+t('box-decoration-break','slice');
+t('box-decoration-break','clone');
+// flexbox container
+t('align-content','normal');
+t('align-content','flex-start');
+t('align-content','center');
+t('align-content','space-around');
+t('justify-items','auto');
+t('justify-self','auto');
+t('place-items','center');
+t('place-self','center');
+// misc box
+t('pointer-events','auto');
+t('pointer-events','none');
+t('cursor','auto');
+t('cursor','pointer');
+t('cursor','crosshair');
+t('cursor','not-allowed');
+t('outline-offset','0');
+t('outline-offset','3px');
+t('outline-style','auto');
+t('outline-width','medium');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
