@@ -1,0 +1,86 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // Build a subtree via innerHTML and reach the descendants.
+    var made = document.createElement('div');
+    root.appendChild(made);
+    made.innerHTML = '<div id=mid><span id=leaf>leaf</span></div>';
+    var mid = made.querySelector('#mid');
+    var leaf = made.querySelector('#leaf');
+
+    // ── A. owner document on the parser-built subtree ────────────────────────
+    eq('A1 the directly inserted child has an owner', safe(function () {
+        return String(!!made.ownerDocument);
+    }), 'ok:true');
+
+    eq('A2 a direct child of the innerHTML root has an owner', safe(function () {
+        return String(!!mid.ownerDocument);
+    }), 'ok:true');
+
+    eq('A3 a grandchild built by innerHTML has an owner', safe(function () {
+        return String(!!leaf.ownerDocument);
+    }), 'ok:true');
+
+    eq('A4 the grandchild owner is the document', safe(function () {
+        return String(leaf.ownerDocument === document);
+    }), 'ok:true');
+
+    // ── B. baseURI walks to the document ─────────────────────────────────────
+    eq('B1 the root answers a baseURI', safe(function () {
+        return String(made.baseURI.length > 0);
+    }), 'ok:true');
+
+    eq('B2 a direct child answers a baseURI', safe(function () {
+        return String(mid.baseURI.length > 0);
+    }), 'ok:true');
+
+    eq('B3 a grandchild answers a baseURI', safe(function () {
+        return String(leaf.baseURI.length > 0);
+    }), 'ok:true');
+
+    // ── C. isConnected / getRootNode are tree walks, owner-independent ───────
+    eq('C1 a grandchild is connected', safe(function () {
+        return String(leaf.isConnected);
+    }), 'ok:true');
+
+    eq('C2 a grandchild getRootNode is the document', safe(function () {
+        return String(leaf.getRootNode() === document);
+    }), 'ok:true');
+
+    // ── D. an orphan input can name its form by id ───────────────────────────
+    eq('D1 an input built by innerHTML finds its form by id', safe(function () {
+        var box = document.createElement('div');
+        root.appendChild(box);
+        box.innerHTML = '<form id=df><input form=df></form>';
+        var c = box.querySelector('input');
+        var f = box.querySelector('form');
+        return String(c.form === f);
+    }), 'ok:true');
+
+    eq('D2 a nested input finds its form', safe(function () {
+        var box = document.createElement('div');
+        root.appendChild(box);
+        box.innerHTML = '<div><form id=dg><input form=dg></form></div>';
+        var c = box.querySelector('input');
+        var f = box.querySelector('form');
+        return String(c.form === f);
+    }), 'ok:true');
+
+    // ── E. an input built with createElement has an owner ────────────────────
+    eq('E1 createElement stamps the owner', safe(function () {
+        var c = document.createElement('input');
+        root.appendChild(c);
+        return String(!!c.ownerDocument);
+    }), 'ok:true');
+})();
+</script></body></html>

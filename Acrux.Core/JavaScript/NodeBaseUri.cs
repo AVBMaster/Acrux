@@ -9,7 +9,11 @@ internal static class NodeBaseUri
     public static string For(Dom.Node? node)
     {
         if (node == null) return "";
-        var document = node as Dom.Document ?? node.OwnerDocument;
+        var document = node as Dom.Document ?? node.OwnerDocument
+            // A node the fragment parser built below the directly-inserted child carries no owner
+            // of its own (AppendChild stamps only that child), but it still lives in the running
+            // document — the same fallback Node.ownerDocument reads through.
+            ?? JavaScriptEngine.Current?.IntegrationService?.Document?.NativeDocument;
         return document?.BaseUrl ?? "";
     }
 }
