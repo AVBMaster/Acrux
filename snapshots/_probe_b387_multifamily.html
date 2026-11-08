@@ -1,0 +1,56 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// transform functions
+t('transform','none');
+t('transform','translate(10px, 20px)');
+t('transform','translateX(10px)');
+t('transform','scale(2)');
+t('transform','scaleX(0.5)');
+t('transform','rotate(45deg)');
+t('transform','skew(10deg, 20deg)');
+t('transform','matrix(1, 0, 0, 1, 10, 20)');
+t('transform','translate(10px) rotate(45deg) scale(2)');
+t('transform','translate(50%, 50%)');
+t('transform','ROTATE(45DEG)');
+t('transform','bogus');
+// object-fit / object-position
+t('object-fit','fill');
+t('object-fit','contain');
+t('object-fit','cover');
+t('object-fit','none');
+t('object-fit','scale-down');
+t('object-fit','bogus');
+t('object-position','center');
+t('object-position','50% 50%');
+t('object-position','left top');
+t('object-position','10px 20px');
+t('object-position','right bottom');
+// outline family
+t('outline','none');
+t('outline','1px solid red');
+t('outline','2px dotted blue');
+t('outline-width','thin');
+t('outline-width','medium');
+t('outline-width','thick');
+t('outline-width','2px');
+t('outline-style','solid');
+t('outline-style','dashed');
+t('outline-style','double');
+t('outline-style','bogus');
+t('outline-color','red');
+t('outline-color','invert');
+t('outline-offset','2px');
+// overflow family
+t('overflow','visible');
+t('overflow','hidden');
+t('overflow','scroll');
+t('overflow','auto');
+t('overflow','clip');
+t('overflow-x','hidden');
+t('overflow-y','auto');
+t('overflow','hidden auto');
+t('overflow','bogus');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
