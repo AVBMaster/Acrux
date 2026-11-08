@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b459: flexbox
+s('flex-dir','display:flex;flex-direction:column',['flex-direction']);
+s('flex-wrap','display:flex;flex-wrap:wrap',['flex-wrap']);
+s('flex-flow','display:flex;flex-flow:row wrap',['flex-flow']);
+s('flex-grow','flex-grow:2',['flex-grow']);
+s('flex-shrink','flex-shrink:0',['flex-shrink']);
+s('flex-basis-auto','flex-basis:auto',['flex-basis']);
+s('flex-basis-px','flex-basis:100px',['flex-basis']);
+s('flex-basis-pct','flex-basis:50%',['flex-basis']);
+s('flex-sh','flex:2 3 100px',['flex','flex-grow','flex-shrink','flex-basis']);
+s('flex-one','flex:1',['flex']);
+s('flex-none','flex:none',['flex']);
+s('flex-auto','flex:auto',['flex']);
+s('justify-start','justify-content:flex-start',['justify-content']);
+s('justify-end','justify-content:flex-end',['justify-content']);
+s('justify-center','justify-content:center',['justify-content']);
+s('justify-between','justify-content:space-between',['justify-content']);
+s('justify-around','justify-content:space-around',['justify-content']);
+s('justify-evenly','justify-content:space-evenly',['justify-content']);
+s('align-items','align-items:baseline',['align-items']);
+s('align-self','align-self:flex-end',['align-self']);
+s('align-content','align-content:space-between',['align-content']);
+s('order','order:3',['order']);
+out.push('SUP flex-grow:2 = '+(()=>{try{return CSS.supports('flex-grow','2')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP flex:2 3 100px = '+(()=>{try{return CSS.supports('flex','2 3 100px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP align-self:flex-end = '+(()=>{try{return CSS.supports('align-self','flex-end')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP order:3 = '+(()=>{try{return CSS.supports('order','3')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

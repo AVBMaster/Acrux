@@ -1,0 +1,26 @@
+flex-dir flex-direction=column
+flex-wrap flex-wrap=wrap
+flex-flow flex-flow=row wrap
+flex-grow flex-grow=2
+flex-shrink flex-shrink=0
+flex-basis-auto flex-basis=auto
+flex-basis-px flex-basis=100px
+flex-basis-pct flex-basis=50%
+flex-sh flex=2 3 100px | flex-grow=2 | flex-shrink=3 | flex-basis=100px
+flex-one flex=1 1 0%
+flex-none flex=0 0 auto
+flex-auto flex=1 1 auto
+justify-start justify-content=flex-start
+justify-end justify-content=flex-end
+justify-center justify-content=center
+justify-between justify-content=space-between
+justify-around justify-content=space-around
+justify-evenly justify-content=space-evenly
+align-items align-items=baseline
+align-self align-self=flex-end
+align-content align-content=space-between
+order order=3
+SUP flex-grow:2 = Y
+SUP flex:2 3 100px = Y
+SUP align-self:flex-end = Y
+SUP order:3 = Y
