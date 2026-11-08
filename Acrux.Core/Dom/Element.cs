@@ -393,6 +393,10 @@ public abstract class Element : Node
     /// ':popover-open' selector matches and the toggle methods refuse to cross twice.</summary>
     public bool IsPopoverShowing { get; set; }
 
+    /// <summary>HTML §4.11.3: a dialog shown with showModal is modal until it closes — the state
+    /// the ':modal' selector matches, distinct from a dialog merely shown into the document.</summary>
+    public bool IsModal { get; set; }
+
     public ShadowRoot AttachShadow(ShadowRootInit init)
     {
         if (InternalState.ShadowRoot != null)

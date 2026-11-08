@@ -850,6 +850,14 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.IsPopoverShowing = value;
     }
 
+    /// <summary>HTML §4.11.3: whether this dialog was shown with showModal — the script's dialog
+    /// methods write it so the ':modal' selector reads the state they set.</summary>
+    public bool __isModal
+    {
+        get => _element.IsModal;
+        set => _element.IsModal = value;
+    }
+
     public DomRect getBoundingClientRect()
     {
         FlushForRead();

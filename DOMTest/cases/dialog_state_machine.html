@@ -1,0 +1,150 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; } catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. show / showModal and the state they begin ─────────────────────────
+    eq('A1 show opens the dialog', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.show();
+        return [String(d.open), String(d.hasAttribute('open'))].join(',');
+    }), 'ok:true,true');
+
+    eq('A2 showModal opens it too', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.showModal();
+        return String(d.open);
+    }), 'ok:true');
+
+    eq('A3 show refuses an already open dialog', thrown(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.show();
+        d.show();
+    }), 'InvalidStateError');
+
+    eq('A4 showModal refuses an already open dialog', thrown(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.showModal();
+        d.showModal();
+    }), 'InvalidStateError');
+
+    eq('A5 a dialog open in the markup still counts as open', safe(function () {
+        var d = host('<dialog open><p>hi</p></dialog>').firstChild;
+        return [String(d.open), thrown(function () { d.show(); })].join(',');
+    }), 'ok:true,InvalidStateError');
+
+    // ── B. close and the events it fires ─────────────────────────────────────
+    eq('B1 close removes open and fires close', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        var seen = [];
+        d.addEventListener('close', function (ev) { seen.push(ev.type); });
+        d.show();
+        d.close();
+        return [String(d.open), seen.join('|')].join(',');
+    }), 'ok:false,close');
+
+    eq('B2 close records the returnValue the page gave', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.returnValue = '';
+        d.show();
+        d.close('saved');
+        return d.returnValue;
+    }), 'ok:saved');
+
+    eq('B3 close with no argument keeps the returnValue', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.returnValue = 'kept';
+        d.show();
+        d.close();
+        return d.returnValue;
+    }), 'ok:kept');
+
+    eq('B4 close fires no cancel event', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        var cancel = false;
+        d.addEventListener('cancel', function () { cancel = true; });
+        d.show();
+        d.close();
+        return String(cancel);
+    }), 'ok:false');
+
+    eq('B5 close coerces its argument to a string', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.show();
+        d.close(42);
+        return d.returnValue;
+    }), 'ok:42');
+
+    eq('B6 close refuses nothing on a closed dialog', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.close();
+        return String(d.open);
+    }), 'ok:false');
+
+    // ── C. requestClose runs the cancel step ─────────────────────────────────
+    eq('C1 requestClose closes and fires close', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        var seen = [];
+        d.addEventListener('close', function () { seen.push('close'); });
+        d.show();
+        d.requestClose();
+        return [String(d.open), seen.join('|')].join(',');
+    }), 'ok:false,close');
+
+    eq('C2 requestClose fires a cancelable cancel event', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        var held = null;
+        d.addEventListener('cancel', function (ev) { held = ev; });
+        d.show();
+        d.requestClose();
+        return [String(held && held.type), String(held && held.cancelable)].join(',');
+    }), 'ok:cancel,true');
+
+    eq('C3 a prevented cancel keeps the dialog open', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        var seen = [];
+        d.addEventListener('cancel', function (ev) { ev.preventDefault(); });
+        d.addEventListener('close', function () { seen.push('close'); });
+        d.show();
+        d.requestClose();
+        return [String(d.open), seen.join('|')].join(',');
+    }), 'ok:true,');
+
+    // ── D. showModal carries the modal state the :modal selector reads ───────
+    eq('D1 showModal makes the dialog match :modal', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.showModal();
+        return String(d.matches(':modal'));
+    }), 'ok:true');
+
+    eq('D2 show does not make it match :modal', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.show();
+        return String(d.matches(':modal'));
+    }), 'ok:false');
+
+    eq('D3 closing clears the modal state', safe(function () {
+        var d = host('<dialog><p>hi</p></dialog>').firstChild;
+        d.showModal();
+        d.close();
+        return String(d.matches(':modal'));
+    }), 'ok:false');
+})();
+</script></body></html>

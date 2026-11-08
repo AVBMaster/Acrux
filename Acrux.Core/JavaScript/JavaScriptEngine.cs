@@ -15823,34 +15823,62 @@ public class JavaScriptEngine : IDisposable
                 elementReflection('HTMLInputElement', 'popoverTargetElement', 'popovertarget');
                 elementReflection('HTMLAnchorElement', 'interestForElement', 'interestfor');
                 elementReflection('HTMLAreaElement', 'interestForElement', 'interestfor');
-                // HTML §4.11.3: the dialog is shown and hidden through its own two doors, and what it
-                // answers when it closes is the value the page left in it.
+                // HTML §4.11.3: the dialog is shown and hidden through its own doors, and what it
+                // answers when it closes is the value the page left in it. show/showModal refuse a
+                // dialog that is already open; showModal marks it modal for the ':modal' selector;
+                // close fires close; requestClose runs a cancelable cancel before it and lets a
+                // preventDefault keep the dialog open.
+                function dialogIsOpen(self) { return self.hasAttribute('open'); }
+                function dialogClose(self, returnValue) {
+                    if (returnValue !== undefined && returnValue !== null) {
+                        self.returnValue = String(returnValue);
+                    }
+                    self.removeAttribute('open');
+                    self.__isModal = false;
+                    try { self.dispatchEvent(new Event('close')); } catch (e) { }
+                    return undefined;
+                }
                 method('HTMLDialogElement', 'show', function () {
                     var self = brand('HTMLDialogElement', this, 'show');
+                    if (dialogIsOpen(self)) {
+                        throw new DOMException('Failed to execute ' + quoted('show') + ' on '
+                            + quoted('HTMLDialogElement') + ': The dialog is already open.',
+                            'InvalidStateError');
+                    }
+                    self.__isModal = false;
                     self.setAttribute('open', '');
                     return undefined;
                 });
                 method('HTMLDialogElement', 'showModal', function () {
                     var self = brand('HTMLDialogElement', this, 'showModal');
+                    if (dialogIsOpen(self)) {
+                        throw new DOMException('Failed to execute ' + quoted('showModal') + ' on '
+                            + quoted('HTMLDialogElement') + ': The dialog is already open.',
+                            'InvalidStateError');
+                    }
+                    self.__isModal = true;
                     self.setAttribute('open', '');
                     return undefined;
                 });
                 method('HTMLDialogElement', 'close', function (returnValue) {
                     var self = brand('HTMLDialogElement', this, 'close');
-                    if (returnValue !== undefined && returnValue !== null) {
-                        self.returnValue = String(returnValue);
-                    }
-                    self.removeAttribute('open');
-                    return undefined;
+                    return dialogClose(self, returnValue);
                 });
                 method('HTMLDialogElement', 'requestClose', function (invokee) {
                     var self = brand('HTMLDialogElement', this, 'requestClose');
-                    if (!invokee || typeof invokee.nodeType !== 'number') {
+                    if (invokee !== undefined && invokee !== null
+                        && typeof invokee.nodeType !== 'number') {
                         throw new TypeError('Failed to execute ' + quoted('requestClose') + ' on '
                             + quoted('HTMLDialogElement') + ': parameter 1 is not of type '
                             + quoted('Element') + '.');
                     }
-                    return new Promise(function (resolve) { resolve(undefined); });
+                    // HTML §4.11.3.1: the cancel step fires a cancelable cancel event; a page that
+                    // prevents it keeps the dialog open and the close never follows.
+                    var cancel = new Event('cancel', { bubbles: false, cancelable: true });
+                    try { self.dispatchEvent(cancel); } catch (e) { }
+                    if (cancel.defaultPrevented) return Promise.resolve(undefined);
+                    dialogClose(self, undefined);
+                    return Promise.resolve(undefined);
                 });
                 // DOM §4.3.11, HTML §4.10.8: a slot's assigned nodes are found among the LIGHT
                 // children of its shadow host — an element goes to the slot its 'slot' attribute

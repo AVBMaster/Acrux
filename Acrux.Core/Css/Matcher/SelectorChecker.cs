@@ -281,7 +281,7 @@ public class SelectorChecker
             CssPseudoType.Lang => MatchLang(selector.Argument, element),
             CssPseudoType.Defined => true,
             CssPseudoType.Target => false,
-            CssPseudoType.Modal => false,
+            CssPseudoType.Modal => element.IsModal,
             CssPseudoType.PopoverOpen => element.IsPopoverShowing,
             CssPseudoType.Fullscreen => false,
             CssPseudoType.PictureInPicture => false,
