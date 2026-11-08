@@ -1,0 +1,60 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// margin
+t('margin','0');
+t('margin','10px');
+t('margin','10px 20px');
+t('margin','10px 20px 30px');
+t('margin','10px 20px 30px 40px');
+t('margin','auto');
+t('margin','0 auto');
+t('margin-top','10px');
+t('margin-top','-5px');
+t('margin-left','auto');
+// padding
+t('padding','0');
+t('padding','10px');
+t('padding','5%');
+t('padding','10px 20px');
+t('padding','10px 20px 30px 40px');
+t('padding-top','15px');
+t('padding-top','-5px');
+// border
+t('border','none');
+t('border','1px solid red');
+t('border','2px dashed #00f');
+t('border','thick double green');
+t('border-top','1px solid red');
+t('border-width','1px');
+t('border-width','1px 2px');
+t('border-style','solid');
+t('border-style','solid dotted');
+t('border-color','red');
+t('border-color','red blue');
+t('border-radius','0');
+t('border-radius','5px');
+t('border-radius','5px 10px');
+t('border-radius','50%');
+t('border-radius','10px 20px 30px 40px');
+t('border-collapse','collapse');
+t('border-spacing','0');
+t('border-spacing','2px 3px');
+// box model
+t('box-sizing','content-box');
+t('box-sizing','border-box');
+t('width','auto');
+t('width','100px');
+t('width','50%');
+t('width','calc(100% - 10px)');
+t('height','auto');
+t('height','50px');
+t('min-width','0');
+t('min-width','100px');
+t('max-width','none');
+t('max-width','500px');
+t('min-height','0');
+t('max-height','none');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
