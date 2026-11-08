@@ -1920,7 +1920,7 @@ public static class CssValueGrammar
         // 'pickers' are all dropped, and a second word is never a value (measured, each).
         CssPropertyId.Appearance => static text => IsOneWordOnly(text,
             "auto", "none", "textfield", "menulist", "listbox", "textarea", "button", "checkbox",
-            "radio", "menulist-button", "searchfield", "meter", "progress-bar"),
+            "radio", "menulist-button", "searchfield", "meter", "progress-bar", "base-select"),
         // CSS Color 5 §…: 'zoom' is a scaling factor — a number from zero up, a percentage, or
         // 'normal'. 'reset' is a later draft's word, a length measures nothing to scale by, a
         // negative is no factor, and a calc() that mixes a percentage with a length is not a

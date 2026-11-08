@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,el,props){ try{ const cs=getComputedStyle(el); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); }catch(e){ out.push(label+' ERR '+e.message); } }
+function mk(css){const d=document.createElement('div');d.style.cssText=css;document.body.appendChild(d);return d;}
+function sup(prop,val){ try{ return CSS.supports(prop,val)?'Y':'N'; }catch(e){ return 'ERR'; } }
+// computed / echo values
+s('cs-l', mk('color-scheme:light'), ['color-scheme']);
+s('cs-d', mk('color-scheme:dark'), ['color-scheme']);
+s('cs-l-d', mk('color-scheme:light dark'), ['color-scheme']);
+s('cs-d-l', mk('color-scheme:dark light'), ['color-scheme']);
+s('cs-only-l', mk('color-scheme:only light'), ['color-scheme']);
+s('cs-norm', mk('color-scheme:normal'), ['color-scheme']);
+s('accent-cur', mk('accent-color:currentColor'), ['accent-color']);
+s('accent-em', mk('accent-color:#abc'), ['accent-color']);
+s('caret-cur', mk('caret-color:currentColor'), ['caret-color']);
+s('forced-preserve', mk('forced-color-adjust:preserve-parent-color'), ['forced-color-adjust']);
+s('print-auto', mk('print-color-adjust:auto'), ['print-color-adjust']);
+s('appear-textfield', mk('appearance:textfield'), ['appearance']);
+s('appear-base-select', mk('appearance:base-select'), ['appearance']);
+// grammar / supports
+out.push('SUP color-scheme:light dark = '+sup('color-scheme','light dark'));
+out.push('SUP color-scheme:only dark = '+sup('color-scheme','only dark'));
+out.push('SUP color-scheme:bogus = '+sup('color-scheme','bogus'));
+out.push('SUP accent-color:red = '+sup('accent-color','red'));
+out.push('SUP accent-color:10px = '+sup('accent-color','10px'));
+out.push('SUP caret-color:#fff = '+sup('caret-color','#fff'));
+out.push('SUP caret-color:auto = '+sup('caret-color','auto'));
+out.push('SUP forced-color-adjust:none = '+sup('forced-color-adjust','none'));
+out.push('SUP forced-color-adjust:bogus = '+sup('forced-color-adjust','bogus'));
+out.push('SUP print-color-adjust:exact = '+sup('print-color-adjust','exact'));
+out.push('SUP appearance:none = '+sup('appearance','none'));
+out.push('SUP appearance:textfield = '+sup('appearance','textfield'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
