@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// color functions
+t('color','rgb(255, 0, 0)');
+t('color','rgba(255, 0, 0, 0.5)');
+t('color','#ff0000');
+t('color','#f00');
+t('color','#ff000080');
+t('color','hsl(120, 100%, 50%)');
+t('color','hsla(120, 100%, 50%, 0.5)');
+t('color','lab(50% 40 30)');
+t('color','lch(50% 40 30)');
+t('color','oklab(0.5 0.1 0.1)');
+t('color','oklch(0.5 0.1 120)');
+t('color','color(srgb 1 0 0)');
+t('color','color(display-p3 1 0 0)');
+t('color','transparent');
+t('color','currentcolor');
+t('background-color','color-mix(in srgb, red, blue)');
+// accent-color / caret-color / column-rule-color
+t('accent-color','red');
+t('accent-color','auto');
+t('caret-color','red');
+t('caret-color','auto');
+t('caret-color','transparent');
+// column-rule-color / border shorthand colors
+t('column-rule-color','red');
+t('column-rule','1px solid red');
+t('border-top-color','red');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
