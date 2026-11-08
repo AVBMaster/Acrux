@@ -1,0 +1,1 @@
+"row.width=400\na.width=100\nb.width=200\nc.width=100\nb.flexGrow=2\nz10.zIndex=10\nz5.zIndex=5\nbox.scrollWidth=400\nbox.clientWidth=200\noverflowY=hidden\ngrid.display=grid\ngrid.columns=97.3281px 97.3281px 97.3438px\nabs.position=absolute\nabs.top=5px\nabs.right=5px"

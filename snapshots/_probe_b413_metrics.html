@@ -1,0 +1,48 @@
+<!doctype html><html><head><style>
+body{margin:0;font:16px/1.4 Arial}
+.row{display:flex;width:400px;height:60px;margin:8px}
+.a{flex:1;background:#f66}
+.b{flex:2;background:#6f6}
+.c{flex:1;background:#66f}
+.z10{position:absolute;top:10px;left:200px;width:100px;height:100px;background:rgba(255,128,128,.8);z-index:10}
+.z5{position:absolute;top:40px;left:240px;width:100px;height:100px;background:rgba(128,128,255,.8);z-index:5}
+.box{width:200px;height:50px;overflow:hidden;border:2px solid #333;margin:8px}
+.inner{width:400px;height:50px;background:linear-gradient(red,blue)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:300px;margin:8px}
+.cell{background:#fc6;padding:4px;border:1px solid #999}
+.rel{position:relative;width:150px;height:40px;background:#eee;margin:8px}
+.abs{position:absolute;top:5px;right:5px;background:gold;padding:2px}
+.sticky{position:sticky;top:0;background:#cfc;padding:4px}
+</style></head><body>
+<div class="row"><div class="a">A</div><div class="b">B</div><div class="c">C</div></div>
+<div class="z5">z5</div><div class="z10">z10</div>
+<div class="box"><div class="inner">overflow hidden</div></div>
+<div class="grid"><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div><div class="cell">4</div><div class="cell">5</div><div class="cell">6</div></div>
+<div class="rel">relative<div class="abs">abs</div></div>
+<div class="sticky">sticky</div>
+<pre id=rec></pre>
+<script>
+const out=[];
+const row=document.querySelector('.row');
+const a=document.querySelector('.a'); const b=document.querySelector('.b'); const c=document.querySelector('.c');
+out.push('row.width='+row.getBoundingClientRect().width);
+out.push('a.width='+a.getBoundingClientRect().width);
+out.push('b.width='+b.getBoundingClientRect().width);
+out.push('c.width='+c.getBoundingClientRect().width);
+out.push('b.flexGrow='+getComputedStyle(b).flexGrow);
+out.push('z10.zIndex='+getComputedStyle(document.querySelector('.z10')).zIndex);
+out.push('z5.zIndex='+getComputedStyle(document.querySelector('.z5')).zIndex);
+const box=document.querySelector('.box');
+out.push('box.scrollWidth='+box.scrollWidth);
+out.push('box.clientWidth='+box.clientWidth);
+out.push('overflowY='+getComputedStyle(box).overflow);
+const grid=document.querySelector('.grid');
+out.push('grid.display='+getComputedStyle(grid).display);
+out.push('grid.columns='+getComputedStyle(grid).gridTemplateColumns);
+const abs=document.querySelector('.abs');
+out.push('abs.position='+getComputedStyle(abs).position);
+out.push('abs.top='+getComputedStyle(abs).top);
+out.push('abs.right='+getComputedStyle(abs).right);
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

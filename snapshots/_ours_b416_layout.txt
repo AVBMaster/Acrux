@@ -1,0 +1,23 @@
+=== flex-shrink ===
+flex-shrink-item0 x=8 y=13 w=133.33 h=18
+flex-shrink-item1 x=141.33 y=13 w=133.33 h=18
+flex-shrink-item2 x=274.67 y=13 w=133.33 h=18
+=== flex-grow ===
+flex-grow-item0 x=8 y=13 w=116.67 h=18
+flex-grow-item1 x=124.67 y=13 w=183.33 h=18
+=== grid-minmax ===
+grid-minmax-c0 x=8 y=13 w=133.33 h=18
+grid-minmax-c1 x=141.33 y=13 w=266.67 h=18
+=== margin-collapse ===
+margin-parent x=8 y=20 w=784 h=30
+margin-child x=8 y=20 w=784 h=30
+child.relativeToParent=0
+=== percentage ===
+pct-parent x=8 y=13 w=440 h=58
+pct-child x=28 y=33 w=200 h=18
+=== absolute ===
+abs-relative x=8 y=13 w=200 h=100
+abs-child x=158 y=13 w=50 h=30
+=== z-index ===
+z1.zIndex=10 z2.zIndex=5
+z1 on top

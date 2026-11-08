@@ -1,0 +1,1 @@
+"body.clientWidth=361\nbody.getBoundingClientRect.width=361\nhtml.clientWidth=377\ninnerWidth=377"

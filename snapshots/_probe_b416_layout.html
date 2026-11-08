@@ -1,0 +1,76 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function rect(label, sel){const el=document.querySelector(sel);if(!el){out.push(label+' NOT FOUND');return;}const r=el.getBoundingClientRect();out.push(label+' x='+Math.round(r.x*100)/100+' y='+Math.round(r.y*100)/100+' w='+Math.round(r.width*100)/100+' h='+Math.round(r.height*100)/100);}
+function cs(label, sel, prop){const el=document.querySelector(sel);if(!el){out.push(label+' NOT FOUND');return;}out.push(label+' '+prop+'='+getComputedStyle(el).getPropertyValue(prop));}
+
+// flex-shrink: three items in 400px, total natural width 600px, all flex-shrink:1
+out.push('=== flex-shrink ===');
+const fs=document.createElement('div');fs.id='fs';fs.style.cssText='display:flex;width:400px';
+for(let i=0;i<3;i++){const c=document.createElement('div');c.style.cssText='width:200px;flex-shrink:1;flex-grow:0;flex-basis:auto';c.textContent='item'+i;fs.appendChild(c);}
+document.body.appendChild(fs);
+rect('flex-shrink-item0','#fs > div:nth-child(1)');
+rect('flex-shrink-item1','#fs > div:nth-child(2)');
+rect('flex-shrink-item2','#fs > div:nth-child(3)');
+fs.remove();
+
+// flex-grow: two items, one flex:1 one flex:2, container 300px
+out.push('=== flex-grow ===');
+const fg=document.createElement('div');fg.id='fg';fg.style.cssText='display:flex;width:300px';
+for(let i=0;i<2;i++){const c=document.createElement('div');c.style.cssText='width:50px;flex-grow:'+(i+1)+';flex-shrink:0';c.textContent='g'+i;fg.appendChild(c);}
+document.body.appendChild(fg);
+rect('flex-grow-item0','#fg > div:nth-child(1)');
+rect('flex-grow-item1','#fg > div:nth-child(2)');
+fg.remove();
+
+// grid minmax
+out.push('=== grid-minmax ===');
+const gm=document.createElement('div');gm.id='gm';gm.style.cssText='display:grid;width:400px;grid-template-columns:minmax(100px,1fr) 2fr';
+document.body.appendChild(gm);
+const gc1=document.createElement('div');gc1.textContent='c1';gm.appendChild(gc1);
+const gc2=document.createElement('div');gc2.textContent='c2';gm.appendChild(gc2);
+rect('grid-minmax-c0','#gm > div:nth-child(1)');
+rect('grid-minmax-c1','#gm > div:nth-child(2)');
+gm.remove();
+
+// margin collapse: parent+child both have margin-top:20px
+out.push('=== margin-collapse ===');
+const mp=document.createElement('div');mp.id='mp';mp.style.cssText='margin-top:20px';
+const mc=document.createElement('div');mc.style.cssText='margin-top:20px;height:30px';mc.textContent='child';
+mp.appendChild(mc);document.body.appendChild(mp);
+rect('margin-parent','#mp');
+rect('margin-child','#mp > div');
+const mpTop=mp.getBoundingClientRect().top;
+const mcTop=mc.getBoundingClientRect().top;
+out.push('child.relativeToParent='+Math.round((mcTop-mpTop)*100)/100);
+mp.remove();
+
+// percentage width against padding-box
+out.push('=== percentage ===');
+const pp=document.createElement('div');pp.id='pp';pp.style.cssText='width:400px;padding:20px;box-sizing:content-box';
+const pc=document.createElement('div');pc.style.cssText='width:50%';pc.textContent='pct';pp.appendChild(pc);
+document.body.appendChild(pp);
+rect('pct-parent','#pp');
+rect('pct-child','#pp > div');
+pp.remove();
+
+// absolute in relative: top:0 right:0
+out.push('=== absolute ===');
+const ar=document.createElement('div');ar.id='ar';ar.style.cssText='position:relative;width:200px;height:100px';
+const aa=document.createElement('div');aa.style.cssText='position:absolute;top:0;right:0;width:50px;height:30px';aa.textContent='abs';
+ar.appendChild(aa);document.body.appendChild(ar);
+rect('abs-relative','#ar');
+rect('abs-child','#ar > div');
+ar.remove();
+
+// z-index stacking
+out.push('=== z-index ===');
+const z1=document.createElement('div');z1.id='z1';z1.style.cssText='position:absolute;top:0;left:0;width:100px;height:100px;background:red;z-index:10';
+const z2=document.createElement('div');z2.id='z2';z2.style.cssText='position:absolute;top:20px;left:20px;width:100px;height:100px;background:blue;z-index:5';
+document.body.appendChild(z2);document.body.appendChild(z1);
+out.push('z1.zIndex='+getComputedStyle(z1).zIndex+' z2.zIndex='+getComputedStyle(z2).zIndex);
+out.push('z1 on top');
+z1.remove();z2.remove();
+
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

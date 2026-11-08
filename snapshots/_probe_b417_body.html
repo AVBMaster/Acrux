@@ -1,0 +1,8 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+out.push('body.clientWidth='+document.body.clientWidth);
+out.push('body.getBoundingClientRect.width='+document.body.getBoundingClientRect().width);
+out.push('html.clientWidth='+document.documentElement.clientWidth);
+out.push('innerWidth='+window.innerWidth);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

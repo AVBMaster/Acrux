@@ -1,0 +1,15 @@
+row.width=400
+a.width=100
+b.width=200
+c.width=100
+b.flexGrow=2
+z10.zIndex=10
+z5.zIndex=5
+box.scrollWidth=200
+box.clientWidth=200
+overflowY=hidden
+grid.display=grid
+grid.columns=97.3281px 97.3281px 97.3438px
+abs.position=absolute
+abs.top=5px
+abs.right=5px
