@@ -1,0 +1,25 @@
+<!doctype html><html><body><div id=t>text</div><input id=i placeholder="ph"><ul><li id=li>item</li></ul><pre id=rec></pre><script>
+const out=[];
+function t(sel,psel,prop,v){const st=document.createElement('style');st.textContent=sel+psel+'{'+prop+':'+v+';}';document.head.appendChild(st);const host=document.querySelector(sel);const s=getComputedStyle(host,psel);const got=s?s.getPropertyValue(prop):'<no box>';out.push(sel+psel+' '+prop+'='+JSON.stringify(v)+' -> '+JSON.stringify(got));st.remove();}
+// ::selection additional properties
+t('#t','::selection','background-color','yellow');
+t('#t','::selection','background','yellow');
+t('#t','::selection','color','white');
+t('#t','::selection','font-weight','bold');
+t('#t','::selection','text-decoration','underline');
+// ::placeholder additional
+t('#i','::placeholder','font-style','italic');
+t('#i','::placeholder','font-weight','bold');
+t('#i','::placeholder','opacity','0.5');
+t('#i','::placeholder','letter-spacing','2px');
+// ::marker additional
+t('#li','::marker','font-size','1.5em');
+t('#li','::marker','content','"X "');
+t('#li','::marker','font-weight','bold');
+// ::first-letter additional
+t('#t','::first-letter','color','red');
+t('#t','::first-letter','font-weight','bold');
+t('#t','::first-letter','line-height','1');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
