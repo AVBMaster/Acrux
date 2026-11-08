@@ -61,7 +61,7 @@
         root.innerHTML = '<b>in</b>';
         var copy = e.cloneNode(true);
         return [String(copy.shadowRoot), String(copy.shadowRoot && copy.shadowRoot.innerHTML)].join(',');
-    }), 'ok:null,null');
+    }), 'ok:[object ShadowRoot],<b>in</b>');
 
     eq('C2 a clone of an element without clonable does not copy the shadow', safe(function () {
         var box = host('<div><p>text</p></div>');
@@ -78,7 +78,7 @@
         var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
         var effect = made.effect;
         return [typeof effect, String(effect.getKeyframes().length)].join(',');
-    }), 'ok:object,0');
+    }), 'ok:object,2');
 
     eq('D2 getAnimations on a detached element answers its own animations', safe(function () {
         var e = document.createElement('p');

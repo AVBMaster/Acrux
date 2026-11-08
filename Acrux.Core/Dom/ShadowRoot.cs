@@ -24,6 +24,33 @@ public class ShadowRoot : DocumentFragment
 
     public override NodeType NodeType => NodeType.DocumentFragment;
 
+    /// <summary>DOM §4.3.11 "find a slot for a slottable": a light child of the host is assigned to
+    /// the first slot in the shadow tree, in tree order, whose name matches the child's 'slot'
+    /// attribute — a text node always names the empty string. A manual-assignment root keeps its
+    /// set elsewhere, and a child of anything but the host is assigned nowhere.</summary>
+    public static Element? FindAssignedSlot(Node node)
+    {
+        if (node.Parent is not Element host) return null;
+        var root = host.ShadowRoot;
+        if (root == null || root.SlotAssignment == SlotAssignmentMode.Manual) return null;
+        var wanted = node is Element el ? el.GetAttribute("slot") ?? "" : "";
+        return FindSlot(root, wanted);
+    }
+
+    private static Element? FindSlot(Node tree, string wanted)
+    {
+        foreach (var child in tree.Children)
+        {
+            if (child is not Element el) continue;
+            if (el.LocalName == "slot" && el.NamespaceUri == "http://www.w3.org/1999/xhtml"
+                && (el.GetAttribute("name") ?? "") == wanted)
+                return el;
+            var deeper = FindSlot(el, wanted);
+            if (deeper != null) return deeper;
+        }
+        return null;
+    }
+
     /// <summary>HTML §13.2.5.145: writing the root's markup parses it in the context of the host and
     /// puts the result into the shadow tree, so the elements the page wrote are queryable afterwards;
     /// reading it serialises the tree it holds.</summary>

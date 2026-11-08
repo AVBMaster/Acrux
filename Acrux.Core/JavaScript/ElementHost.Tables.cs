@@ -469,11 +469,27 @@ public partial class ElementHost
             throw new DOMException("Failed to execute 'attachShadow' on 'Element': Shadow root cannot "
                 + "be created on a host which already hosts a shadow tree.", "NotSupportedError");
         }
-        var delegatesFocus = ReadEngineOption(JavaScriptEngine.Current ?? Engine, options, "delegatesFocus");
+        var engine = JavaScriptEngine.Current ?? Engine;
+        var delegatesFocus = ReadEngineOption(engine, options, "delegatesFocus");
+        // HTML §4.3.7.2: the rest of the dictionary travels with the root — the assignment mode it
+        // asked for, and the clonable/serializable flags a clone and a serialisation read back.
+        var slotAssignment = ReadEngineString(engine, options, "slotAssignment");
+        if (slotAssignment != null && slotAssignment != "named" && slotAssignment != "manual")
+        {
+            var quote = (char)39;
+            throw new DOMException("Failed to execute 'attachShadow' on 'Element': Failed to read the "
+                + quote + "slotAssignment" + quote + " property from " + quote + "ShadowRootInit" + quote
+                + ": The provided value " + quote + slotAssignment + quote
+                + " is not a valid enum value of type SlotAssignmentMode.", "TypeError");
+        }
         var root = _element.AttachShadow(new Acrux.Core.Dom.ShadowRootInit
         {
             Mode = mode == "closed" ? Acrux.Core.Dom.ShadowMode.Closed : Acrux.Core.Dom.ShadowMode.Open,
             DelegatesFocus = delegatesFocus,
+            SlotAssignment = slotAssignment == "manual"
+                ? Acrux.Core.Dom.SlotAssignmentMode.Manual : Acrux.Core.Dom.SlotAssignmentMode.Named,
+            Clonable = ReadEngineOption(engine, options, "clonable"),
+            Serializable = ReadEngineOption(engine, options, "serializable"),
         });
         return JsIntegrationService.WrapAny(root) ?? new ShadowRootHost(root);
     }

@@ -12683,8 +12683,13 @@ public class JavaScriptEngine : IDisposable
                     };
                     made.finish = function () {
                         if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
-                        slots.currentTime = total();
+                        // Web Animations §3.5.6: finish jumps to the end the rate runs toward — the
+                        // total span forward, the start when the rate runs backward. 'total' was never
+                        // a function here, so the call threw before the state could change.
+                        slots.currentTime = slots.playbackRate < 0 ? 0
+                            : (slots.span === undefined ? 0 : slots.span);
                         slots.playState = 'finished';
+                        fireAnimation(made, 'finish');
                     };
                     made.cancel = function () {
                         if (slots.timer) { clearTimeout(slots.timer); slots.timer = 0; }
@@ -12729,8 +12734,44 @@ public class JavaScriptEngine : IDisposable
                     }
                     return live;
                 }
-                method('Element', 'getAnimations', function () { return animationsOf(this); });
-                method('Document', 'getAnimations', function () { return animationsOf(this); });
+                method('Element', 'getAnimations', function (options) {
+                    var live = animationsOf(this);
+                    // Web Animations §3.5: 'subtree' reaches the animations of every element below
+                    // this one, in tree order; without it the answer is the element's own alone.
+                    if (options && options.subtree) {
+                        var walk = function (node) {
+                            var kids = node.childNodes;
+                            if (!kids) return;
+                            for (var i = 0; i < kids.length; i++) {
+                                var child = kids[i];
+                                if (child.nodeType !== 1) continue;
+                                var own = animationsOf(child);
+                                for (var j = 0; j < own.length; j++) live.push(own[j]);
+                                walk(child);
+                            }
+                        };
+                        walk(this);
+                    }
+                    return live;
+                });
+                method('Document', 'getAnimations', function () {
+                    // The document's answer is every animation in its tree — the document node's
+                    // own first, then the elements below it in tree order.
+                    var live = animationsOf(this);
+                    var walk = function (node) {
+                        var kids = node.childNodes;
+                        if (!kids) return;
+                        for (var i = 0; i < kids.length; i++) {
+                            var child = kids[i];
+                            if (child.nodeType !== 1) continue;
+                            var own = animationsOf(child);
+                            for (var j = 0; j < own.length; j++) live.push(own[j]);
+                            walk(child);
+                        }
+                    };
+                    walk(this);
+                    return live;
+                });
                 method('Element', 'animate', function (keyframes, options) {
                     if (!isNode(this)) refusal();
                     var made = new Animation(null, null, null);
@@ -15672,29 +15713,70 @@ public class JavaScriptEngine : IDisposable
                     }
                     return new Promise(function (resolve) { resolve(undefined); });
                 });
-                // DOM §4.10.9: a slot holds the nodes assigned to it, and assigning them is the answer
-                // the hand-authored tree never changes.
-                function assignedNodes(receiver, elementsOnly) {
+                // DOM §4.3.11, HTML §4.10.8: a slot's assigned nodes are found among the LIGHT
+                // children of its shadow host — an element goes to the slot its 'slot' attribute
+                // names, a text node always to the default slot, and the slot's own parent (the
+                // shadow root) holds none of them.
+                function slotRootOf(receiver) {
+                    var root = receiver;
+                    while (root.parentNode) root = root.parentNode;
+                    return root && root.nodeType === 11 && root.host ? root : null;
+                }
+                function assignedNodes(receiver, elementsOnly, flatten) {
                     brand('HTMLSlotElement', receiver, 'assignedNodes');
-                    var parent = receiver.parentNode;
-                    if (!parent || !parent.childNodes) return [ ];
+                    var root = slotRootOf(receiver);
                     var kept = [ ];
-                    for (var i = 0; i < parent.childNodes.length; i++) {
-                        var node = parent.childNodes[i];
-                        if (node === receiver) continue;
-                        if (elementsOnly && node.nodeType !== 1) continue;
-                        kept.push(node);
+                    var manual = root && root.slotAssignment === 'manual';
+                    if (manual) {
+                        var given = receiver.__acruxAssigned;
+                        if (given) {
+                            for (var m = 0; m < given.length; m++) {
+                                var held = given[m];
+                                if (!held || (held.nodeType !== 1 && held.nodeType !== 3)) continue;
+                                if (elementsOnly && held.nodeType !== 1) continue;
+                                kept.push(held);
+                            }
+                        }
+                    } else if (root && root.host && root.host.childNodes) {
+                        var name = String(receiver.getAttribute('name') || '');
+                        var kids = root.host.childNodes;
+                        for (var i = 0; i < kids.length; i++) {
+                            var node = kids[i];
+                            if (node.nodeType !== 1 && node.nodeType !== 3) continue;
+                            var wanted = node.nodeType === 1
+                                ? String(node.getAttribute('slot') || '') : '';
+                            if (wanted !== name) continue;
+                            if (elementsOnly && node.nodeType !== 1) continue;
+                            kept.push(node);
+                        }
+                    }
+                    // DOM §4.3.11: with nothing assigned and 'flatten' asked for, the slot answers
+                    // its fallback content — its own children, a nested slot flattened in turn.
+                    if (!kept.length && flatten && receiver.childNodes) {
+                        var fallback = receiver.childNodes;
+                        for (var j = 0; j < fallback.length; j++) {
+                            var child = fallback[j];
+                            if (child.nodeType !== 1 && child.nodeType !== 3) continue;
+                            if (child.nodeType === 1 && String(child.localName) === 'slot') {
+                                var inner = assignedNodes(child, elementsOnly, true);
+                                for (var k = 0; k < inner.length; k++) kept.push(inner[k]);
+                                continue;
+                            }
+                            if (elementsOnly && child.nodeType !== 1) continue;
+                            kept.push(child);
+                        }
                     }
                     return kept;
                 }
                 method('HTMLSlotElement', 'assignedNodes', function (options) {
-                    return assignedNodes(this, false);
+                    return assignedNodes(this, false, !!(options && options.flatten));
                 });
                 method('HTMLSlotElement', 'assignedElements', function (options) {
-                    return assignedNodes(this, true);
+                    return assignedNodes(this, true, !!(options && options.flatten));
                 });
                 method('HTMLSlotElement', 'assign', function () {
                     var self = brand('HTMLSlotElement', this, 'assign');
+                    var nodes = [ ];
                     for (var i = 0; i < arguments.length; i++) {
                         var made = arguments[i];
                         if (made === null || made === undefined) continue;
@@ -15703,7 +15785,14 @@ public class JavaScriptEngine : IDisposable
                                 + quoted('HTMLSlotElement') + ': parameter ' + (i + 1)
                                 + ' is not of type ' + quoted('Node') + '.');
                         }
+                        nodes.push(made);
                     }
+                    // HTML §4.10.8: the nodes are kept as the manually assigned set; the root's
+                    // slot-assignment mode decides whether that set or the name matching is read.
+                    try {
+                        Object.defineProperty(self, '__acruxAssigned', { value: nodes,
+                            enumerable: false, configurable: true, writable: true });
+                    } catch (e) { self.__acruxAssigned = nodes; }
                     return undefined;
                 });
                 // DOM §4.8: the ChildNode doors are a doctype's too — it sits in the document's child
@@ -19749,18 +19838,47 @@ public class JavaScriptEngine : IDisposable
                     var state = effectState(this);
                     var held = state && state.keyframes;
                     if (held === null || held === undefined) return [ ];
-                    var made = [ ];
-                    for (var i = 0; i < held.length; i++) {
-                        if (typeof held[i] !== 'object' || held[i] === null) {
+                    // Web Animations §4.4.4: the property-indexed form ({ opacity: [0, 1] }) names
+                    // one list per property, and the read answers the frames those lists line up
+                    // into — the longest list decides how many frames there are, a short one stops
+                    // where its values run out, and a bare value stands in every frame.
+                    var frames = held;
+                    if (!Array.isArray(held)) {
+                        if (typeof held !== 'object') {
                             throw new TypeError('Failed to execute ' + quoted('getKeyframes')
                                 + ' on ' + quoted('KeyframeEffect') + ': the keyframes held a '
                                 + 'value that is not a keyframe.');
                         }
-                        var one = { composite: 'add', easing: 'linear', offset: null,
-                            computedOffset: i / (held.length || 1),
+                        var names = Object.keys(held);
+                        var count = 1;
+                        names.forEach(function (key) {
+                            var values = held[key];
+                            if (Array.isArray(values) && values.length > count) count = values.length;
+                        });
+                        frames = [ ];
+                        for (var f = 0; f < count; f++) {
+                            var frame = { };
+                            names.forEach(function (key) {
+                                var values = held[key];
+                                if (Array.isArray(values)) {
+                                    if (f < values.length) frame[key] = values[f];
+                                } else frame[key] = values;
+                            });
+                            frames.push(frame);
+                        }
+                    }
+                    var made = [ ];
+                    for (var i = 0; i < frames.length; i++) {
+                        if (typeof frames[i] !== 'object' || frames[i] === null) {
+                            throw new TypeError('Failed to execute ' + quoted('getKeyframes')
+                                + ' on ' + quoted('KeyframeEffect') + ': the keyframes held a '
+                                + 'value that is not a keyframe.');
+                        }
+                        var one = { composite: 'replace', easing: 'linear', offset: null,
+                            computedOffset: frames.length > 1 ? i / (frames.length - 1) : 0,
                             computedEasing: 'linear' };
-                        Object.keys(held[i]).forEach(function (key) { one[key] = held[i][key]; });
-                        one.offset = held[i].offset === undefined ? null : Number(held[i].offset);
+                        Object.keys(frames[i]).forEach(function (key) { one[key] = frames[i][key]; });
+                        one.offset = frames[i].offset === undefined ? null : Number(frames[i].offset);
                         made.push(one);
                     }
                     return made;

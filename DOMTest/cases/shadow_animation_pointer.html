@@ -50,11 +50,10 @@
     eq('B2 slotAssignment and clonable answer the options the call named', safe(function () {
         var e = el('<p>text</p>');
         var root = e.attachShadow({ mode: 'open', slotAssignment: 'manual', clonable: true });
-        // §4.3.7: slotAssignment is an attribute of the init dictionary, but the engine does not
-        // read it — a page that asks for 'manual' still gets the default 'named'. Recorded.
+        // HTML §4.3.7.2: the init dictionary's flags travel with the root and read back as given.
         return [root.slotAssignment, String(root.clonable), String(root.delegatesFocus),
             String(root.serializable)].join(',');
-    }), 'ok:named,false,false,false');
+    }), 'ok:manual,true,false,false');
 
     // ── C. animate and getAnimations ─────────────────────────────────────────
     eq('C1 animate makes an Animation and getAnimations lists it', safe(function () {

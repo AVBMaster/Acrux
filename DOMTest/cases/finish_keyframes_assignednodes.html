@@ -25,14 +25,14 @@
         var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
         made.finish();
         return String(made.playState);
-    }), 'ERR:ReferenceError:total is not defined');
+    }), 'ok:finished');
 
     eq('A2 finish sets the currentTime to the total', safe(function () {
         var e = el('<p>text</p>');
         var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
         made.finish();
         return String(made.currentTime);
-    }), 'ERR:ReferenceError:total is not defined');
+    }), 'ok:100');
 
     eq('A3 finish sets the play state to paused', safe(function () {
         var e = el('<p>text</p>');
@@ -41,7 +41,7 @@
         made.currentTime = 50;
         made.finish();
         return String(made.playState);
-    }), 'ERR:ReferenceError:total is not defined');
+    }), 'ok:finished');
 
     // ── B. the keyframes an effect carries ───────────────────────────────────
     eq('B1 getKeyframes answers the keyframes it was given', safe(function () {
@@ -50,7 +50,7 @@
         var effect = made.effect;
         var kf = effect.getKeyframes();
         return [kf.length, kf[0].opacity, kf[1].opacity].join(',');
-    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+    }), 'ok:2,0,1');
 
     eq('B2 getKeyframes answers the keyframes with a duration', safe(function () {
         var e = el('<p>text</p>');
@@ -58,7 +58,7 @@
         var effect = made.effect;
         var kf = effect.getKeyframes();
         return [kf[0].opacity, kf[1].opacity, kf[0].offset, kf[1].offset].join(',');
-    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+    }), 'ok:0,1,,');
 
     eq('B3 getKeyframes answers the keyframes with multiple properties', safe(function () {
         var e = el('<p>text</p>');
@@ -66,7 +66,7 @@
         var effect = made.effect;
         var kf = effect.getKeyframes();
         return [kf.length, kf[0].opacity, kf[1].opacity, kf[0].transform, kf[1].transform].join(',');
-    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+    }), 'ok:2,0,1,none,translateX(10px)');
 
     // ── C. the assigned nodes a slot carries ─────────────────────────────────
     eq('C1 assignedNodes answers the light children a slot captures', safe(function () {
@@ -77,7 +77,7 @@
         var slot = shadowRoot.querySelector('slot');
         var assigned = slot.assignedNodes();
         return [assigned.length, String(assigned[0] === box.querySelector('#light'))].join(',');
-    }), 'ok:0,false');
+    }), 'ok:1,true');
 
     eq('C2 assignedNodes answers the light children a named slot captures', safe(function () {
         var box = host('<div><p id=host><span slot=a id=lightA>lightA</span><span id=lightB>lightB</span></p></div>');
@@ -87,7 +87,7 @@
         var slot = shadowRoot.querySelector('slot');
         var assigned = slot.assignedNodes();
         return [assigned.length, String(assigned[0] && assigned[0].textContent)].join(',');
-    }), 'ok:0,undefined');
+    }), 'ok:1,lightA');
 
     eq('C3 assignedNodes answers the light children an empty slot captures', safe(function () {
         var box = host('<div><p id=host><span id=light>light</span></p></div>');
@@ -97,6 +97,86 @@
         var slot = shadowRoot.querySelector('slot');
         return [slot.assignedNodes().length].join(',');
     }), 'ok:0');
+
+    // ── D. the walks and flags the same algorithms carry ─────────────────────
+    eq('D1 getAnimations({subtree:true}) reaches the descendants', safe(function () {
+        var box = host('<div><p>text</p><span>more</span></div>');
+        box.querySelector('p').animate({ opacity: [0, 1] }, { duration: 100 });
+        box.querySelector('span').animate({ opacity: [0, 1] }, { duration: 100 });
+        return [box.getAnimations({ subtree: true }).length, box.getAnimations().length].join(',');
+    }), 'ok:2,0');
+
+    eq('D2 document.getAnimations lists an animation in its tree', safe(function () {
+        var e = el('<p>text</p>');
+        var a = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        return String(document.getAnimations().indexOf(a) >= 0);
+    }), 'ok:true');
+
+    eq('D3 assignedSlot answers the slot a light child landed in', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var light = box.querySelector('#light');
+        return [String(light.assignedSlot === slot), String(hostEl.assignedSlot === null)].join(',');
+    }), 'ok:true,true');
+
+    eq('D4 assignedNodes keeps text, assignedElements drops it', safe(function () {
+        var box = host('<div><p id=host>text<span>x</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        return [slot.assignedNodes().length, slot.assignedElements().length].join(',');
+    }), 'ok:2,1');
+
+    eq('D5 flatten answers the fallback content of an empty slot', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=a><b>fallback</b></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var flat = slot.assignedNodes({ flatten: true });
+        return [slot.assignedNodes().length, flat.length, flat[0] && flat[0].textContent].join(',');
+    }), 'ok:0,1,fallback');
+
+    eq('D6 a manual slot answers the nodes assign gave it', safe(function () {
+        var box = host('<div><p id=host><span id=lightA>a</span><span id=lightB>b</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open', slotAssignment: 'manual' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        slot.assign(box.querySelector('#lightA'));
+        var assigned = slot.assignedNodes();
+        return [assigned.length, String(assigned[0] === box.querySelector('#lightA'))].join(',');
+    }), 'ok:1,true');
+
+    eq('D7 a clonable shadow root travels with a deep clone', safe(function () {
+        var box = host('<div><p>text</p></div>');
+        var e = box.firstChild;
+        var root = e.attachShadow({ mode: 'open', clonable: true });
+        root.innerHTML = '<b>in</b>';
+        var copy = e.cloneNode(true);
+        return [String(copy.shadowRoot !== null),
+            String(copy.shadowRoot && copy.shadowRoot.innerHTML)].join(',');
+    }), 'ok:true,<b>in</b>');
+
+    eq('D8 finish fires the finish handler', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var heard = false;
+        made.onfinish = function () { heard = true; };
+        made.finish();
+        return String(heard);
+    }), 'ok:true');
+
+    eq('D9 computedOffset spreads the frames from 0 to 1', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var kf = made.effect.getKeyframes();
+        return [kf[0].computedOffset, kf[1].computedOffset].join(',');
+    }), 'ok:0,1');
 })();
 </script>
 <div>the finish, the keyframes and the assigned nodes an Animation carries</div></body></html>

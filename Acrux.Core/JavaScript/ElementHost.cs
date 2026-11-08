@@ -786,9 +786,10 @@ public partial class ElementHost : IDomPrototypeHost
         catch { return fallback; }
     }
 
-    /// <summary>DOM §4.2.1: the slot an element was assigned to. This engine has no shadow trees to
-    /// assign anything into, so the answer is the one a page sees outside a shadow host.</summary>
-    public object? assignedSlot => null;
+    /// <summary>DOM §4.3.11: the slot this element is assigned to — the first slot of its parent's
+    /// shadow tree whose name matches the element's 'slot' attribute, or null outside a host.</summary>
+    public object? assignedSlot => _element.AssignedSlot is { } slot
+        ? JsIntegrationService.WrapAny(slot) : null;
 
     public DomRect getBoundingClientRect()
     {

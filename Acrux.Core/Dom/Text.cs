@@ -72,7 +72,7 @@ public class TextNode : CharacterData
         _ => new TextNode(data) { OwnerDocument = OwnerDocument },
     };
 
-    public Element? AssignedSlot => null;
+    public Element? AssignedSlot => ShadowRoot.FindAssignedSlot(this);
 
     protected override Node CloneNodeInternal(bool deep) => new TextNode(Data);
 }

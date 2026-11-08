@@ -37,8 +37,26 @@ public abstract class Element : Node
         foreach (var kv in Style) clone.Style[kv.Key] = kv.Value;
         clone.StyleMirrorText = StyleMirrorText;
         if (deep)
+        {
             foreach (var child in Children)
                 clone.AppendChild(child.CloneNode(true));
+            // DOM §4.6: a shadow root travels with a deep clone only when it was opened clonable —
+            // the copy keeps the mode and the flags, and its tree is cloned node for node.
+            var shadow = ShadowRoot;
+            if (shadow != null && shadow.Clonable)
+            {
+                var copy = clone.AttachShadow(new ShadowRootInit
+                {
+                    Mode = shadow.Mode,
+                    DelegatesFocus = shadow.DelegatesFocus,
+                    SlotAssignment = shadow.SlotAssignment,
+                    Clonable = shadow.Clonable,
+                    Serializable = shadow.Serializable
+                });
+                foreach (var child in shadow.Children)
+                    copy.AppendChild(child.CloneNode(true));
+            }
+        }
         return clone;
     }
 
@@ -369,7 +387,7 @@ public abstract class Element : Node
 
     // ===== Shadow DOM =====
     public ShadowRoot? ShadowRoot => InternalState.ShadowRoot;
-    public Element? AssignedSlot => null;
+    public Element? AssignedSlot => Dom.ShadowRoot.FindAssignedSlot(this);
 
     public ShadowRoot AttachShadow(ShadowRootInit init)
     {

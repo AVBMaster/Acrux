@@ -26,7 +26,7 @@
         var effect = made.effect;
         var kf = effect.getKeyframes();
         return [typeof effect, kf.length, kf.length > 0 ? kf[0].opacity : 'none', kf.length > 1 ? kf[1].opacity : 'none'].join(',');
-    }), 'ok:object,0,none,none');
+    }), 'ok:object,2,0,1');
 
     eq('A2 the Animation effect carries the timing it was given', safe(function () {
         var e = el('<p>text</p>');
@@ -46,7 +46,7 @@
         var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
         made.finish();
         return String(made.playState);
-    }), 'ERR:ReferenceError:total is not defined');
+    }), 'ok:finished');
 
     eq('A5 reverse sets the playback rate to -1', safe(function () {
         var e = el('<p>text</p>');
@@ -82,7 +82,7 @@
         var slot = shadowRoot.querySelector('slot');
         var assigned = slot.assignedNodes();
         return [assigned.length, String(assigned[0] === box.querySelector('#light'))].join(',');
-    }), 'ok:0,false');
+    }), 'ok:1,true');
 
     eq('C2 an empty slot answers no assigned nodes', safe(function () {
         var box = host('<div><p id=host><span id=light>light</span></p></div>');
@@ -101,7 +101,7 @@
         var slot = shadowRoot.querySelector('slot');
         var assigned = slot.assignedNodes();
         return [assigned.length, String(assigned[0] && assigned[0].textContent)].join(',');
-    }), 'ok:0,undefined');
+    }), 'ok:1,lightA');
 })();
 </script>
 <div>animation, sheets and slots</div></body></html>
