@@ -2399,6 +2399,8 @@ public static class CssValueText
             inner = CanonicalRadialGradient(inner);
         if (lowered == "conic-gradient" || lowered == "repeating-conic-gradient")
             inner = CanonicalConicGradient(inner);
+        if (lowered == "linear-gradient" || lowered == "repeating-linear-gradient")
+            inner = CanonicalLinearGradient(inner);
         // A function name is ASCII case-insensitive on the way in, but the CSSOM prints the few
         // that carry a capital in their canonical spelling — the transform family above all, so
         // 'TRANSLATEZ(10px)' reads back 'translateZ(10px)' and not 'translatez(10px)' (measured).
@@ -2652,6 +2654,72 @@ public static class CssValueText
         if (parts.Count == 0) args.RemoveAt(0);
         else args[0] = string.Join(" ", parts);
         return string.Join(", ", args.Select(a => a.Trim()));
+    }
+
+    /// <summary>
+    /// Print a linear gradient's <c>[ to &lt;side&gt; ]? | &lt;angle&gt;?</c> direction the way the
+    /// reference engine does:
+    /// • <c>to bottom</c> is the default direction and is elided (<c>to bottom, red, blue</c> →
+    ///   <c>red, blue</c>); every other <c>to</c> direction is kept.
+    /// • A corner direction is reordered horizontal-then-vertical: <c>to top right</c> reads
+    ///   <c>to right top</c>, <c>to bottom left</c> reads <c>to left bottom</c> (measured).
+    /// • An angle direction is kept as written.
+    /// A length is not a direction here at all — that is the grammar's refusal, not the echo's.
+    /// The colour stops after the first top-level comma are left untouched (the colour fold
+    /// handles those).
+    /// </summary>
+    private static string CanonicalLinearGradient(string inner)
+    {
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return inner;
+
+        var prologue = args[0].Trim();
+        if (prologue.Length == 0) return inner;
+        var tokens = SplitTopLevelWords(prologue);
+        // Only a first word of 'to' or an angle begins the direction. Anything else is the first
+        // colour stop ('linear-gradient(red, blue)') and is left alone.
+        if (tokens.Count == 0) return inner;
+        var first = tokens[0].ToLowerInvariant();
+        bool isDirection = first == "to" || IsAngleToken(tokens[0]);
+        if (!isDirection) return inner;
+
+        // 'to <side> [<side>]' — a corner direction, reordered horizontal-then-vertical.
+        if (first == "to" && tokens.Count >= 2)
+        {
+            var vertical = new[] { "top", "bottom" };
+            var horizontal = new[] { "left", "right" };
+            string? vert = null, horiz = null;
+            for (int i = 1; i < tokens.Count; i++)
+            {
+                var w = tokens[i].ToLowerInvariant();
+                if (vertical.Contains(w)) vert = w;
+                else if (horizontal.Contains(w)) horiz = w;
+            }
+            if (vert == "bottom" && horiz == null)
+            {
+                // 'to bottom' is the default direction — elide the whole prologue.
+                args.RemoveAt(0);
+            }
+            else if (vert != null && horiz != null)
+            {
+                // Corner: horizontal word first, then the vertical one.
+                args[0] = "to " + horiz + " " + vert;
+            }
+            // else: a single non-default side ('to right', 'to top', 'to left') stays as written.
+            return string.Join(", ", args.Select(a => a.Trim()));
+        }
+
+        // An angle direction — kept as written.
+        return inner;
+    }
+
+    /// <summary>True for a token that is an angle — a number with one of the four angle units.
+    /// Used to tell a linear gradient's angle direction from its first colour stop.</summary>
+    private static bool IsAngleToken(string token)
+    {
+        if (token.Length == 0) return false;
+        return Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit)
+            && unit.ToLowerInvariant() is "deg" or "grad" or "rad" or "turn";
     }
 
     /// <summary>True for a token that is a length or a percentage — the size a radial gradient

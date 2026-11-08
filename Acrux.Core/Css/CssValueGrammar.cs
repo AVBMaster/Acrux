@@ -927,6 +927,9 @@ public static class CssValueGrammar
         bool conic = name.Equals("conic-gradient", StringComparison.OrdinalIgnoreCase)
                   || name.Equals("repeating-conic-gradient", StringComparison.OrdinalIgnoreCase);
         if (conic) return ConicPrologueIsValid(token, open);
+        bool linear = name.Equals("linear-gradient", StringComparison.OrdinalIgnoreCase)
+                   || name.Equals("repeating-linear-gradient", StringComparison.OrdinalIgnoreCase);
+        if (linear) return LinearDirectionIsValid(token, open);
         foreach (var image in ImageFunctionNames)
             if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
@@ -1060,6 +1063,45 @@ public static class CssValueGrammar
         if (!Acrux.Core.Dom.Animations.CssValueTokenizer.TrySplitUnit(token, out _, out var unit))
             return false;
         return unit.ToLowerInvariant() is "deg" or "grad" or "rad" or "turn";
+    }
+
+    /// <summary>CSS Images 3 §4.1: a linear gradient's direction is either <c>to</c> and one or
+    /// two side keywords, or a single &lt;angle&gt;. A length is not a direction at all, and two
+    /// angles are two directions — measured: 'linear-gradient(100px, red, blue)' and
+    /// 'linear-gradient(90deg 45deg, red, blue)' are each refused while '45deg' reads. The stops
+    /// after the first top-level comma are not this function's business.</summary>
+    private static bool LinearDirectionIsValid(string token, int open)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return true;
+        var inner = token[(open + 1)..^1];
+        var firstComma = TopLevelComma(inner);
+        var prologue = (firstComma < 0 ? inner : inner[..firstComma]).Trim();
+        if (prologue.Length == 0) return true;
+        var words = SplitComponents(prologue);
+        var first = words[0].ToLowerInvariant();
+        // The first argument is the direction only when it says 'to' or is an angle. A colour is
+        // the first stop ('red', '#fff', 'rgba(0,0,0,.5)') and is not a direction — accepted here
+        // and left to the colour fold. Anything else (a length, a second angle, a stray word) is
+        // no direction the grammar owns, so it is refused.
+        if (first != "to" && !IsConicAngle(words[0]))
+            return ColorParser.IsColorToken(words[0]);
+
+        if (first == "to")
+        {
+            // 'to' carries one side, or two sides that name different axes (a corner).
+            if (words.Count < 2 || words.Count > 3) return false;
+            bool hasHorizontal = false, hasVertical = false;
+            for (int i = 1; i < words.Count; i++)
+            {
+                var w = words[i].ToLowerInvariant();
+                if (w is "left" or "right") { if (hasHorizontal) return false; hasHorizontal = true; }
+                else if (w is "top" or "bottom") { if (hasVertical) return false; hasVertical = true; }
+                else return false;
+            }
+            return true;
+        }
+        // Not a 'to' direction: the prologue must be a single angle and nothing else.
+        return words.Count == 1 && IsConicAngle(words[0]);
     }
 
     /// <summary>The index of the first comma in |text| that is not inside a function or a

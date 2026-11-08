@@ -1,0 +1,21 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> sup='+CSS.supports('background-image',v)+' echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// corner word orders
+t('linear-gradient(to top right, red, blue)');
+t('linear-gradient(to right top, red, blue)');
+t('linear-gradient(to bottom left, red, blue)');
+t('linear-gradient(to left bottom, red, blue)');
+t('linear-gradient(to bottom right, red, blue)');
+// invalid direction forms
+t('linear-gradient(100px, red, blue)');
+t('linear-gradient(45deg, red, blue)');
+t('linear-gradient(90deg 45deg, red, blue)');
+// default elision
+t('linear-gradient(to bottom, red, blue)');
+t('linear-gradient(to right, red, blue)');
+// case
+t('linear-gradient(TO TOP RIGHT, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
