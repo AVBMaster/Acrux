@@ -1,0 +1,45 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// logical properties
+t('margin-inline-start','10px');
+t('margin-inline-end','10px');
+t('margin-block-start','10px');
+t('margin-block-end','10px');
+t('margin-inline','10px');
+t('margin-block','10px 20px');
+t('padding-inline-start','5px');
+t('padding-block','5px 10px');
+t('border-inline-start','1px solid red');
+t('border-inline','1px solid red');
+t('border-block-start-width','2px');
+t('border-start-start-radius','5px');
+t('inset-inline-start','10px');
+t('inset-inline','10px 20px');
+t('inset-block-start','5px');
+t('inset-inline','auto');
+t('inline-size','100px');
+t('block-size','50px');
+t('min-inline-size','0');
+t('max-inline-size','none');
+// container queries
+t('container-type','normal');
+t('container-type','size');
+t('container-type','inline-size');
+t('container-name','none');
+t('container-name','sidebar');
+t('container','none');
+t('container','sidebar / size');
+// scroll snap
+t('scroll-snap-type','none');
+t('scroll-snap-type','x mandatory');
+t('scroll-snap-type','y proximity');
+t('scroll-snap-align','none');
+t('scroll-snap-align','start');
+t('scroll-snap-align','center');
+t('scroll-snap-align','end');
+t('scroll-snap-stop','normal');
+t('scroll-snap-stop','always');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
