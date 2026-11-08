@@ -1,0 +1,31 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function g(label,css,parentCss){ try{
+  const p=document.createElement('div'); p.style.cssText=(parentCss||'width:200px;')+'display:block;';
+  const d=document.createElement('div'); d.style.cssText=css; p.appendChild(d);
+  document.body.appendChild(p); const r=d.getBoundingClientRect();
+  out.push(label+' -> '+Math.round(r.width*100)/100+'x'+Math.round(r.height*100)/100); p.remove();
+ }catch(e){ out.push(label+' ERR '+e.message); } }
+// b445: aspect-ratio geometry
+g('ar-16-9-w','aspect-ratio:16/9;width:160px');
+g('ar-16-9-h','aspect-ratio:16/9;height:90px');
+g('ar-1-1','aspect-ratio:1;width:50px');
+g('ar-frac','aspect-ratio:1.7777;width:177px');
+g('ar-auto','aspect-ratio:auto;width:50px;height:50px');
+g('ar-w-h','aspect-ratio:4/3;width:40px');
+g('ar-both','aspect-ratio:2/1;width:60px;height:60px');
+g('ar-pct-w','aspect-ratio:2/1;width:50%');
+g('ar-minw','aspect-ratio:2/1;width:100px;min-width:120px');
+// object-fit on a sized box (geometry via intrinsic-less box)
+function of_(label,fit){ try{
+  const p=document.createElement('div'); p.style.cssText='width:100px;height:60px;overflow:hidden;position:relative;';
+  const img=document.createElement('img'); img.style.cssText='width:100%;height:100%;object-fit:'+fit+';display:block;';
+  img.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"/>';
+  p.appendChild(img); document.body.appendChild(p);
+  const r=img.getBoundingClientRect();
+  out.push('of-'+label+' rect='+Math.round(r.width*100)/100+'x'+Math.round(r.height*100)/100+' fit='+getComputedStyle(img).objectFit); p.remove();
+ }catch(e){ out.push('of-'+label+' ERR '+e.message); } }
+of_('fill','fill'); of_('contain','contain'); of_('cover','cover');
+of_('none','none'); of_('sdn','scale-down');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

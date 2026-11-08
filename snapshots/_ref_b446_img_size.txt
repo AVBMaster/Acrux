@@ -1,0 +1,18 @@
+# Edge (live browser) reference for <img> sizing:
+#   png-pct  (data:image/png,<percent-encoded>)  -> 100x60, natural=0x0 complete=false
+#   png-b64  (data:image/png;base64,...)         -> 100x60, natural=0x0 complete=false
+# Edge fills the 100x60 box while the image is still loading (complete=false).
+#
+# OURS via --dumplayout: BOTH give 16x16, natural=0x0 complete=true — for base64 PNG
+# too, not just percent-encoded. That proves the headless --dumplayout path never
+# installs the intrinsic-size resolver / decodes images at all, so every <img> falls
+# to a 16x16 default regardless of format. This is a HARNESS LIMITATION, not a CSS
+# gap — it cannot be measured in --dumplayout.
+#
+# The percent-encoded data-URI decode fix in PaintVisitor.LoadImageAsync (RFC 2397)
+# is a genuine correctness improvement for the live browser (the base64-only gate
+# dropped every percent-encoded inline raster image), but it is NOT verifiable in
+# --dumplayout because that path doesn't decode images. Flagged honestly rather than
+# claimed as measured.
+png-pct -> 100x60
+png-b64 -> 100x60

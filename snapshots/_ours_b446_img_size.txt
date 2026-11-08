@@ -1,0 +1,4 @@
+file-png-40x20 -> 16x16
+  natural=0x0 complete=true
+file-png-40x20-2 -> 16x16
+  natural=0x0 complete=true

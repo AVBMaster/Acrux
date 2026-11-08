@@ -1,0 +1,16 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function dim(label,el){ const r=el.getBoundingClientRect();
+  out.push(label+' -> '+Math.round(r.width*100)/100+'x'+Math.round(r.height*100)/100); }
+function test(naturalInfo){
+  const p=document.createElement('div'); p.style.cssText='width:100px;height:60px;overflow:hidden;';
+  const i=document.createElement('img'); i.style.cssText='width:100%;height:100%;display:block;';
+  i.src=naturalInfo.src; p.appendChild(i); document.body.appendChild(p);
+  dim(naturalInfo.label,i); out.push('  natural='+i.naturalWidth+'x'+i.naturalHeight+' complete='+i.complete);
+  p.remove();
+}
+// a 40x20 local PNG file
+test({label:'file-png-40x20', src:'file:///home/master/Acrux/snapshots/red40x20.png'});
+test({label:'file-png-40x20-2', src:'file:///home/master/Acrux/snapshots/red40x20.png'});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

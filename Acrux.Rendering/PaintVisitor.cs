@@ -4598,9 +4598,17 @@ public class ImageCache
                 if (comma < 0) return null;
                 var meta = url[5..comma];
                 var payload = url[(comma + 1)..];
-                if (!meta.EndsWith(";base64", StringComparison.OrdinalIgnoreCase))
-                    return null;
-                var bytes = Convert.FromBase64String(payload);
+                byte[] bytes;
+                if (meta.EndsWith(";base64", StringComparison.OrdinalIgnoreCase))
+                    bytes = Convert.FromBase64String(payload);
+                else
+                {
+                    // A data URI without ';base64' percent-encodes its payload
+                    // (RFC 2397). Decoding it here is what lets a percent-encoded
+                    // inline image reach the decoder — the reference engine answers
+                    // these, and they previously fell through to null.
+                    bytes = Encoding.UTF8.GetBytes(Uri.UnescapeDataString(payload));
+                }
                 PipelineTimings.ImageDecode.AddSample(Clock.NowNanos() - sw);
                 return SKImage.FromEncodedData(bytes);
             }

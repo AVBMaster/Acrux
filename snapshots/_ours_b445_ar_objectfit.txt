@@ -1,0 +1,14 @@
+ar-16-9-w -> 160x90
+ar-16-9-h -> 160x90
+ar-1-1 -> 50x50
+ar-frac -> 177x99.57
+ar-auto -> 50x50
+ar-w-h -> 40x30
+ar-both -> 60x60
+ar-pct-w -> 100x50
+ar-minw -> 120x60
+of-fill rect=16x16 fit=fill
+of-contain rect=16x16 fit=contain
+of-cover rect=16x16 fit=cover
+of-none rect=16x16 fit=none
+of-sdn rect=16x16 fit=scale-down
