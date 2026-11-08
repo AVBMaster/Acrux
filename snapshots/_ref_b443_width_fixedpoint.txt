@@ -1,0 +1,13 @@
+# Edge reference for computed 'width' on a fractional-priced box.
+# ALL rows match ours except pct-third, which is a viewport-width artifact
+# (reference browser 377px vs our 800px, so 33.33333% of the parent differs).
+# Confirms #305 (width/height from the layout's fixed-point grid) is already
+# correct: tiny-fract quantises to 0.09375px and subpx to 0.328125px in BOTH.
+fract-px -> 100.5px
+fract-em -> 105px
+third -> 33.3281px
+pct-third -> 120.328px
+subpx -> 0.328125px
+big-fract -> 1000.25px
+tiny-fract -> 0.09375px
+exact -> 100px

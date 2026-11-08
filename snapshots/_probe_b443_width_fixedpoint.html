@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function w(label,css){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const v=getComputedStyle(d).width; d.remove(); out.push(label+' -> '+v); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b443: width that prices to a fractional px - does getComputedStyle report the
+// authored value or the layout's used (possibly fixed-point-quantized) value?
+w('fract-px','width:100.5px;height:10px');
+w('fract-em','font-size:10px;width:10.5em;height:10px');
+w('third','width:calc(100px / 3);height:10px');
+w('pct-third','width:33.33333%;height:10px');
+w('subpx','width:0.333333px;height:10px');
+w('big-fract','width:1000.25px;height:10px');
+w('tiny-fract','width:0.1px;height:10px');
+w('exact','width:100px;height:10px');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
