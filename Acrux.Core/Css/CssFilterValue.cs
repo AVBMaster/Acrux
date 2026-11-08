@@ -115,6 +115,13 @@ public static class CssFilterValue
             if (!CssValueTokenizer.TryReadFunction(item, out var rawName, out var argsText))
             { parts.Add(item); continue; }
             var name = rawName.Trim().ToLowerInvariant();
+            // A bare zero length reads back with its unit on the specified surface too, the same
+            // answer the computed value gives: 'blur(0)' reads 'blur(0px)' and a drop-shadow
+            // offset '0' reads '0px' (measured). The normalising LengthText is only reached on the
+            // computed path, so the echo does it here for the two functions that take lengths.
+            if ((name == "blur" || name == "drop-shadow") && !HasTopLevelComma(argsText)
+                && CanonicalizeSpecifiedLengths(name, argsText) is { } normalised)
+            { parts.Add(normalised); continue; }
             // A fraction function whose argument is a bare number above one is clamped to one on the
             // specified surface too, the same answer the computed value gives (measured: 'filter:
             // opacity(2)' reads back 'opacity(1)'). A percentage keeps the '%' the page wrote — the
@@ -137,6 +144,54 @@ public static class CssFilterValue
             parts.Add("drop-shadow(" + string.Join(" ", reordered) + ")");
         }
         return string.Join(" ", parts);
+    }
+
+    /// <summary>The <c>blur()</c> / <c>drop-shadow()</c> argument list with every bare zero
+    /// length printed as <c>0px</c>, the way the reference engine's echo says them
+    /// ('blur(0)' → 'blur(0px)', 'drop-shadow(0 0 0 red)' → 'drop-shadow(red 0px 0px 0px)').
+    /// <c>null</c> when the list is not one of those two functions, or when a length is not a
+    /// plain number-plus-unit the echo can normalise — the caller then leaves the item as
+    /// written and lets the grammar and the computed path judge it.</summary>
+    private static string? CanonicalizeSpecifiedLengths(string name, string argsText)
+    {
+        var args = SplitArgumentTokens(argsText);
+        if (name == "blur")
+        {
+            if (args.Count > 1) return null;
+            // 'blur()' with no argument at all reads back as written ('blur()'); only a bare
+            // zero that IS written gains its unit ('blur(0)' → 'blur(0px)', measured).
+            if (args.Count == 0) return null;
+            var radius = NormaliseSpecifiedLength(args[0]);
+            return radius == null ? null : $"blur({radius})";
+        }
+        // drop-shadow: the colour moves to the front, the lengths keep their order. A named
+        // colour keeps its keyword ('red'), but a hex or a colour function is said the way the
+        // echo says every such colour — folded to rgb() ('#fff' → 'rgb(255, 255, 255)', measured).
+        int colour = -1;
+        for (int i = 0; i < args.Count; i++)
+            if (ColorParser.IsColorToken(args[i])) { colour = i; break; }
+        if (colour <= 0) return null;
+        string colourText;
+        var colourToken = args[colour];
+        if (colourToken.Equals("currentcolor", StringComparison.OrdinalIgnoreCase)
+            || ColorParser.IsColorName(colourToken))
+            colourText = colourToken.ToLowerInvariant();
+        else
+            colourText = CssColorText.FromColor(ColorParser.Parse(colourToken));
+        var reordered = new List<string>(args.Count) { colourText };
+        for (int i = 0; i < args.Count; i++)
+            if (i != colour) reordered.Add(NormaliseSpecifiedLength(args[i]) ?? args[i]);
+        return $"drop-shadow({string.Join(" ", reordered)})";
+    }
+
+    /// <summary>A bare zero length as <c>0px</c>, and any other token unchanged — the echo
+    /// normalises the zero but keeps the authored unit and value otherwise, because the element
+    /// that would resolve a relative unit is not known on the specified surface.</summary>
+    private static string? NormaliseSpecifiedLength(string? token)
+    {
+        if (string.IsNullOrEmpty(token)) return "0px";
+        if (!CssValueTokenizer.TrySplitUnit(token.Trim(), out var number, out var unit)) return null;
+        return unit.Length == 0 && number == 0 ? "0px" : null;
     }
 
     private static string? ComputeItem(string item, ComputedStyle? style)

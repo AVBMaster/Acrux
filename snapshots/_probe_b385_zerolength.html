@@ -1,0 +1,13 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.filter=v;out.push(v+' -> echo='+JSON.stringify(el.style.filter));el.remove();}
+t('blur(0)');
+t('blur(0px)');
+t('blur()');
+t('drop-shadow(0 0 0 red)');
+t('drop-shadow(0 0 red)');
+t('drop-shadow(2px 2px 2px red)');
+t('drop-shadow(0 0 0 #fff)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

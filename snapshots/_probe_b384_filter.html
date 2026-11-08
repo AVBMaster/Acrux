@@ -1,0 +1,23 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+t('filter','none');
+t('filter','blur(5px)');
+t('filter','blur(0)');
+t('filter','brightness(0.5)');
+t('filter','brightness(50%)');
+t('filter','contrast(200%)');
+t('filter','grayscale(1)');
+t('filter','grayscale(100%)');
+t('filter','hue-rotate(90deg)');
+t('filter','invert(0.5)');
+t('filter','opacity(0.5)');
+t('filter','saturate(2)');
+t('filter','sepia(0.5)');
+t('filter','drop-shadow(2px 2px 2px red)');
+t('filter','blur(2px) brightness(0.5)');
+t('filter','url(#f)');
+t('filter','BOGUS');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
