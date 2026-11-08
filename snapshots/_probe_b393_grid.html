@@ -1,0 +1,43 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+t('display','grid');
+t('display','inline-grid');
+t('grid-template-columns','none');
+t('grid-template-columns','100px 1fr');
+t('grid-template-columns','repeat(3, 1fr)');
+t('grid-template-columns','repeat(auto-fill, 50px)');
+t('grid-template-columns','repeat(auto-fit, 50px)');
+t('grid-template-columns','minmax(100px, 1fr)');
+t('grid-template-columns','1fr 2fr');
+t('grid-template-rows','none');
+t('grid-template-rows','100px auto');
+t('grid-template-rows','repeat(2, 1fr)');
+t('grid-template','none');
+t('grid-template','"a a" 100px / 1fr 1fr');
+t('grid-template-areas','none');
+t('grid-auto-rows','auto');
+t('grid-auto-rows','100px');
+t('grid-auto-flow','row');
+t('grid-auto-flow','column');
+t('grid-auto-flow','row dense');
+t('grid-auto-flow','column dense');
+t('grid-column','auto');
+t('grid-column','1 / 3');
+t('grid-column','span 2');
+t('grid-row','auto');
+t('grid-row','1 / span 2');
+t('grid-area','auto');
+t('grid-area','a');
+t('gap','10px');
+t('gap','10px 20px');
+t('justify-items','stretch');
+t('justify-items','center');
+t('align-items','stretch');
+t('align-items','center');
+t('justify-content','start');
+t('justify-content','space-between');
+t('align-content','start');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
