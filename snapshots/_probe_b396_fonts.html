@@ -1,0 +1,62 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// visibility / display / opacity
+t('visibility','visible');
+t('visibility','hidden');
+t('visibility','collapse');
+t('visibility','bogus');
+t('opacity','1');
+t('opacity','0');
+t('opacity','0.5');
+t('opacity','-1');
+t('opacity','2');
+// font family / size / weight / style
+t('font-family','serif');
+t('font-family','sans-serif');
+t('font-family','monospace');
+t('font-family','Arial');
+t('font-family','Arial, sans-serif');
+t('font-family','"My Font", serif');
+t('font-size','medium');
+t('font-size','16px');
+t('font-size','1.5em');
+t('font-size','120%');
+t('font-size','larger');
+t('font-size','smaller');
+t('font-size','xx-large');
+t('font-weight','normal');
+t('font-weight','bold');
+t('font-weight','100');
+t('font-weight','900');
+t('font-weight','bolder');
+t('font-weight','lighter');
+t('font-style','normal');
+t('font-style','italic');
+t('font-style','oblique');
+t('font-variant','normal');
+t('font-variant','small-caps');
+// list properties
+t('list-style-type','none');
+t('list-style-type','disc');
+t('list-style-type','decimal');
+t('list-style-type','upper-roman');
+t('list-style-type','bogus');
+t('list-style-position','outside');
+t('list-style-position','inside');
+t('list-style','none');
+t('list-style','decimal inside');
+t('list-style','square url(a.png)');
+// float / clear
+t('float','none');
+t('float','left');
+t('float','right');
+t('float','inline-start');
+t('float','inline-end');
+t('clear','none');
+t('clear','left');
+t('clear','both');
+t('clear','inline-end');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
