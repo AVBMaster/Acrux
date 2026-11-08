@@ -1,0 +1,186 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('form');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function flags(v) {
+        return [v.valueMissing, v.typeMismatch, v.patternMismatch, v.tooLong, v.tooShort,
+            v.rangeUnderflow, v.rangeOverflow, v.stepMismatch, v.badInput, v.customError,
+            v.valid].map(String).join(',');
+    }
+
+    // ── A. the ValidityState object identity ─────────────────────────────────
+    eq('A1 validity answers a ValidityState', safe(function () {
+        var f = host('<input required>');
+        var v = f.firstChild.validity;
+        return [Object.prototype.toString.call(v), v instanceof ValidityState].join(',');
+    }), 'ok:[object ValidityState],true');
+
+    eq('A2 validity is the same object each read', safe(function () {
+        var f = host('<input required>');
+        var c = f.firstChild;
+        return String(c.validity === c.validity);
+    }), 'ok:true');
+
+    eq('A3 a clean control answers valid', safe(function () {
+        var f = host('<input value=hi>');
+        return String(f.firstChild.validity.valid);
+    }), 'ok:true');
+
+    // ── B. valueMissing ──────────────────────────────────────────────────────
+    eq('B1 required empty answers valueMissing', safe(function () {
+        var f = host('<input required>');
+        var v = f.firstChild.validity;
+        return [String(v.valueMissing), String(v.valid)].join(',');
+    }), 'ok:true,false');
+
+    eq('B2 required with a value clears it', safe(function () {
+        var f = host('<input required value=x>');
+        return String(f.firstChild.validity.valueMissing);
+    }), 'ok:false');
+
+    eq('B3 not required empty is valid', safe(function () {
+        var f = host('<input>');
+        var v = f.firstChild.validity;
+        return [String(v.valueMissing), String(v.valid)].join(',');
+    }), 'ok:false,true');
+
+    // ── C. typeMismatch ──────────────────────────────────────────────────────
+    eq('C1 email without @ mismatches', safe(function () {
+        var f = host('<input type=email value=nope>');
+        return String(f.firstChild.validity.typeMismatch);
+    }), 'ok:true');
+
+    eq('C2 email with @ is fine', safe(function () {
+        var f = host('<input type=email value=a@b.c>');
+        return String(f.firstChild.validity.typeMismatch);
+    }), 'ok:false');
+
+    eq('C3 url without scheme mismatches', safe(function () {
+        var f = host('<input type=url value=nope>');
+        return String(f.firstChild.validity.typeMismatch);
+    }), 'ok:true');
+
+    eq('C4 number with letters answers badInput not typeMismatch', safe(function () {
+        var f = host('<input type=number value=abc>');
+        var v = f.firstChild.validity;
+        return [String(v.badInput), String(v.typeMismatch)].join(',');
+    }), 'ok:true,false');
+
+    // ── D. patternMismatch ───────────────────────────────────────────────────
+    eq('D1 pattern not matched answers patternMismatch', safe(function () {
+        var f = host('<input pattern=[0-9]+ value=abc>');
+        return String(f.firstChild.validity.patternMismatch);
+    }), 'ok:true');
+
+    eq('D2 pattern matched clears it', safe(function () {
+        var f = host('<input pattern=[0-9]+ value=123>');
+        return String(f.firstChild.validity.patternMismatch);
+    }), 'ok:false');
+
+    eq('D3 empty value skips the pattern', safe(function () {
+        var f = host('<input pattern=[0-9]+ value=>');
+        return String(f.firstChild.validity.patternMismatch);
+    }), 'ok:false');
+
+    // ── E. range and step ────────────────────────────────────────────────────
+    eq('E1 below min answers rangeUnderflow', safe(function () {
+        var f = host('<input type=number min=5 value=3>');
+        return String(f.firstChild.validity.rangeUnderflow);
+    }), 'ok:true');
+
+    eq('E2 above max answers rangeOverflow', safe(function () {
+        var f = host('<input type=number max=5 value=7>');
+        return String(f.firstChild.validity.rangeOverflow);
+    }), 'ok:true');
+
+    eq('E3 off-step answers stepMismatch', safe(function () {
+        var f = host('<input type=number min=0 step=2 value=3>');
+        return String(f.firstChild.validity.stepMismatch);
+    }), 'ok:true');
+
+    eq('E4 on-step is valid', safe(function () {
+        var f = host('<input type=number min=0 step=2 value=4>');
+        var v = f.firstChild.validity;
+        return [String(v.stepMismatch), String(v.valid)].join(',');
+    }), 'ok:false,true');
+
+    // ── F. tooLong / tooShort ────────────────────────────────────────────────
+    eq('F1 over maxlength answers tooLong', safe(function () {
+        var f = host('<input maxlength=3 value=abcdef>');
+        var v = f.firstChild.validity;
+        return [String(v.tooLong), String(v.valid)].join(',');
+    }), 'ok:true,false');
+
+    eq('F2 under minlength answers tooShort', safe(function () {
+        var f = host('<input minlength=5 value=ab>');
+        var v = f.firstChild.validity;
+        return [String(v.tooShort), String(v.valid)].join(',');
+    }), 'ok:true,false');
+
+    eq('F3 within the length bounds is valid', safe(function () {
+        var f = host('<input minlength=2 maxlength=5 value=abc>');
+        var v = f.firstChild.validity;
+        return [String(v.tooLong), String(v.tooShort), String(v.valid)].join(',');
+    }), 'ok:false,false,true');
+
+    // ── G. customError ───────────────────────────────────────────────────────
+    eq('G1 setCustomValidity sets customError', safe(function () {
+        var f = host('<input value=x>');
+        var c = f.firstChild;
+        c.setCustomValidity('nope');
+        var v = c.validity;
+        return [String(v.customError), String(v.valid), c.validationMessage].join(',');
+    }), 'ok:true,false,nope');
+
+    eq('G2 setCustomValidity("") clears it', safe(function () {
+        var f = host('<input value=x>');
+        var c = f.firstChild;
+        c.setCustomValidity('nope');
+        c.setCustomValidity('');
+        var v = c.validity;
+        return [String(v.customError), String(v.valid), String(c.validationMessage)].join(',');
+    }), 'ok:false,true,');
+
+    // ── H. checkValidity and reportValidity ──────────────────────────────────
+    eq('H1 checkValidity answers false on an invalid control', safe(function () {
+        var f = host('<input required>');
+        return String(f.firstChild.checkValidity());
+    }), 'ok:false');
+
+    eq('H2 checkValidity answers true on a valid control', safe(function () {
+        var f = host('<input value=x>');
+        return String(f.firstChild.checkValidity());
+    }), 'ok:true');
+
+    eq('H3 reportValidity answers the same as checkValidity', safe(function () {
+        var f = host('<input required>');
+        return String(f.firstChild.reportValidity());
+    }), 'ok:false');
+
+    // ── I. form.novalidate ───────────────────────────────────────────────────
+    eq('I1 form.checkValidity aggregates its controls', safe(function () {
+        var f = host('<input value=ok><input required>');
+        return String(f.checkValidity());
+    }), 'ok:false');
+
+    eq('I2 novalidate makes the form valid', safe(function () {
+        var f = host('<input required>');
+        f.setAttribute('novalidate', '');
+        return String(f.checkValidity());
+    }), 'ok:true');
+})();
+</script></body></html>

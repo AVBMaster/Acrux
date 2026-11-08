@@ -611,7 +611,12 @@ public partial class ElementHost
     /// 'customError' and answers this text (HTML §4.10.4.4).</summary>
     public void setCustomValidity(string? message) => _customValidityMessage = message ?? "";
 
-    public ValidationStateHost validity => new(() => TagIs(_element, "FORM") ? FormFlags() : ValidationFlags());
+    private ValidationStateHost? _validity;
+
+    /// <summary>HTML §4.10.4: 'validity' is [SameObject] — the same object every read answers, and
+    /// its flags are recomputed from the control each time one is asked.</summary>
+    public ValidationStateHost validity => _validity ??= new ValidationStateHost(
+        () => TagIs(_element, "FORM") ? FormFlags() : ValidationFlags());
 
     /// <summary>§4.10.22.2: a form's validity is the union of the flags its listed controls carry —
     /// the form fails with the bit the first failing control fails with.</summary>
@@ -665,13 +670,26 @@ public partial class ElementHost
         var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
         flags["customError"] = _customValidityMessage.Length > 0;
         flags["valueMissing"] = _element.HasAttribute("required") && text.Length == 0;
+        // HTML §4.10.4: badInput asks about the text the field holds, not the sanitized value — a
+        // number field whose text is not a number answers "" from 'value', which would never set it.
+        var rawText = IsInput && ControlType is "number" or "range"
+            ? (_element.Value ?? "") : text;
+        if (IsInput && ControlType == "number" && rawText.Length > 0 && !double.TryParse(rawText,
+            NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+            flags["badInput"] = true;
+        // HTML §4.10.4: the length flags read the value the control carries, not the attribute's
+        // guard — a page that sets value past maxlength is what the flags report.
+        if (int.TryParse(_element.GetAttribute("maxlength"), NumberStyles.Integer,
+            CultureInfo.InvariantCulture, out var maxLen) && maxLen >= 0 && text.Length > maxLen)
+            flags["tooLong"] = true;
+        if (int.TryParse(_element.GetAttribute("minlength"), NumberStyles.Integer,
+            CultureInfo.InvariantCulture, out var minLen) && minLen >= 0 && text.Length > 0
+            && text.Length < minLen)
+            flags["tooShort"] = true;
         if (IsInput && ControlType == "email" && text.Length > 0 && !text.Contains('@'))
             flags["typeMismatch"] = true;
         if (IsInput && ControlType == "url" && text.Length > 0 && !Uri.IsWellFormedUriString(text, UriKind.Absolute))
             flags["typeMismatch"] = true;
-        if (IsInput && ControlType == "number" && text.Length > 0 && !double.TryParse(text,
-            NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-            flags["badInput"] = true;
         var pattern = _element.GetAttribute("pattern");
         if (!string.IsNullOrEmpty(pattern) && text.Length > 0)
         {
@@ -756,6 +774,9 @@ public partial class ElementHost
 
     private bool FormValidity()
     {
+        // HTML §4.10.22.3: novalidate takes the form's controls out of constraint validation, so
+        // the form is valid (and fires no invalid events) whatever its controls carry.
+        if (_element.HasAttribute("novalidate")) return true;
         foreach (var control in ValidationControls())
         {
             if (!control.willValidate) continue;
