@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> sup='+CSS.supports('background-image',v)+' echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+t('linear-gradient(currentcolor, blue)');
+t('linear-gradient(transparent, blue)');
+t('linear-gradient(rgb(255,0,0), rgb(0,0,255))');
+t('linear-gradient(rgba(255,0,0,0.5) 0%, rgb(0,0,255) 100%)');
+t('linear-gradient(hsl(120,100%,50%) 10%, hsl(240,100%,50%) 90%)');
+t('linear-gradient(lab(50% 40 30), blue)');
+t('linear-gradient(color(srgb 1 0 0), blue)');
+t('linear-gradient(red calc(10% + 20px), blue)');
+t('linear-gradient(red, blue, green)');
+t('linear-gradient(#ABCDEF 0%, #123456 100%)');
+t('radial-gradient(circle at center, currentcolor, blue)');
+t('conic-gradient(from 0deg, currentcolor, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
