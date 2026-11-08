@@ -1,0 +1,5 @@
+visible sw=200 cw=200 ch=50 isc=false
+auto sw=400 cw=200 ch=38 isc=true
+hidden sw=200 cw=200 ch=50 isc=false
+scroll sw=400 cw=188 ch=38 isc=true
+clip sw=200 cw=200 ch=50 isc=false

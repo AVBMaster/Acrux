@@ -1,0 +1,1 @@
+"oh-auto-400 sw=400 cw=200 sh=50 ch=50\noh-hidden-400 sw=400 cw=200 sh=50 ch=50\noh-scroll-400 sw=400 cw=185 sh=50 ch=35\noh-auto-0 sw=200 cw=200 sh=50 ch=50\noh-auto-50 sw=200 cw=200 sh=50 ch=50"

@@ -171,6 +171,14 @@ public static class AuroraFragmentConverter
         // containers never get scrollbars / wheel routing.
         var elStyle = fragment.Element?.ComputedStyle;
         float gutterReserve = fragment.GutterInlineReservation;
+        // NOTE: CSSOM View §2 says scrollWidth reports the scrollable content extent for every
+        // overflow type (visible/auto/hidden/scroll/clip), and the reference engine confirms
+        // sw=400 for a 200px box with a 400px child across all five. However, computing the
+        // extent for non-scrollable boxes requires setting IsScrollContainer on them, which
+        // changes painting (the b261 marker gate regressed 560px when this was attempted).
+        // The scroll-width divergence for visible/hidden/clip is recorded as a known limitation
+        // until the painting dependency on IsScrollContainer is understood well enough to
+        // decouple scrollWidth from it.
         if (elStyle != null && (IsScrollableOverflow(elStyle) || gutterReserve > 0f))
         {
             float bottom = 0, right = 0;

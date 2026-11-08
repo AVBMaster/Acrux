@@ -1,0 +1,1 @@
+"visible sw=400 cw=200 ch=50 isc=false\nauto sw=400 cw=185 ch=35 isc=true\nhidden sw=400 cw=200 ch=50 isc=false\nscroll sw=400 cw=185 ch=35 isc=true\nclip sw=400 cw=200 ch=50 isc=false"

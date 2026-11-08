@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function probe(label, css, inner){
+ const box=document.createElement('div');box.setAttribute('style',css);
+ const kid=document.createElement('div');kid.setAttribute('style',inner);
+ box.appendChild(kid);document.body.appendChild(box);
+ out.push(label+' sw='+box.scrollWidth+' cw='+box.clientWidth+' ch='+box.clientHeight+' isc='+ (box.scrollHeight>box.clientHeight));
+ box.remove();
+}
+probe('visible','width:200px;height:50px','width:400px;height:50px');
+probe('auto','width:200px;height:50px;overflow:auto','width:400px;height:50px');
+probe('hidden','width:200px;height:50px;overflow:hidden','width:400px;height:50px');
+probe('scroll','width:200px;height:50px;overflow:scroll','width:400px;height:50px');
+probe('clip','width:200px;height:50px;overflow:clip','width:400px;height:50px');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

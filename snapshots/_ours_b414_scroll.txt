@@ -1,0 +1,5 @@
+oh-auto-400 sw=400 cw=200 sh=50 ch=50
+oh-hidden-400 sw=400 cw=200 sh=50 ch=50
+oh-scroll-400 sw=400 cw=188 sh=50 ch=38
+oh-auto-0 sw=200 cw=200 sh=50 ch=50
+oh-auto-50 sw=200 cw=200 sh=50 ch=50
