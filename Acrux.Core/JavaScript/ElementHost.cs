@@ -2532,12 +2532,18 @@ public partial class ElementHost : IDomPrototypeHost
 
     /// <summary>HTML §4.10.22: the action a submission goes to is the attribute resolved against the
     /// document's base — an absolute address, or the document's own address when the markup (or the
-    /// empty action) gives no other target (measured: a form with no action answers its page URL).</summary>
+    /// empty action) gives no other target (measured: a form with no action answers its page URL).
+    /// A button/input's formAction reflects its own 'formaction' attribute, not the form's.</summary>
     public string formAction
     {
-        get => ResolveAgainstBase(_element.GetAttribute("action"));
-        set => _element.SetAttribute("action", value ?? "");
+        get => IsFormControlTag
+            ? ResolveAgainstBase(_element.GetAttribute("formaction"))
+            : ResolveAgainstBase(_element.GetAttribute("action"));
+        set => _element.SetAttribute(IsFormControlTag ? "formaction" : "action", value ?? "");
     }
+
+    private bool IsFormControlTag => _element.TagName is "BUTTON" or "INPUT"
+        or "SELECT" or "TEXTAREA" or "FIELDSET" or "OUTPUT" or "PROGRESS" or "METER" or "OBJECT";
 
     private string ResolveAgainstBase(string? raw)
     {

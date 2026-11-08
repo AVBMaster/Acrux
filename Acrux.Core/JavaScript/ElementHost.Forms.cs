@@ -387,15 +387,29 @@ public partial class ElementHost
     private static int ClampIndex(int index, int length) => index < 0 ? 0 : (index > length ? length : index);
 
     // ── the control's place in a form ────────────────────────────────────────
-    /// <summary>HTML §4.10.13: the form the control belongs to — the one that holds it, or the one its
-    /// 'form' attribute names.</summary>
+    /// <summary>HTML §4.10.13: the form the control belongs to — the one its 'form' attribute names
+    /// (an orphan control can be associated by id), or the nearest form ancestor. The page holds the
+    /// very object it has for that form, so the read answers the cached wrapper, not a fresh one.</summary>
     public object? form
     {
         get
         {
             if (!IsFormControl(_element)) return null;
+            var byId = _element.GetAttribute("form");
+            if (!string.IsNullOrEmpty(byId))
+            {
+                // The form an orphan control names may live outside the subtree innerHTML built —
+                // whose nodes the parser leaves without an owner document — so fall back to the
+                // running document the way Node.ownerDocument does.
+                var doc = _element.OwnerDocument
+                    ?? JavaScriptEngine.Current?.IntegrationService?.Document?.NativeDocument;
+                var named = doc?.GetElementById(byId);
+                if (named is not null && TagIs(named, "FORM"))
+                    return JsIntegrationService.WrapAny(named);
+                return null;
+            }
             for (var node = _element.ParentElement; node != null; node = node.ParentElement)
-                if (TagIs(node, "FORM")) return WrapForCollection(node);
+                if (TagIs(node, "FORM")) return JsIntegrationService.WrapAny(node);
             return null;
         }
     }

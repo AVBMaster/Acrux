@@ -1,0 +1,91 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. form association ──────────────────────────────────────────────────
+    eq('A1 an input in a form answers that form', safe(function () {
+        var box = host('<form id=f><input></form>');
+        var f = box.querySelector('form');
+        var c = box.querySelector('input');
+        return [String(c.form === f), String(c.form.id)].join(',');
+    }), 'ok:true,f');
+
+    eq('A2 an input outside a form answers null', safe(function () {
+        var f = host('<input>');
+        return String(f.firstChild.form);
+    }), 'ok:null');
+
+    eq('A3 form=form-id associates an orphan input', safe(function () {
+        var box = host('<div><form id=fa></form><input form=fa></div>');
+        var f = box.querySelector('form');
+        var c = box.querySelector('input');
+        return String(c.form === f);
+    }), 'ok:true');
+
+    eq('A4 form=unknown-id answers null', safe(function () {
+        var box = host('<form id=f></form><input form=nope>');
+        return String(box.querySelector('input').form);
+    }), 'ok:null');
+
+    // ── B. labels ────────────────────────────────────────────────────────────
+    eq('B1 a label wraps its control', safe(function () {
+        var f = host('<label id=lb><input></label>');
+        var c = f.querySelector('input');
+        return [c.labels.length, c.labels[0].id].join(',');
+    }), 'ok:1,lb');
+
+    eq('B2 a label for=id points at the control', safe(function () {
+        var f = host('<label for=t id=lb>t</label><input id=t>');
+        var c = f.querySelector('#t');
+        return [c.labels.length, c.labels[0].id].join(',');
+    }), 'ok:1,lb');
+
+    eq('B3 an unlabelled control answers an empty list', safe(function () {
+        var f = host('<input>');
+        return String(f.firstChild.labels.length);
+    }), 'ok:0');
+
+    // ── C. the button/input form* attributes ─────────────────────────────────
+    eq('C1 formAction resolves the formaction against the base', safe(function () {
+        var f = host('<button formaction="/go">b</button>');
+        return String(f.firstChild.formAction.indexOf('/go') >= 0);
+    }), 'ok:true');
+
+    eq('C2 formMethod answers the method attribute', safe(function () {
+        var f = host('<input formmethod=post>');
+        return f.firstChild.formMethod;
+    }), 'ok:post');
+
+    eq('C3 formNoValidate reflects the attribute', safe(function () {
+        var f = host('<button formnovalidate>b</button>');
+        return String(f.firstChild.formNoValidate);
+    }), 'ok:true');
+
+    eq('C4 formTarget answers the target attribute', safe(function () {
+        var f = host('<button formtarget=_blank>b</button>');
+        return f.firstChild.formTarget;
+    }), 'ok:_blank');
+
+    eq('C5 an unset formaction resolves to the page URL', safe(function () {
+        var f = host('<button>b</button>');
+        var a = f.firstChild.formAction;
+        return [String(a.length > 0), String(a === document.URL), String(a.indexOf('form_association') >= 0),
+            f.firstChild.formMethod, f.firstChild.formTarget].join(',');
+    }), 'ok:true,true,true,,');
+})();
+</script></body></html>
