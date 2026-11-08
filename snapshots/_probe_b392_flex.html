@@ -1,0 +1,54 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// flex container
+t('display','flex');
+t('display','inline-flex');
+t('flex-direction','row');
+t('flex-direction','row-reverse');
+t('flex-direction','column');
+t('flex-direction','column-reverse');
+t('flex-direction','bogus');
+t('flex-wrap','nowrap');
+t('flex-wrap','wrap');
+t('flex-wrap','wrap-reverse');
+t('flex-flow','row wrap');
+t('flex-flow','column nowrap');
+t('justify-content','flex-start');
+t('justify-content','flex-end');
+t('justify-content','center');
+t('justify-content','space-between');
+t('justify-content','space-around');
+t('justify-content','space-evenly');
+t('justify-content','bogus');
+t('align-items','stretch');
+t('align-items','flex-start');
+t('align-items','center');
+t('align-items','baseline');
+t('align-items','flex-end');
+t('align-content','stretch');
+t('align-content','center');
+t('align-content','space-between');
+t('gap','10px');
+t('gap','10px 20px');
+t('row-gap','10px');
+t('column-gap','20px');
+// flex items
+t('flex','none');
+t('flex','1');
+t('flex','1 1 auto');
+t('flex','2 0 100px');
+t('flex','0 0 auto');
+t('flex-grow','1');
+t('flex-shrink','0');
+t('flex-basis','auto');
+t('flex-basis','100px');
+t('flex-basis','content');
+t('order','1');
+t('order','-1');
+t('align-self','auto');
+t('align-self','center');
+t('align-self','flex-end');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
