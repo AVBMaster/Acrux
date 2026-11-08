@@ -1,0 +1,102 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe147 — the finish, the keyframes and the assigned nodes an Animation carries</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the finish an Animation carries ───────────────────────────────────
+    eq('A1 finish sets the play state to finished', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.finish();
+        return String(made.playState);
+    }), 'ERR:ReferenceError:total is not defined');
+
+    eq('A2 finish sets the currentTime to the total', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.finish();
+        return String(made.currentTime);
+    }), 'ERR:ReferenceError:total is not defined');
+
+    eq('A3 finish sets the play state to paused', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        made.pause();
+        made.currentTime = 50;
+        made.finish();
+        return String(made.playState);
+    }), 'ERR:ReferenceError:total is not defined');
+
+    // ── B. the keyframes an effect carries ───────────────────────────────────
+    eq('B1 getKeyframes answers the keyframes it was given', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var effect = made.effect;
+        var kf = effect.getKeyframes();
+        return [kf.length, kf[0].opacity, kf[1].opacity].join(',');
+    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+
+    eq('B2 getKeyframes answers the keyframes with a duration', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1] }, { duration: 100 });
+        var effect = made.effect;
+        var kf = effect.getKeyframes();
+        return [kf[0].opacity, kf[1].opacity, kf[0].offset, kf[1].offset].join(',');
+    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+
+    eq('B3 getKeyframes answers the keyframes with multiple properties', safe(function () {
+        var e = el('<p>text</p>');
+        var made = e.animate({ opacity: [0, 1], transform: ['none', 'translateX(10px)'] }, { duration: 100 });
+        var effect = made.effect;
+        var kf = effect.getKeyframes();
+        return [kf.length, kf[0].opacity, kf[1].opacity, kf[0].transform, kf[1].transform].join(',');
+    }), 'ERR:TypeError:Cannot read properties of undefined (rea');
+
+    // ── C. the assigned nodes a slot carries ─────────────────────────────────
+    eq('C1 assignedNodes answers the light children a slot captures', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var assigned = slot.assignedNodes();
+        return [assigned.length, String(assigned[0] === box.querySelector('#light'))].join(',');
+    }), 'ok:0,false');
+
+    eq('C2 assignedNodes answers the light children a named slot captures', safe(function () {
+        var box = host('<div><p id=host><span slot=a id=lightA>lightA</span><span id=lightB>lightB</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=a></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        var assigned = slot.assignedNodes();
+        return [assigned.length, String(assigned[0] && assigned[0].textContent)].join(',');
+    }), 'ok:0,undefined');
+
+    eq('C3 assignedNodes answers the light children an empty slot captures', safe(function () {
+        var box = host('<div><p id=host><span id=light>light</span></p></div>');
+        var hostEl = box.querySelector('#host');
+        var shadowRoot = hostEl.attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = '<slot name=other></slot>';
+        var slot = shadowRoot.querySelector('slot');
+        return [slot.assignedNodes().length].join(',');
+    }), 'ok:0');
+})();
+</script>
+<div>the finish, the keyframes and the assigned nodes an Animation carries</div></body></html>
