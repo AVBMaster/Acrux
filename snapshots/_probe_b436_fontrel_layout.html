@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function m(label,val){ try{ out.push(label+' -> '+val); }catch(e){ out.push(label+' ERR'); } }
+function dim(sel){ const e=document.querySelector(sel); if(!e) return 'MISSING'; const r=e.getBoundingClientRect(); return Math.round(r.width*100)/100+'x'+Math.round(r.height*100)/100; }
+// A plain font-relative length (em/ch/ex) reaching a layout path that may read only px.
+// host: font-size 20px, 100px wide -> 1em=20px, 2ch~20px.
+const host=document.createElement('div'); host.style.cssText='font-size:20px;width:100px;position:relative;'; host.id='host'; document.body.appendChild(host);
+const ids=['em-width','ch-width','ex-height','em-margin','em-padding','em-border','em-inset','em-textindent','rem-width'];
+const csss=['width:1em','width:2ch','height:1ex','width:50px;margin-left:1em','width:50px;padding-left:1em;box-sizing:border-box','width:60px;border-left:0.5em solid;box-sizing:border-box','position:absolute;left:1em;width:20px','text-indent:2em;width:80px','width:2rem'];
+for(let k=0;k<ids.length;k++){
+  const d=document.createElement('div'); d.id='m_'+ids[k]; d.style.cssText=csss[k]+';'; host.appendChild(d);
+}
+for(const id of ids){ m(id+' rect='+dim('#m_'+id)); }
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
