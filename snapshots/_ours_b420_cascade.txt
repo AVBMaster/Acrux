@@ -1,0 +1,19 @@
+inherit-child-color -> "rgb(255, 0, 0)"
+initial-color -> "rgb(0, 0, 0)"
+unset-color-inherited -> "rgb(255, 0, 0)"
+unset-margin-initial -> "0px"
+all-unset-color -> "rgb(255, 0, 0)"
+inherit-margin-non-inherited -> "50px"
+attr-contains-bc -> "rgb(128, 0, 128)"
+li-first -> "rgb(255, 0, 0)"
+li-middle -> "rgb(0, 128, 0)"
+li-last -> "rgb(0, 0, 255)"
+not-x-first -> "rgb(0, 0, 255)"
+not-x-second -> "rgb(255, 0, 0)"
+font-style -> italic
+font-weight -> 700
+font-size -> 16px
+line-height -> 24px
+font-family -> Arial
+inherit-font-size -> 20px
+inherit-line-height -> 30px

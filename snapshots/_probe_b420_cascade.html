@@ -1,0 +1,92 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// CSS-wide keywords: inherit/initial/unset/revert
+function t(label, setup, prop, val, readSel){
+ setup();
+ const el=document.querySelector(readSel);
+ const got=el?getComputedStyle(el).getPropertyValue(prop):'<no el>';
+ out.push(label+' -> '+JSON.stringify(got));
+ document.getElementById('rec').textContent=out.join('\n');
+}
+// inherit
+document.body.style.color='blue';
+const inh=document.createElement('div');inh.id='inh';inh.innerHTML='<p id=inh-p>text</p>';
+inh.style.color='red';document.body.appendChild(inh);
+out.push('inherit-child-color -> '+JSON.stringify(getComputedStyle(document.getElementById('inh-p')).color));
+document.body.removeChild(inh);
+// initial
+const ini=document.createElement('div');ini.id='ini';ini.style.cssText='color:red';
+const iniP=document.createElement('p');iniP.style.cssText='color:initial';iniP.textContent='x';
+ini.appendChild(iniP);document.body.appendChild(ini);
+out.push('initial-color -> '+JSON.stringify(getComputedStyle(iniP).color));
+ini.remove();
+// unset (inherit for inherited props, initial for non-inherited)
+const uns=document.createElement('div');uns.id='uns';uns.style.color='red';
+const unsP=document.createElement('p');unsP.style.cssText='color:unset';unsP.textContent='x';
+uns.appendChild(unsP);document.body.appendChild(uns);
+out.push('unset-color-inherited -> '+JSON.stringify(getComputedStyle(unsP).color));
+uns.remove();
+const uns2=document.createElement('div');uns2.style.cssText='margin-left:50px';
+const uns2P=document.createElement('p');uns2P.style.cssText='margin-left:unset';uns2P.textContent='x';
+uns2.appendChild(uns2P);document.body.appendChild(uns2);
+out.push('unset-margin-initial -> '+JSON.stringify(getComputedStyle(uns2P).marginLeft));
+uns2.remove();
+// all: unset
+const all=document.createElement('div');all.style.cssText='color:red;margin:10px;padding:5px;border:1px solid black';
+const allP=document.createElement('p');allP.style.cssText='all:unset';allP.textContent='x';
+all.appendChild(allP);document.body.appendChild(all);
+out.push('all-unset-color -> '+JSON.stringify(getComputedStyle(allP).color));
+all.remove();
+// inherit on non-inherited property (margin)
+const nh=document.createElement('div');nh.style.cssText='margin-left:50px';
+const nhP=document.createElement('p');nhP.style.cssText='margin-left:inherit';nhP.textContent='x';
+nh.appendChild(nhP);document.body.appendChild(nh);
+out.push('inherit-margin-non-inherited -> '+JSON.stringify(getComputedStyle(nhP).marginLeft));
+nh.remove();
+// attribute selectors
+const at=document.createElement('style');
+at.textContent='[data-x]{color:red}[data-x="y"]{color:blue}[data-x^="ab"]{color:green}[data-x$="cd"]{color:orange}[data-x*="bc"]{color:purple}';
+document.head.appendChild(at);
+const atEl=document.createElement('div');atEl.setAttribute('data-x','abcd');atEl.textContent='x';
+document.body.appendChild(atEl);
+out.push('attr-contains-bc -> '+JSON.stringify(getComputedStyle(atEl).color));
+at.remove();atEl.remove();
+// pseudo-classes
+const ps=document.createElement('style');
+ps.textContent='li:first-child{color:red}li:last-child{color:blue}li:nth-child(2){color:green}';
+document.head.appendChild(ps);
+const ul=document.createElement('ul');ul.innerHTML='<li>1</li><li>2</li><li>3</li>';
+document.body.appendChild(ul);
+out.push('li-first -> '+JSON.stringify(getComputedStyle(ul.children[0]).color));
+out.push('li-middle -> '+JSON.stringify(getComputedStyle(ul.children[1]).color));
+out.push('li-last -> '+JSON.stringify(getComputedStyle(ul.children[2]).color));
+ps.remove();ul.remove();
+// :not()
+const nt=document.createElement('style');nt.textContent='li:not(.x){color:red}';
+document.head.appendChild(nt);
+const ntUl=document.createElement('ul');ntUl.innerHTML='<li class=x>a</li><li>b</li>';
+document.body.appendChild(ntUl);
+out.push('not-x-first -> '+JSON.stringify(getComputedStyle(ntUl.children[0]).color));
+out.push('not-x-second -> '+JSON.stringify(getComputedStyle(ntUl.children[1]).color));
+nt.remove();ntUl.remove();
+// font shorthand
+const ff=document.createElement('div');ff.style.cssText='font:italic bold 16px/1.5 Arial';
+document.body.appendChild(ff);
+out.push('font-style -> '+getComputedStyle(ff).fontStyle);
+out.push('font-weight -> '+getComputedStyle(ff).fontWeight);
+out.push('font-size -> '+getComputedStyle(ff).fontSize);
+out.push('line-height -> '+getComputedStyle(ff).lineHeight);
+out.push('font-family -> '+getComputedStyle(ff).fontFamily);
+ff.remove();
+// inheritance chain
+const ic=document.createElement('style');ic.textContent='#ic-root{font-size:20px;line-height:1.5}';
+document.head.appendChild(ic);
+const icR=document.createElement('div');icR.id='ic-root';
+const icC=document.createElement('div');icC.textContent='x';
+icR.appendChild(icC);document.body.appendChild(icR);
+out.push('inherit-font-size -> '+getComputedStyle(icC).fontSize);
+out.push('inherit-line-height -> '+getComputedStyle(icC).lineHeight);
+ic.remove();icR.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
