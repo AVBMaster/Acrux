@@ -1,0 +1,13 @@
+ch-width-arial-16 -> 9px
+ch-width-mono-20 -> 10px
+ch-width-serif-24 -> 12px
+ex-width-arial-16 -> 8.4375px
+font-size-adjust-line-height -> 16px
+em-padding-top -> 20px
+rem-width -> 80px
+rem-height -> 32px
+calc-ch -> 95px
+vw-width -> 400px
+vh-height -> 100px
+vmin-width -> 40px
+vmax-height -> 80px

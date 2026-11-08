@@ -1,0 +1,57 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function m(label,val){out.push(label+' -> '+val);}
+// ch unit: should be width of '0' glyph, not a rounded pixel
+const ch=document.createElement('div');ch.style.cssText='font-family:Arial;font-size:16px;width:1ch;height:1em;position:absolute;visibility:hidden';
+document.body.appendChild(ch);
+m('ch-width-arial-16',getComputedStyle(ch).width);
+ch.remove();
+const ch2=document.createElement('div');ch2.style.cssText='font-family:monospace;font-size:20px;width:1ch;position:absolute;visibility:hidden';
+document.body.appendChild(ch2);
+m('ch-width-mono-20',getComputedStyle(ch2).width);
+ch2.remove();
+const ch3=document.createElement('div');ch3.style.cssText='font-family:serif;font-size:24px;width:1ch;position:absolute;visibility:hidden';
+document.body.appendChild(ch3);
+m('ch-width-serif-24',getComputedStyle(ch3).width);
+ch3.remove();
+// ex unit
+const ex=document.createElement('div');ex.style.cssText='font-family:Arial;font-size:16px;width:1ex;position:absolute;visibility:hidden';
+document.body.appendChild(ex);
+m('ex-width-arial-16',getComputedStyle(ex).width);
+ex.remove();
+// font-size-adjust
+const fsa=document.createElement('div');fsa.style.cssText='font-family:Arial;font-size:16px;font-size-adjust:0.5;line-height:1em';
+document.body.appendChild(fsa);
+m('font-size-adjust-line-height',getComputedStyle(fsa).lineHeight);
+fsa.remove();
+// em in padding
+const em=document.createElement('div');em.style.cssText='font-size:20px;padding:1em;width:100px';
+document.body.appendChild(em);
+m('em-padding-top',getComputedStyle(em).paddingTop);
+em.remove();
+// rem in various places
+const rem=document.createElement('div');rem.style.cssText='font-size:20px;width:5rem;height:2rem';
+document.body.appendChild(rem);
+m('rem-width',getComputedStyle(rem).width);
+m('rem-height',getComputedStyle(rem).height);
+rem.remove();
+// calc with ch
+const cc=document.createElement('div');cc.style.cssText='font-family:Arial;font-size:16px;width:calc(10ch + 5px)';
+document.body.appendChild(cc);
+m('calc-ch',getComputedStyle(cc).width);
+cc.remove();
+// viewport units
+const vw=document.createElement('div');vw.style.cssText='width:50vw;height:25vh';
+document.body.appendChild(vw);
+m('vw-width',getComputedStyle(vw).width);
+m('vh-height',getComputedStyle(vw).height);
+vw.remove();
+// vmin/vmax
+const vm=document.createElement('div');vm.style.cssText='width:10vmin;height:10vmax';
+document.body.appendChild(vm);
+m('vmin-width',getComputedStyle(vm).width);
+m('vmax-height',getComputedStyle(vm).height);
+vm.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

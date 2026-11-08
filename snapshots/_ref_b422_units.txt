@@ -1,0 +1,1 @@
+"ch-width-arial-16 -> 8.89062px\nch-width-mono-20 -> 9.98438px\nch-width-serif-24 -> 12px\nex-width-arial-16 -> 8.45312px\nfont-size-adjust-line-height -> 16px\nem-padding-top -> 20px\nrem-width -> 80px\nrem-height -> 32px\ncalc-ch -> 93.9844px\nvw-width -> 188.5px\nvh-height -> 120.25px\nvmin-width -> 37.6875px\nvmax-height -> 48.0938px"
