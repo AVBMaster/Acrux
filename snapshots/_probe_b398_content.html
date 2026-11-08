@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+t('content','none');
+t('content','normal');
+t('content','"abc"');
+t('content','"a" "b"');
+t('content','open-quote');
+t('content','close-quote');
+t('content','counter(x)');
+t('content','counters(x, ".")');
+t('content','attr(data-x)');
+t('content','url(a.png)');
+t('content','bogus');
+t('counter-reset','none');
+t('counter-reset','x');
+t('counter-reset','x 5');
+t('counter-reset','x y');
+t('counter-increment','none');
+t('counter-increment','x');
+t('counter-increment','x 2');
+t('counter-set','x 3');
+t('quotes','none');
+t('quotes','auto');
+t('quotes','"«" "»" "‹" "›"');
+t('writing-mode','horizontal-tb');
+t('writing-mode','vertical-rl');
+t('writing-mode','vertical-lr');
+t('writing-mode','sideways-rl');
+t('writing-mode','bogus');
+t('text-orientation','mixed');
+t('text-orientation','upright');
+t('text-orientation','sideways');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
