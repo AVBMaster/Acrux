@@ -2397,6 +2397,8 @@ public static class CssValueText
         if (lowered == "color-mix") inner = CanonicalColorMix(inner);
         if (lowered == "radial-gradient" || lowered == "repeating-radial-gradient")
             inner = CanonicalRadialGradient(inner);
+        if (lowered == "conic-gradient" || lowered == "repeating-conic-gradient")
+            inner = CanonicalConicGradient(inner);
         // A function name is ASCII case-insensitive on the way in, but the CSSOM prints the few
         // that carry a capital in their canonical spelling — the transform family above all, so
         // 'TRANSLATEZ(10px)' reads back 'translateZ(10px)' and not 'translatez(10px)' (measured).
@@ -2560,8 +2562,11 @@ public static class CssValueText
             var posValue = string.Join(" ", tokens.GetRange(atIndex + 1, tokens.Count - atIndex - 1));
             posText = ShorthandExpander.PositionPairText(posValue) ?? posValue.ToLowerInvariant();
         }
+        // 'at center', 'at center center' and 'at 50% 50%' all say the default centre, so none
+        // of them is said (the conic twin measured the 50% 50% form).
         bool isDefaultCenter = posText.Equals("center", StringComparison.OrdinalIgnoreCase)
-                            || posText.Equals("center center", StringComparison.OrdinalIgnoreCase);
+                            || posText.Equals("center center", StringComparison.OrdinalIgnoreCase)
+                            || posText.Equals("50% 50%", StringComparison.OrdinalIgnoreCase);
 
         // Assemble what survives.
         var parts = new List<string>();
@@ -2575,6 +2580,75 @@ public static class CssValueText
 
         // Nothing left to say — the stops become the whole value. Returning an empty first
         // argument would leave a stray comma, so drop the argument entirely.
+        if (parts.Count == 0) args.RemoveAt(0);
+        else args[0] = string.Join(" ", parts);
+        return string.Join(", ", args.Select(a => a.Trim()));
+    }
+
+    /// <summary>
+    /// Print a conic gradient's <c>[ from &lt;angle&gt; ]? [ at &lt;position&gt; ]?</c> prologue
+    /// the way the reference engine does:
+    /// • The default start angle <c>from 0deg</c> is elided entirely — a <c>0turn</c> or
+    ///   <c>0rad</c> that names the same default goes too, and the equivalent <c>360deg</c>
+    ///   stays (measured). Any other angle is kept.
+    /// • The default <c>at center</c> is elided; any other position is expanded to its two
+    ///   axes (<c>at top</c> → <c>at center top</c>), the same as a radial gradient's.
+    /// Stopping-colour arguments after the first top-level comma are left untouched.
+    /// </summary>
+    private static string CanonicalConicGradient(string inner)
+    {
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return inner;
+
+        var prologue = args[0].Trim();
+        if (prologue.Length == 0) return inner;
+        // The first argument only carries the prologue when it names 'from' or 'at'; otherwise it
+        // is the first colour stop ('conic-gradient(red, blue)') and there is nothing to elide.
+        bool hasPrologue = prologue.Contains(' ', StringComparison.OrdinalIgnoreCase)
+            && (prologue.Contains("from ", StringComparison.OrdinalIgnoreCase)
+                || prologue.Contains("at ", StringComparison.OrdinalIgnoreCase));
+        if (!hasPrologue) return inner;
+        var tokens = SplitTopLevelWords(prologue);
+
+        // Find 'from <angle>' and 'at <position>' groups. Both are optional and 'from' comes
+        // first when both are present.
+        int fromIndex = -1, atIndex = -1;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var lower = tokens[i].ToLowerInvariant();
+            if (lower == "from" && fromIndex < 0) fromIndex = i;
+            else if (lower == "at") { atIndex = i; break; }
+        }
+
+        // The angle the prologue starts from, or '' when the default 0deg is what was written.
+        string angle = string.Empty;
+        if (fromIndex >= 0 && fromIndex + 1 < tokens.Count)
+        {
+            var raw = tokens[fromIndex + 1].ToLowerInvariant();
+            bool zero = raw is "0deg" or "0turn" or "0rad" or "0grad";
+            if (!zero) angle = raw;
+        }
+
+        // The canonical two-axis position, or '' for the default center.
+        string posText = string.Empty;
+        if (atIndex >= 0 && atIndex + 1 < tokens.Count)
+        {
+            var posValue = string.Join(" ", tokens.GetRange(atIndex + 1, tokens.Count - atIndex - 1));
+            posText = ShorthandExpander.PositionPairText(posValue) ?? posValue.ToLowerInvariant();
+        }
+        // 'at center', 'at center center' and 'at 50% 50%' all say the default centre (measured:
+        // 'conic-gradient(at 50% 50%, red, blue)' reads 'conic-gradient(red, blue)'), so none of
+        // them is said.
+        bool isDefaultCenter = posText.Equals("center", StringComparison.OrdinalIgnoreCase)
+                            || posText.Equals("center center", StringComparison.OrdinalIgnoreCase)
+                            || posText.Equals("50% 50%", StringComparison.OrdinalIgnoreCase);
+
+        var parts = new List<string>();
+        if (angle.Length > 0) parts.Add("from " + angle);
+        if (posText.Length > 0 && !isDefaultCenter) parts.Add("at " + posText);
+
+        // Everything elided leaves no prologue to say — drop the argument so the stops become
+        // the whole value ('conic-gradient(red, blue)'), not a stray comma.
         if (parts.Count == 0) args.RemoveAt(0);
         else args[0] = string.Join(" ", parts);
         return string.Join(", ", args.Select(a => a.Trim()));

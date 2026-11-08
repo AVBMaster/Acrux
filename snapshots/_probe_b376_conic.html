@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// conic-gradient forms
+t('conic-gradient(red, blue)');
+t('conic-gradient(from 0deg, red, blue)');
+t('conic-gradient(from 90deg, red, blue)');
+t('conic-gradient(at center, red, blue)');
+t('conic-gradient(at top, red, blue)');
+t('conic-gradient(from 0deg at center, red, blue)');
+t('conic-gradient(from 0deg at top, red, blue)');
+t('conic-gradient(#fff, blue)');
+t('conic-gradient(red 0deg, blue 180deg)');
+t('conic-gradient(from 45deg at 20px 30px, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

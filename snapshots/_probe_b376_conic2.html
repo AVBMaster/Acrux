@@ -1,0 +1,17 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+t('conic-gradient(from 0deg, red, blue)');
+t('conic-gradient(from 360deg, red, blue)');
+t('conic-gradient(from 0turn, red, blue)');
+t('conic-gradient(from 0rad, red, blue)');
+t('conic-gradient(from 90deg, red, blue)');
+t('conic-gradient(from 0deg at center, red, blue)');
+t('conic-gradient(from 0deg at top, red, blue)');
+t('conic-gradient(at center, red, blue)');
+t('conic-gradient(at 50% 50%, red, blue)');
+t('conic-gradient(FROM 0DEG AT TOP, red, blue)');
+t('conic-gradient(from 0deg at center, #fff, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
