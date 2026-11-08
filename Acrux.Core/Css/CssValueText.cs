@@ -2328,7 +2328,13 @@ public static class CssValueText
 
     private static string FoldColorWords(string text, string property)
     {
-        if (!Resolver.CssPropertyTraits.TakesColorValue(property)) return text;
+        // A gradient is not itself a colour-valued property, but the reference engine folds the
+        // colour stops inside one to rgb() the way it folds a colour property's own value:
+        // 'linear-gradient(#fff, blue)' reads 'linear-gradient(rgb(255, 255, 255), blue)' and an
+        // 'hsl()' stop reads 'rgb(…)' (measured). The stops are the gradient's colour-valued
+        // arguments, so the fold runs for them too; every other argument the descent leaves alone.
+        bool gradient = text.Contains("gradient(", StringComparison.OrdinalIgnoreCase);
+        if (!Resolver.CssPropertyTraits.TakesColorValue(property) && !gradient) return text;
         return MapLayers(text, layer => FoldColorWordsInLayer(layer, property));
     }
 

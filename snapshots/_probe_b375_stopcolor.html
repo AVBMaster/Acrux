@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// plain colour properties (echo should keep notation per #116)
+t('background-color','#fff');
+t('color','#fff');
+t('border-color','#fff');
+// gradient stops
+t('background-image','radial-gradient(#fff, blue)');
+t('background-image','linear-gradient(#fff, blue)');
+t('background-image','linear-gradient(RED, blue)');
+t('background-image','linear-gradient(rgba(255,0,0,0.5), blue)');
+t('background-image','linear-gradient(hsl(120, 100%, 50%), blue)');
+// multi-word function stops
+t('background-image','linear-gradient(to right, #ABCDEF 0%, #123456 100%)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
