@@ -1,0 +1,54 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(label,val){out.push(label+' -> '+val);}
+// var() substitution
+const v1=document.createElement('div');v1.style.cssText='--x: 10px; width: var(--x)';
+document.body.appendChild(v1);t('var-basic-width',getComputedStyle(v1).width);v1.remove();
+const v2=document.createElement('div');v2.style.cssText='--x: 10px; width: var(--y, 20px)';
+document.body.appendChild(v2);t('var-fallback-used',getComputedStyle(v2).width);v2.remove();
+const v3=document.createElement('div');v3.style.cssText='--x: 10px; width: var(--x, 20px)';
+document.body.appendChild(v3);t('var-fallback-not-used',getComputedStyle(v3).width);v3.remove();
+const v4=document.createElement('div');v4.style.cssText='--a: 10px; --b: var(--a); width: var(--b)';
+document.body.appendChild(v4);t('var-nested',getComputedStyle(v4).width);v4.remove();
+const v5=document.createElement('div');v5.style.cssText='--x: 10px; width: calc(var(--x) + 5px)';
+document.body.appendChild(v5);t('var-calc',getComputedStyle(v5).width);v5.remove();
+const v6=document.createElement('div');v6.style.cssText='--x: bogus; width: var(--x, 20px)';
+document.body.appendChild(v6);t('var-invalid-value',getComputedStyle(v6).width);v6.remove();
+// calc() mixed units
+const c1=document.createElement('div');c1.style.cssText='width: calc(100px + 1em)';c1.style.fontSize='16px';
+document.body.appendChild(c1);t('calc-px-em',getComputedStyle(c1).width);c1.remove();
+const c2=document.createElement('div');c2.style.cssText='width: calc(50% - 10px)';c2.style.maxWidth='none';
+document.body.appendChild(c2);t('calc-pct-px',getComputedStyle(c2).width);c2.remove();
+const c3=document.createElement('div');c3.style.cssText='width: calc(2 * (100px + 20px))';
+document.body.appendChild(c3);t('calc-multiply-parens',getComputedStyle(c3).width);c3.remove();
+const c4=document.createElement('div');c4.style.cssText='width: calc(100px / 4)';
+document.body.appendChild(c4);t('calc-divide',getComputedStyle(c4).width);c4.remove();
+const c5=document.createElement('div');c5.style.cssText='width: calc(100% / 3)';c5.style.maxWidth='none';
+document.body.appendChild(c5);t('calc-pct-divide',getComputedStyle(c5).width);c5.remove();
+const c6=document.createElement('div');c6.style.cssText='width: calc(100px + 2em + 3rem)';c6.style.fontSize='10px';
+document.body.appendChild(c6);t('calc-multi-unit',getComputedStyle(c6).width);c6.remove();
+const c7=document.createElement('div');c7.style.cssText='width: calc(100vw - 50px)';c7.style.maxWidth='none';
+document.body.appendChild(c7);t('calc-vw-px',getComputedStyle(c7).width);c7.remove();
+const c8=document.createElement('div');c8.style.cssText='width: calc(min(100px, 200px))';
+document.body.appendChild(c8);t('calc-min',getComputedStyle(c8).width);c8.remove();
+const c9=document.createElement('div');c9.style.cssText='width: calc(max(100px, 200px))';
+document.body.appendChild(c9);t('calc-max',getComputedStyle(c9).width);c9.remove();
+const c10=document.createElement('div');c10.style.cssText='width: calc(clamp(50px, 10vw, 200px))';
+document.body.appendChild(c10);t('calc-clamp',getComputedStyle(c10).width);c10.remove();
+// CSS specificity
+const sp=document.createElement('style');sp.textContent='#spec-id{color:red}.spec-class{color:blue}div{color:green}';
+document.head.appendChild(sp);
+const spEl=document.createElement('div');spEl.id='spec-id';spEl.className='spec-class';spEl.textContent='x';
+document.body.appendChild(spEl);
+t('specificity-id-wins',getComputedStyle(spEl).color);
+sp.remove();spEl.remove();
+// !important
+const imp=document.createElement('style');imp.textContent='#imp-id{color:red!important}.imp-class{color:blue!important}';
+document.head.appendChild(imp);
+const impEl=document.createElement('div');impEl.id='imp-id';impEl.className='imp-class';impEl.textContent='x';
+document.body.appendChild(impEl);
+t('important-both',getComputedStyle(impEl).color);
+imp.remove();impEl.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

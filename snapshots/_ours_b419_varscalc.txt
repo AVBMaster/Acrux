@@ -1,0 +1,18 @@
+var-basic-width -> 10px
+var-fallback-used -> 20px
+var-fallback-not-used -> 10px
+var-nested -> 10px
+var-calc -> 15px
+var-invalid-value -> 784px
+calc-px-em -> 116px
+calc-pct-px -> 382px
+calc-multiply-parens -> 240px
+calc-divide -> 25px
+calc-pct-divide -> 261.328px
+calc-multi-unit -> 168px
+calc-vw-px -> 750px
+calc-min -> 100px
+calc-max -> 200px
+calc-clamp -> 80px
+specificity-id-wins -> rgb(255, 0, 0)
+important-both -> rgb(255, 0, 0)
