@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. innerHTML written into a DETACHED element, then attached ──────────
+    eq('A1 innerHTML on a detached element stamps its subtree', safe(function () {
+        var holder = document.createElement('div');
+        holder.innerHTML = '<p id=p1>x</p>';
+        var p1 = holder.querySelector('#p1');
+        var before = String(!!p1.ownerDocument);
+        root.appendChild(holder);
+        var after = String(!!p1.ownerDocument);
+        return [before, after].join(',');
+    }), 'ok:true,true');
+
+    eq('A2 a detached subtree node answers baseURI once attached', safe(function () {
+        var holder = document.createElement('div');
+        holder.innerHTML = '<span id=s1>x</span>';
+        var s1 = holder.querySelector('#s1');
+        root.appendChild(holder);
+        return String(s1.baseURI.length > 0);
+    }), 'ok:true');
+
+    // ── B. createDocumentFragment children ───────────────────────────────────
+    eq('B1 a fragment child gets an owner on append', safe(function () {
+        var frag = document.createDocumentFragment();
+        var s = document.createElement('span');
+        frag.appendChild(s);
+        var inFrag = String(!!s.ownerDocument);
+        root.appendChild(frag);
+        return [inFrag, String(!!s.ownerDocument)].join(',');
+    }), 'ok:true,true');
+
+    eq('B2 a fragment built with innerHTML on itself', safe(function () {
+        var frag = document.createDocumentFragment();
+        frag.innerHTML = '<b id=b1>y</b>';
+        var b1 = frag.querySelector('#b1');
+        root.appendChild(frag);
+        return String(!!b1.ownerDocument);
+    }), 'ok:true');
+
+    // ── C. the orphan form= id path (round 50's byId branch) ─────────────────
+    eq('C1 an orphan input built detached finds its form by id', safe(function () {
+        var holder = document.createElement('div');
+        holder.innerHTML = '<form id=cf><input form=cf></form>';
+        root.appendChild(holder);
+        var c = holder.querySelector('input');
+        var f = holder.querySelector('form');
+        return String(c.form === f);
+    }), 'ok:true');
+
+    // ── D. cloneNode of an attached subtree keeps the owner ──────────────────
+    eq('D1 a clone of an attached deep node keeps its owner', safe(function () {
+        var holder = document.createElement('div');
+        root.appendChild(holder);
+        holder.innerHTML = '<ul><li id=li1>a</li></ul>';
+        var clone = holder.querySelector('#li1').cloneNode(true);
+        root.appendChild(clone);
+        return String(!!clone.ownerDocument);
+    }), 'ok:true');
+
+    // ── E. importNode / adoptNode of a detached subtree ──────────────────────
+    eq('E1 adoptNode of a detached subtree stamps the owner', safe(function () {
+        var holder = document.createElement('div');
+        holder.innerHTML = '<p id=pa>z</p>';
+        var adopted = document.adoptNode(holder.firstChild);
+        root.appendChild(adopted);
+        return String(!!adopted.ownerDocument);
+    }), 'ok:true');
+})();
+</script></body></html>
