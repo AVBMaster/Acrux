@@ -1,0 +1,20 @@
+g-template display=grid | grid-template-columns=100px 100px
+g-rows grid-template-rows=50px 50px
+g-area grid-area=main
+g-column grid-column=1 / 3 | grid-column-start=1 | grid-column-end=3
+g-row grid-row=2 / span 2 | grid-row-start=2 | grid-row-end=span 2
+g-gap gap=10px 20px | row-gap=10px | column-gap=20px
+g-auto-flow grid-auto-flow=column dense
+g-auto-rows grid-auto-rows=minmax(50px, auto)
+g-justify-items justify-items=center
+g-align-items align-items=end
+g-place-items place-items=center start
+g-justify-content justify-content=space-between
+g-align-content align-content=space-around
+g-self-align align-self=stretch
+g-self-justify justify-self=end
+g-self-place place-self=start end
+g-item-item ERR (probe-script bug in BOTH)
+SUP grid-template-columns:repeat(3,1fr) = Y
+SUP gap:10px 20px = Y
+SUP place-self:start end = Y

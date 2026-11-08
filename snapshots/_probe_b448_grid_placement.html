@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,el,props){ try{ const cs=getComputedStyle(el); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); }catch(e){ out.push(label+' ERR '+e.message); } }
+function mk(css){const d=document.createElement('div');d.style.cssText=css;document.body.appendChild(d);return d;}
+// b448: grid placement + alignment
+s('g-template', mk('display:grid;grid-template-columns:100px 100px'), ['display','grid-template-columns']);
+s('g-rows', mk('display:grid;grid-template-rows:50px 50px'), ['grid-template-rows']);
+s('g-area', mk('grid-area:main'), ['grid-area']);
+s('g-column', mk('grid-column:1 / 3'), ['grid-column','grid-column-start','grid-column-end']);
+s('g-row', mk('grid-row:2 / span 2'), ['grid-row','grid-row-start','grid-row-end']);
+s('g-gap', mk('display:grid;gap:10px 20px'), ['gap','row-gap','column-gap']);
+s('g-auto-flow', mk('display:grid;grid-auto-flow:column dense'), ['grid-auto-flow']);
+s('g-auto-rows', mk('display:grid;grid-auto-rows:minmax(50px,auto)'), ['grid-auto-rows']);
+s('g-justify-items', mk('display:grid;justify-items:center'), ['justify-items']);
+s('g-align-items', mk('display:grid;align-items:end'), ['align-items']);
+s('g-place-items', mk('display:grid;place-items:center start'), ['place-items']);
+s('g-justify-content', mk('display:grid;justify-content:space-between'), ['justify-content']);
+s('g-align-content', mk('display:grid;align-content:space-around'), ['align-content']);
+s('g-self-align', mk('align-self:stretch'), ['align-self']);
+s('g-self-justify', mk('justify-self:end'), ['justify-self']);
+s('g-self-place', mk('place-self:start end'), ['place-self']);
+s('g-item-item', (()=>{const g=mk('display:grid;grid-template-columns:repeat(3,1fr)');
+  const it=document.createElement('div');it.style.cssText='grid-column:2;grid-row:1';g.appendChild(it);
+  document.body.appendChild(g); const r=g.getBoundingClientRect();
+  const out2=[g.offsetWidth+'x'+g.offsetHeight, it.getBoundingClientRect().x.toFixed(1)]; g.remove(); return out2.join(' / ');})());
+out.push('SUP grid-template-columns:repeat(3,1fr) = '+(()=>{try{return CSS.supports('grid-template-columns','repeat(3,1fr)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP gap:10px 20px = '+(()=>{try{return CSS.supports('gap','10px 20px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP place-self:start end = '+(()=>{try{return CSS.supports('place-self','start end')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
