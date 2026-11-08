@@ -1,0 +1,26 @@
+ct-inline container-type=inline-size
+ct-size container-type=size
+ct-norm container-type=normal
+cname container-name=sidebar
+cname-none container-name=none
+cname-multi container-name=a b
+container-sh container-name=main | container-type=inline-size
+ss-start scroll-snap-type=x mandatory
+ss-both scroll-snap-type=both
+ss-none scroll-snap-type=none
+ss-align-start scroll-snap-align=start
+ss-align-last scroll-snap-align=none
+ss-align-none scroll-snap-align=none
+ss-stop-norm scroll-snap-stop=normal
+ss-stop-always scroll-snap-stop=always
+ss-margin scroll-margin-top=10px | scroll-margin-right=20px
+ss-padding scroll-padding-top=15px
+ss-margin-block scroll-margin-block-start=5px | scroll-margin-block-end=10px
+SUP container-type:inline-size = Y
+SUP container-type:bogus = N
+SUP container:main / inline-size = Y
+SUP scroll-snap-type:x mandatory = Y
+SUP scroll-snap-type:bogus = N
+SUP scroll-snap-align:last center = N
+SUP scroll-snap-stop:always = Y
+SUP scroll-margin:10px = Y

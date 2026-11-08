@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,el,props){ try{ const cs=getComputedStyle(el); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); }catch(e){ out.push(label+' ERR '+e.message); } }
+function mk(css){const d=document.createElement('div');d.style.cssText=css;document.body.appendChild(d);return d;}
+function sup(prop,val){ try{ return CSS.supports(prop,val)?'Y':'N'; }catch(e){ return 'ERR'; } }
+// b433: container-query + scroll-snap family
+s('ct-inline', mk('container-type:inline-size'), ['container-type']);
+s('ct-size', mk('container-type:size'), ['container-type']);
+s('ct-norm', mk('container-type:normal'), ['container-type']);
+s('cname', mk('container-name:sidebar'), ['container-name']);
+s('cname-none', mk('container-name:none'), ['container-name']);
+s('cname-multi', mk('container-name:a b'), ['container-name']);
+s('container-sh', mk('container:main / inline-size'), ['container-name','container-type']);
+s('ss-start', mk('scroll-snap-type:x mandatory'), ['scroll-snap-type']);
+s('ss-both', mk('scroll-snap-type:both proximity'), ['scroll-snap-type']);
+s('ss-none', mk('scroll-snap-type:none'), ['scroll-snap-type']);
+s('ss-align-start', mk('scroll-snap-align:start'), ['scroll-snap-align']);
+s('ss-align-last', mk('scroll-snap-align:last center'), ['scroll-snap-align']);
+s('ss-align-none', mk('scroll-snap-align:none'), ['scroll-snap-align']);
+s('ss-stop-norm', mk('scroll-snap-stop:normal'), ['scroll-snap-stop']);
+s('ss-stop-always', mk('scroll-snap-stop:always'), ['scroll-snap-stop']);
+s('ss-margin', mk('scroll-margin:10px 20px'), ['scroll-margin-top','scroll-margin-right']);
+s('ss-padding', mk('scroll-padding:15px'), ['scroll-padding-top']);
+s('ss-margin-block', mk('scroll-margin-block:5px 10px'), ['scroll-margin-block-start','scroll-margin-block-end']);
+out.push('SUP container-type:inline-size = '+sup('container-type','inline-size'));
+out.push('SUP container-type:bogus = '+sup('container-type','bogus'));
+out.push('SUP container:main / inline-size = '+sup('container','main / inline-size'));
+out.push('SUP scroll-snap-type:x mandatory = '+sup('scroll-snap-type','x mandatory'));
+out.push('SUP scroll-snap-type:bogus = '+sup('scroll-snap-type','bogus'));
+out.push('SUP scroll-snap-align:last center = '+sup('scroll-snap-align','last center'));
+out.push('SUP scroll-snap-stop:always = '+sup('scroll-snap-stop','always'));
+out.push('SUP scroll-margin:10px = '+sup('scroll-margin','10px'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

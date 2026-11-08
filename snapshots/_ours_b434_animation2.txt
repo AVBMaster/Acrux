@@ -1,0 +1,26 @@
+an-name animation-name=slide
+an-name-multi animation-name=slide, fade
+an-dur animation-duration=2s, 1s
+an-timing-linear animation-timing-function=linear
+an-timing-steps animation-timing-function=steps(4, jump-none)
+an-timing-bezier animation-timing-function=cubic-bezier(0.2, 0.1, 0.3, 1)
+an-iter animation-iteration-count=infinite
+an-dir-alt animation-direction=alternate-reverse
+an-fill-both animation-fill-mode=both
+an-play-pause animation-play-state=paused
+an-delay-neg animation-delay=-1s
+an-composition animation-composition=add
+an-range animation-range=normal
+an-shorthand animation-name=slide | animation-duration=2s | animation-timing-function=linear | animation-iteration-count=infinite
+tr-prop transition-property=width, height
+tr-prop-all transition-property=all
+tr-dur transition-duration=0.5s
+tr-timing transition-timing-function=ease-in-out
+tr-behavior transition-behavior=allow-discrete
+tr-shorthand transition-property=width | transition-duration=1s | transition-timing-function=ease | transition-delay=0s
+SUP animation-timing-function:steps(4,jump-none) = Y
+SUP animation-composition:add = Y
+SUP transition-behavior:allow-discrete = Y
+SUP animation-range:normal = Y
+SUP animation-delay:-1s = Y
+SUP transition-duration:-1s = N
