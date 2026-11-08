@@ -1,0 +1,24 @@
+fill-red fill=rgb(255, 0, 0)
+fill-cur fill=rgb(0, 0, 0)
+fill-none fill=none
+fill-opacity fill=rgb(255, 0, 0) | fill-opacity=0.5
+stroke-width stroke=rgb(0, 0, 255) | stroke-width=3px
+stroke-linejoin stroke-linejoin=round
+stroke-dasharray stroke-dasharray=4px, 2px
+stroke-dashoffset stroke-dashoffset=5px
+marker-start marker-start=url("#m")
+paint-order paint-order=stroke
+shape-render shape-rendering=crispedges
+vector-effect vector-effect=non-scaling-stroke
+content-none content=normal
+content-str content="abc"
+content-counter content=counter(x)
+content-attr content=""
+content-open content=open-quote
+quotes quotes="«" "»"
+counter-reset counter-reset=x 5
+counter-incr counter-increment=x 1
+SUP fill:red = Y
+SUP stroke-dasharray:4 2 = Y
+SUP paint-order:stroke fill = Y
+SUP content:counter(x) = Y
