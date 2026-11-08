@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b453: box model sizing
+s('w-auto','width:auto',['width']);
+s('w-px','width:100px',['width']);
+s('w-pct','width:50%',['width']);
+s('w-em','font-size:16px;width:10em',['width']);
+s('h-auto','height:auto',['height']);
+s('h-px','height:60px',['height']);
+s('min-w','min-width:50px',['min-width']);
+s('max-w','max-width:200px',['max-width']);
+s('min-h','min-height:30px',['min-height']);
+s('max-h','max-height:80px',['max-height']);
+s('box-border','box-sizing:border-box',['box-sizing']);
+s('box-content','box-sizing:content-box',['box-sizing']);
+s('mt','margin-top:10px',['margin-top']);
+s('mx','margin-left:10px;margin-right:20px',['margin-left','margin-right']);
+s('my','margin-top:5px;margin-bottom:15px',['margin-top','margin-bottom']);
+s('margin','margin:10px 20px',['margin-top','margin-right','margin-bottom','margin-left']);
+s('pt','padding-top:10px',['padding-top']);
+s('padding','padding:5px 10px',['padding-top','padding-right','padding-bottom','padding-left']);
+out.push('SUP width:50% = '+(()=>{try{return CSS.supports('width','50%')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP max-width:200px = '+(()=>{try{return CSS.supports('max-width','200px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP box-sizing:border-box = '+(()=>{try{return CSS.supports('box-sizing','border-box')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP margin:10px 20px = '+(()=>{try{return CSS.supports('margin','10px 20px')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
