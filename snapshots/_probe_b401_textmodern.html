@@ -1,0 +1,49 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// text rendering / overflow ellipsis
+t('text-overflow','clip');
+t('text-overflow','ellipsis');
+t('text-overflow','bogus');
+t('overflow-wrap','break-word');
+t('overflow-wrap','anywhere');
+t('word-break','break-all');
+t('word-break','keep-all');
+t('word-break','break-word');
+t('white-space','nowrap');
+t('white-space','pre');
+t('white-space','pre-wrap');
+t('white-space','break-spaces');
+t('line-break','auto');
+t('line-break','strict');
+t('line-break','loose');
+t('hyphens','none');
+t('hyphens','manual');
+t('hyphens','auto');
+t('text-rendering','auto');
+t('text-rendering','optimizeSpeed');
+t('text-rendering','geometricPrecision');
+// image / replaced
+t('image-rendering','auto');
+t('image-rendering','pixelated');
+t('image-rendering','crisp-edges');
+t('object-fit','fill');
+t('object-fit','contain');
+t('object-fit','cover');
+t('object-fit','none');
+t('object-fit','scale-down');
+t('object-position','50% 50%');
+t('object-position','center top');
+// aspect-ratio
+t('aspect-ratio','auto');
+t('aspect-ratio','1 / 1');
+t('aspect-ratio','16 / 9');
+t('aspect-ratio','0.5');
+// accent / caret
+t('accent-color','auto');
+t('accent-color','red');
+t('caret-color','auto');
+t('caret-color','transparent');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
