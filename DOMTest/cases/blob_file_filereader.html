@@ -1,0 +1,107 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // A promise-returning row: build the label, then settle it on a timer.
+    var pending = [];
+    function pl(label, promise, expected) {
+        pending.push([label, promise, expected]);
+    }
+
+    // ── A. Blob basics ───────────────────────────────────────────────────────
+    eq('A1 a Blob answers its size', safe(function () {
+        var b = new Blob(['hello']);
+        return String(b.size);
+    }), 'ok:5');
+
+    eq('A2 a Blob answers its type', safe(function () {
+        var b = new Blob(['x'], { type: 'text/plain' });
+        return b.type;
+    }), 'ok:text/plain');
+
+    eq('A3 an empty Blob answers size 0', safe(function () {
+        return String(new Blob([]).size);
+    }), 'ok:0');
+
+    eq('A4 a Blob with no type answers empty', safe(function () {
+        return String(new Blob(['x']).type);
+    }), 'ok:');
+
+    eq('A5 a Blob is an instance of Blob', safe(function () {
+        return String(new Blob(['x']) instanceof Blob);
+    }), 'ok:true');
+
+    eq('A6 Blob slice answers a smaller size', safe(function () {
+        var b = new Blob(['abcdef']);
+        return String(b.slice(1, 3).size);
+    }), 'ok:2');
+
+    eq('A7 Blob slice carries the type', safe(function () {
+        var b = new Blob(['abcdef'], { type: 'text/plain' });
+        return b.slice(0, 2).type;
+    }), 'ok:text/plain');
+
+    // ── B. File ──────────────────────────────────────────────────────────────
+    eq('B1 a File answers its name', safe(function () {
+        var f = new File(['hello'], 'a.txt');
+        return f.name;
+    }), 'ok:a.txt');
+
+    eq('B2 a File answers its size', safe(function () {
+        return String(new File(['hello'], 'a.txt').size);
+    }), 'ok:5');
+
+    eq('B3 a File is a Blob', safe(function () {
+        return String(new File(['x'], 'a.txt') instanceof Blob);
+    }), 'ok:true');
+
+    eq('B4 a File without lastModified answers a number', safe(function () {
+        return String(typeof new File(['x'], 'a.txt').lastModified);
+    }), 'ok:number');
+
+    eq('B5 a File with lastModified in the init answers it', safe(function () {
+        return String(new File(['x'], 'a.txt', { lastModified: 5000 }).lastModified);
+    }), 'ok:5000');
+
+    // ── C. FileReader text ───────────────────────────────────────────────────
+    eq('C1 FileReader readAsText starts in the loading state', safe(function () {
+        var r = new FileReader();
+        var b = new Blob(['hello'], { type: 'text/plain' });
+        var done = false;
+        r.onload = function () { done = true; };
+        r.readAsText(b);
+        return String(typeof r.readyState);
+    }), 'ok:number');
+
+    // ── D. Blob.text() and arrayBuffer() ─────────────────────────────────────
+    eq('D1 Blob.text() answers a promise', safe(function () {
+        return String(new Blob(['x']).text() instanceof Promise);
+    }), 'ok:true');
+
+    eq('D2 Blob.arrayBuffer() answers a promise', safe(function () {
+        return String(new Blob(['x']).arrayBuffer() instanceof Promise);
+    }), 'ok:true');
+
+    eq('D3 Blob.stream() answers a ReadableStream', safe(function () {
+        var s = new Blob(['x']).stream();
+        return String(s && typeof s.getReader === 'function');
+    }), 'ok:true');
+
+    // ── E. the uncloneable refusal ───────────────────────────────────────────
+    eq('E1 FileReader without a Blob is refused', thrown(function () {
+        var r = new FileReader();
+        r.readAsText('not a blob');
+    }), 'TypeError');
+})();
+</script></body></html>

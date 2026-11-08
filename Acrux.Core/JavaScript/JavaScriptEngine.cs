@@ -3022,14 +3022,18 @@ public class JavaScriptEngine : IDisposable
             Blob.prototype.bytes = function bytes() { return Promise.resolve(blobBytes(this).slice()); };
             Blob.prototype.slice = function slice(start, end, contentType) {
                 // §4.1.1.8: the range is in bytes, a negative bound counts back from the end, and the
-                // two bounds are clamped and swapped before the run is taken.
+                // two bounds are clamped and swapped before the run is taken. The slice carries the
+                // content type the page passed, or the source blob's own when none was given.
                 var total = blobBytesOf(this).length;
                 var s = start === undefined ? 0 : Number(start) || 0;
                 var e = end === undefined ? total : Number(end) || 0;
                 if (s < 0) s = Math.max(total + s, 0); else s = Math.min(s, total);
                 if (e < 0) e = Math.max(total + e, 0); else e = Math.min(e, total);
                 if (e < s) e = s;
-                return new Blob([blobBytes(this).slice(s, e)], { type: contentType || '' });
+                var type = contentType === undefined || contentType === null
+                    ? String(this.__type === undefined ? '' : this.__type)
+                    : mimeOrEmpty(contentType);
+                return new Blob([blobBytes(this).slice(s, e)], { type: type });
             };
             Object.defineProperty(Blob.prototype, Symbol.toStringTag,
                 { value: 'Blob', configurable: true });
