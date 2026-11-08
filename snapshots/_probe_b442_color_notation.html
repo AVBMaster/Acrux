@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function c(label,css){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const v=getComputedStyle(d).color; d.remove(); out.push(label+' -> '+v); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+const forms=[['plain-hex','color:#3498db'],['plain-named','color:red'],
+ ['rgb-fn','color:rgb(52,152,219)'],['hsl-fn','color:hsl(204,70%,53%)'],
+ ['lab-fn','color:lab(59% -12 -43)'],['oklch-fn','color:oklch(0.65 0.13 242)'],
+ ['color-fn','color:color(srgb 0.2 0.6 0.85)'],['color-disp3','color:color(display-p3 1 0 0)'],
+ ['rel-rgb','color:rgb(from #3498db r g b)'],['mix-srgb','color:color-mix(in srgb, red, blue)'],
+ ['mix-oklab','color:color-mix(in oklab, red, blue)'],['hex-alpha','color:#3498db80'],
+ ['rgba-fn','color:rgba(52,152,219,0.5)']];
+for(const [n,c2] of forms) c(n,c2);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

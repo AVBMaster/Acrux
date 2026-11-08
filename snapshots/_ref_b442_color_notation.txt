@@ -1,0 +1,27 @@
+# Edge reference for computed 'color'. Which forms KEEP notation vs fold to rgb().
+# MATCH ours (fold to rgb()/rgba): plain-hex, plain-named, rgb-fn, hsl-fn (51 vs 52 is
+#   an HSL->RGB rounding step), hex-alpha, rgba-fn.
+# DIVERGE (#116): Edge KEEPS notation for these; we fold to rgb():
+#   lab-fn    Edge=lab(59 -12 -43)          ours=rgb(51,151,217)
+#   oklch-fn  Edge=oklch(0.65 0.13 242)     ours=rgb(55,151,215)
+#   color-fn  Edge=color(srgb 0.2 0.6 0.85) ours=rgb(51,153,217)
+#   color-disp3 Edge=color(display-p3 1 0 0) ours=rgb(255,0,0)
+#   rel-rgb   Edge=color(srgb 0.203922 0.596078 0.858824) ours=rgb(52,152,219)
+#   mix-srgb  Edge=color(srgb 0.5 0 0.5)    ours=rgb(128,0,128)
+#   mix-oklab Edge=oklab(0.539974 0.0962086 -0.0928316) ours=rgb(140,83,162)
+# Values are equivalent (converted); only the NOTATION differs. Fixing means the
+# computed printer emits the origin colour space, and that text feeds back through
+# the sheet parser (see the b400 column-rule revert), so it needs its own gated round.
+plain-hex -> rgb(52, 152, 219)
+plain-named -> rgb(255, 0, 0)
+rgb-fn -> rgb(52, 152, 219)
+hsl-fn -> rgb(51, 152, 219)
+lab-fn -> lab(59 -12 -43)
+oklch-fn -> oklch(0.65 0.13 242)
+color-fn -> color(srgb 0.2 0.6 0.85)
+color-disp3 -> color(display-p3 1 0 0)
+rel-rgb -> color(srgb 0.203922 0.596078 0.858824)
+mix-srgb -> color(srgb 0.5 0 0.5)
+mix-oklab -> oklab(0.539974 0.0962086 -0.0928316)
+hex-alpha -> rgba(52, 152, 219, 0.5)
+rgba-fn -> rgba(52, 152, 219, 0.5)
