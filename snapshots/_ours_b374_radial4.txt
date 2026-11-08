@@ -1,0 +1,8 @@
+radial-gradient(100px, red, blue) -> sup=true echo="radial-gradient(100px, red, blue)"
+radial-gradient(50%, red, blue) -> sup=false echo=""
+radial-gradient(100px 50px, red, blue) -> sup=true echo="radial-gradient(100px 50px, red, blue)"
+radial-gradient(100px at center, red, blue) -> sup=true echo="radial-gradient(100px, red, blue)"
+radial-gradient(ellipse 100px, red, blue) -> sup=false echo=""
+radial-gradient(circle 100px 50px, red, blue) -> sup=false echo=""
+radial-gradient(circle closest-side, red, blue) -> sup=true echo="radial-gradient(circle closest-side, red, blue)"
+radial-gradient(ellipse farthest-corner, red, blue) -> sup=true echo="radial-gradient(red, blue)"

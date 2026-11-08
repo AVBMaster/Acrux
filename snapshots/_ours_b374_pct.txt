@@ -1,0 +1,11 @@
+radial-gradient(50%, red, blue) -> sup=false
+radial-gradient(ellipse 50%, red, blue) -> sup=false
+radial-gradient(circle 50%, red, blue) -> sup=false
+radial-gradient(ellipse 50% 50%, red, blue) -> sup=true
+radial-gradient(50% 50%, red, blue) -> sup=true
+radial-gradient(100px, red, blue) -> sup=true
+radial-gradient(ellipse 100px, red, blue) -> sup=false
+radial-gradient(circle 100px, red, blue) -> sup=true
+radial-gradient(5em, red, blue) -> sup=true
+radial-gradient(circle 5em, red, blue) -> sup=true
+radial-gradient(ellipse 5em, red, blue) -> sup=false

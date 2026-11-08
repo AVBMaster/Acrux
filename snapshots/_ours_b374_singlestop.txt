@@ -1,0 +1,7 @@
+radial-gradient(red) -> sup=true echo="radial-gradient(red)"
+radial-gradient(red, blue) -> sup=true echo="radial-gradient(red, blue)"
+radial-gradient(#fff) -> sup=true echo="radial-gradient(#fff)"
+radial-gradient(circle, red) -> sup=true echo="radial-gradient(circle, red)"
+radial-gradient(circle at center, red) -> sup=true echo="radial-gradient(circle, red)"
+radial-gradient(50%) -> sup=false echo=""
+radial-gradient(100px, red, blue) -> sup=true echo="radial-gradient(100px, red, blue)"

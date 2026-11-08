@@ -1,0 +1,20 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> sup='+CSS.supports('background-image',v));el.remove();}
+// single percentage in every shape context
+t('radial-gradient(50%, red, blue)');
+t('radial-gradient(ellipse 50%, red, blue)');
+t('radial-gradient(circle 50%, red, blue)');
+t('radial-gradient(ellipse 50% 50%, red, blue)');
+t('radial-gradient(50% 50%, red, blue)');
+// single length in every shape context (for contrast)
+t('radial-gradient(100px, red, blue)');
+t('radial-gradient(ellipse 100px, red, blue)');
+t('radial-gradient(circle 100px, red, blue)');
+// single length in em
+t('radial-gradient(5em, red, blue)');
+t('radial-gradient(circle 5em, red, blue)');
+t('radial-gradient(ellipse 5em, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>

@@ -919,9 +919,95 @@ public static class CssValueGrammar
         var name = token[..open];
         if (name.Equals("url", StringComparison.OrdinalIgnoreCase)) return true;
         if (name.Equals("paint", StringComparison.OrdinalIgnoreCase)) return IsPaintCall(token, open);
+        bool radial = name.Equals("radial-gradient", StringComparison.OrdinalIgnoreCase)
+                   || name.Equals("repeating-radial-gradient", StringComparison.OrdinalIgnoreCase)
+                   || name.Equals("-webkit-radial-gradient", StringComparison.OrdinalIgnoreCase)
+                   || name.Equals("-webkit-repeating-radial-gradient", StringComparison.OrdinalIgnoreCase);
+        if (radial) return RadialPrologueIsValid(token, open);
         foreach (var image in ImageFunctionNames)
             if (name.Equals(image, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
+    }
+
+    /// <summary>CSS Images 3 §3.2 ties the ending shape to its size, and a shape that its size
+    /// contradicts is no value at all. The first argument carries the shape, the size and the
+    /// position (the stops after the first top-level comma are not this function's business).
+    /// Measured against the reference engine:
+    /// • a single <c>&lt;length&gt;</c> is the radius of a circle — '100px' and 'circle 100px' read,
+    ///   'ellipse 100px' is refused;
+    /// • a single <c>&lt;percentage&gt;</c> is refused in every form — '50%', 'ellipse 50%' and
+    ///   'circle 50%' all drop, because a circle's radius cannot be a percentage and one value
+    ///   cannot be an ellipse's pair;
+    /// • two lengths or percentages are the radii of an ellipse — '50% 50%' and 'ellipse 50% 50%'
+    ///   read, 'circle 100px 50px' is refused.
+    /// The four size keywords read with either shape.</summary>
+    private static bool RadialPrologueIsValid(string token, int open)
+    {
+        if (!token.EndsWith(")", StringComparison.Ordinal)) return true;
+        var inner = token[(open + 1)..^1];
+        var firstComma = TopLevelComma(inner);
+        var prologue = (firstComma < 0 ? inner : inner[..firstComma]).Trim();
+        if (prologue.Length == 0) return true;
+
+        var words = SplitComponents(prologue);
+        // A prologue is only present when it names a shape, a size keyword or 'at'; otherwise the
+        // first argument is the first colour stop and there is no shape/size pair to check.
+        bool hasPrologue = false;
+        foreach (var w in words)
+        {
+            var lower = w.ToLowerInvariant();
+            if (lower == "at" || lower is "circle" or "ellipse"
+                || lower is "closest-side" or "closest-corner" or "farthest-side" or "farthest-corner")
+            { hasPrologue = true; break; }
+            if (IsRadialSizeWord(w)) { hasPrologue = true; break; }
+        }
+        if (!hasPrologue) return true;
+
+        string? shape = null;
+        int lengthCount = 0, percentageCount = 0;
+        for (int i = 0; i < words.Count; i++)
+        {
+            var w = words[i];
+            var lower = w.ToLowerInvariant();
+            // 'at' opens the position, which any shape and size may precede.
+            if (lower == "at") return true;
+            if (lower is "circle" or "ellipse") { if (shape != null) return false; shape = lower; continue; }
+            if (lower is "closest-side" or "closest-corner" or "farthest-side" or "farthest-corner") continue;
+            if (IsPlainLength(w)) { lengthCount++; continue; }
+            if (w[^1] == '%') { percentageCount++; continue; }
+            return false;
+        }
+        int sizeCount = lengthCount + percentageCount;
+        // A single value is a circle's radius: a percentage cannot be one, and an explicit
+        // 'ellipse' contradicts the circle a length implies.
+        if (sizeCount == 1)
+        {
+            if (percentageCount == 1) return false;
+            if (shape == "ellipse") return false;
+        }
+        // Two values are an ellipse's radii, which an explicit 'circle' contradicts.
+        if (sizeCount >= 2 && shape == "circle") return false;
+        return true;
+    }
+
+    /// <summary>True for a word that is a length or a percentage — either can be a size the
+    /// prologue carries, and telling them apart is what §3.2's circle rule needs.</summary>
+    private static bool IsRadialSizeWord(string word) =>
+        word.Length > 0 && (IsPlainLength(word) || word[^1] == '%');
+
+    /// <summary>The index of the first comma in |text| that is not inside a function or a
+    /// parenthesised group, or -1 when there is none.</summary>
+    private static int TopLevelComma(string text)
+    {
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')' && depth > 0) depth--;
+            else if (c == ',' && depth == 0) return i;
+        }
+        return -1;
     }
 
     /// <summary>Houdini Painting 3 §3.1 writes 'paint()' with the worklet's name and, in the draft,

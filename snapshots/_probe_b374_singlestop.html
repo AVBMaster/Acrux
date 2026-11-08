@@ -1,0 +1,16 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.backgroundImage=v;out.push(v+' -> sup='+CSS.supports('background-image',v)+' echo='+JSON.stringify(el.style.backgroundImage));el.remove();}
+// single-stop radial gradients: prologue == whole text, no comma
+t('radial-gradient(red)');
+t('radial-gradient(red, blue)');
+t('radial-gradient(#fff)');
+t('radial-gradient(circle, red)');
+t('radial-gradient(circle at center, red)');
+// single percentage as the ONLY argument
+t('radial-gradient(50%)');
+// two stops, both lengths (already known true)
+t('radial-gradient(100px, red, blue)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
