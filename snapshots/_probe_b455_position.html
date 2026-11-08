@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b455: position properties
+s('pos-static','position:static',['position']);
+s('pos-relative','position:relative',['position']);
+s('pos-absolute','position:absolute',['position']);
+s('pos-fixed','position:fixed',['position']);
+s('pos-sticky','position:sticky',['position']);
+s('pos-rel-top','position:relative;top:10px',['position','top']);
+s('pos-abs-all','position:absolute;top:10px;right:20px;bottom:30px;left:40px',['top','right','bottom','left']);
+s('pos-abs-auto','position:absolute;top:auto;left:auto',['top','left']);
+s('z-auto','position:relative;z-index:auto',['z-index']);
+s('z-pos','position:relative;z-index:10',['z-index']);
+s('z-neg','position:relative;z-index:-1',['z-index']);
+s('float-left','float:left',['float']);
+s('float-right','float:right',['float']);
+s('float-none','float:none',['float']);
+s('clear-both','clear:both',['clear']);
+s('clear-left','clear:left',['clear']);
+s('opacity-1','opacity:1',['opacity']);
+s('opacity-5','opacity:0.5',['opacity']);
+s('opacity-0','opacity:0',['opacity']);
+s('visibility-vis','visibility:visible',['visibility']);
+s('visibility-hid','visibility:hidden',['visibility']);
+out.push('SUP position:sticky = '+(()=>{try{return CSS.supports('position','sticky')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP z-index:10 = '+(()=>{try{return CSS.supports('z-index','10')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP float:left = '+(()=>{try{return CSS.supports('float','left')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP opacity:0.5 = '+(()=>{try{return CSS.supports('opacity','0.5')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

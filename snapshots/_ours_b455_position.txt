@@ -1,0 +1,25 @@
+pos-static position=static
+pos-relative position=relative
+pos-absolute position=absolute
+pos-fixed position=fixed
+pos-sticky position=sticky
+pos-rel-top position=relative | top=10px
+pos-abs-all top=10px | right=20px | bottom=30px | left=40px
+pos-abs-auto top=auto | left=auto
+z-auto z-index=auto
+z-pos z-index=10
+z-neg z-index=-1
+float-left float=left
+float-right float=right
+float-none float=none
+clear-both clear=both
+clear-left clear=left
+opacity-1 opacity=1
+opacity-5 opacity=0.5
+opacity-0 opacity=0
+visibility-vis visibility=visible
+visibility-hid visibility=hidden
+SUP position:sticky = Y
+SUP z-index:10 = Y
+SUP float:left = Y
+SUP opacity:0.5 = Y
