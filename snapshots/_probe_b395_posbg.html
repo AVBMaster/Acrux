@@ -1,0 +1,54 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// position + insets
+t('position','static');
+t('position','relative');
+t('position','absolute');
+t('position','fixed');
+t('position','sticky');
+t('position','bogus');
+t('top','auto');
+t('top','10px');
+t('top','10%');
+t('top','-10px');
+t('right','0');
+t('bottom','auto');
+t('left','5em');
+t('inset','0');
+t('inset','10px 20px');
+t('inset','10px 20px 30px 40px');
+t('z-index','auto');
+t('z-index','10');
+t('z-index','-1');
+// background family
+t('background-color','red');
+t('background-image','none');
+t('background-image','url(a.png)');
+t('background-image','linear-gradient(red, blue)');
+t('background-repeat','repeat');
+t('background-repeat','no-repeat');
+t('background-repeat','repeat-x');
+t('background-repeat','space round');
+t('background-attachment','scroll');
+t('background-attachment','fixed');
+t('background-attachment','local');
+t('background-position','center');
+t('background-position','left top');
+t('background-position','50% 50%');
+t('background-position','10px 20px');
+t('background-size','auto');
+t('background-size','cover');
+t('background-size','contain');
+t('background-size','100px 50px');
+t('background-clip','border-box');
+t('background-clip','padding-box');
+t('background-clip','content-box');
+t('background-clip','text');
+t('background-origin','padding-box');
+t('background-origin','border-box');
+t('background','red');
+t('background','url(a.png) no-repeat center / cover');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
