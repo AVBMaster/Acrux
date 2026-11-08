@@ -1,0 +1,15 @@
+shrink-1 -> 200x0
+shrink-0 -> 200x0
+basis-auto -> 200x0
+basis-0 -> 300x0
+basis-px -> 300x0
+grow-2 -> 300x0
+shrink-2 -> 200x0
+no-shrink-min -> 200x0
+wrap -> 200x0
+no-basis-grow -> 300x0
+z-auto z=auto
+z-neg z=-1
+z-num z=10
+z-inherit z=auto
+---

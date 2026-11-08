@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function box(label,css){ try{ const h=document.createElement('div'); h.style.cssText='display:flex;width:300px;';
+  const a=document.createElement('div'); a.style.cssText=css; h.appendChild(a);
+  document.body.appendChild(h); const r=a.getBoundingClientRect();
+  out.push(label+' -> '+Math.round(r.width*100)/100+'x'+Math.round(r.height*100)/100); h.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b444: flex shrink/basis/grow edges
+box('shrink-1','width:200px;flex-shrink:1');
+box('shrink-0','width:200px;flex-shrink:0');
+box('basis-auto','width:200px;flex-basis:auto');
+box('basis-0','flex-basis:0;flex-grow:1');
+box('basis-px','flex-basis:50px;flex-grow:1');
+box('grow-2','width:50px;flex-grow:2');
+box('shrink-2','width:200px;flex-shrink:2');
+box('no-shrink-min','width:200px;min-width:150px');
+box('wrap','width:200px;flex-wrap:wrap');
+box('no-basis-grow','flex-grow:1');
+// z-index / stacking
+function z(label,css){ try{ const p=document.createElement('div'); p.style.cssText='position:relative;';
+  const c=document.createElement('div'); c.style.cssText='position:absolute;'+css; p.appendChild(c);
+  document.body.appendChild(p); const v=getComputedStyle(c).zIndex; p.remove(); out.push(label+' z='+v); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+z('z-auto','z-index:auto');
+z('z-neg','z-index:-1');
+z('z-num','z-index:10');
+z('z-inherit','z-index:inherit');
+out.push('---');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
