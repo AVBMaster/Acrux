@@ -2124,13 +2124,15 @@ public static class CssValueText
             color ??= word;
         }
         var parts = new List<string>();
-        // A component that is its longhand's initial is dropped (measured: 'medium none
-        // currentcolor' echoes 'medium'), but a style that is 'none' is still kept when the width
-        // is also non-initial (measured: 'none 27' keeps 'none' in the border-image form; for
-        // column-rule 'none' alone echoes 'medium').
+        // A 'none' style is always elided on column-rule, whatever else is present — the style
+        // longhand's initial is 'none', so '1px none' reads '1px' and 'medium none currentcolor'
+        // reads 'medium' (measured). A shorthand with nothing left says the width's initial
+        // 'medium' alone; a bare 'none' (which names the style, so it lands in the colour slot
+        // below) drops entirely and is replaced by that 'medium' (measured: 'none' echoes
+        // 'medium', not 'none').
         if (width != null) parts.Add(width);
         if (style != null && style.ToLowerInvariant() != "none") parts.Add(style);
-        if (color != null) parts.Add(color);
+        if (color != null && color.ToLowerInvariant() != "none") parts.Add(color);
         if (parts.Count == 0) parts.Add("medium");
         return string.Join(" ", parts);
     }

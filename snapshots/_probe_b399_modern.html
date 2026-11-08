@@ -1,0 +1,54 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// multicol
+t('columns','auto');
+t('columns','2');
+t('columns','100px');
+t('columns','2 100px');
+t('column-count','auto');
+t('column-count','3');
+t('column-width','auto');
+t('column-width','200px');
+t('column-gap','normal');
+t('column-gap','20px');
+t('column-rule','none');
+t('column-rule','1px solid red');
+t('column-span','none');
+t('column-span','all');
+t('column-fill','balance');
+t('column-fill','auto');
+// clip-path / shape-outside
+t('clip-path','none');
+t('clip-path','circle(50%)');
+t('clip-path','ellipse(50% 50%)');
+t('clip-path','inset(10px)');
+t('clip-path','polygon(0 0, 100% 0, 100% 100%)');
+t('shape-outside','none');
+t('shape-outside','circle(50%)');
+t('shape-outside','inset(10px)');
+// blend / isolation
+t('mix-blend-mode','normal');
+t('mix-blend-mode','multiply');
+t('mix-blend-mode','screen');
+t('mix-blend-mode','overlay');
+t('mix-blend-mode','bogus');
+t('isolation','auto');
+t('isolation','isolate');
+// modern props
+t('will-change','auto');
+t('will-change','opacity');
+t('will-change','transform, opacity');
+t('contain','none');
+t('contain','strict');
+t('contain','layout');
+t('contain','paint');
+t('resize','none');
+t('resize','both');
+t('resize','horizontal');
+t('user-select','auto');
+t('user-select','none');
+t('user-select','text');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
