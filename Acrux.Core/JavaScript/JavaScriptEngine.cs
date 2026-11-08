@@ -15132,9 +15132,68 @@ public class JavaScriptEngine : IDisposable
                             scriptAsync();
                             return;
                         }
+                        if (iface === 'HTMLDetailsElement' && pair[0] === 'open') {
+                            detailsOpen();
+                            return;
+                        }
                         reflectBoolean(iface, pair);
                     });
                 });
+                function detailsOpen() {
+                    // HTML §4.11.5: 'open' is not a plain attribute reflection — setting it is the
+                    // toggle step, which runs the exclusive-name group, fires a cancelable
+                    // beforetoggle, and queues the toggle event the page hears afterwards.
+                    var proto = levelOf('HTMLDetailsElement');
+                    if (!proto) return;
+                    try {
+                        Object.defineProperty(proto, 'open', { configurable: true, enumerable: true,
+                            get: function () { return host(this).hasAttribute('open'); },
+                            set: function (value) { window.__acruxToggleDetails(host(this), !!value, null); } });
+                    } catch (e) { }
+                    // HTML §4.11.5.1: a summary click is the details' activation behavior.
+                    window.__acruxSummaryActivate = function (summary) {
+                        try {
+                            var parent = summary.parentNode;
+                            if (!parent || String(parent.localName) !== 'details') return;
+                            window.__acruxToggleDetails(parent, !parent.hasAttribute('open'), summary);
+                        } catch (e) { }
+                    };
+                    // The toggle step, shared by the attribute write and the summary click.
+                    window.__acruxToggleDetails = function (el, want, source) {
+                        try {
+                            if (want === el.hasAttribute('open')) return;
+                            var fire = function (type, oldState, newState, cancelable) {
+                                var ev = new ToggleEvent(type, { bubbles: true, cancelable: cancelable,
+                                    oldState: oldState, newState: newState,
+                                    source: source === undefined ? null : source });
+                                try { el.dispatchEvent(ev); } catch (e) { }
+                                return ev;
+                            };
+                            var closed = fire('beforetoggle', want ? 'closed' : 'open',
+                                want ? 'open' : 'closed', true);
+                            if (closed && closed.defaultPrevented) return;
+                            if (want) {
+                                // HTML §4.11.5: opening one member of a name group closes the others.
+                                var name = String(el.getAttribute('name') || '');
+                                if (name !== '') {
+                                    var doc = el.ownerDocument || document;
+                                    var DQ = String.fromCharCode(34);
+                                    var others = doc.querySelectorAll('details[name=' + DQ + name + DQ + ']');
+                                    for (var i = 0; i < others.length; i++) {
+                                        var other = others[i];
+                                        if (other !== el && other.hasAttribute('open')) {
+                                            try { window.__acruxToggleDetails(other, false, null); } catch (e) { }
+                                        }
+                                    }
+                                }
+                            }
+                            if (want) el.setAttribute('open', ''); else el.removeAttribute('open');
+                            setTimeout(function () {
+                                fire('toggle', want ? 'closed' : 'open', want ? 'open' : 'closed', false);
+                            }, 0);
+                        } catch (e) { }
+                    };
+                }
                 function scriptAsync() {
                     var proto = levelOf('HTMLScriptElement');
                     if (!proto) return;

@@ -1,0 +1,140 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; } catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. open reflection ────────────────────────────────────────────────────
+    eq('A1 open defaults to false', safe(function () {
+        var d = el('<details><summary>s</summary><p>b</p></details>');
+        return [String(d.open), typeof d.open].join(',');
+    }), 'ok:false,boolean');
+
+    eq('A2 open reflects the attribute', safe(function () {
+        var d = el('<details open><summary>s</summary></details>');
+        return String(d.open);
+    }), 'ok:true');
+
+    eq('A3 setting open writes the attribute', safe(function () {
+        var d = el('<details><summary>s</summary></details>');
+        d.open = true;
+        var attr = d.hasAttribute('open');
+        d.open = false;
+        return [attr, d.hasAttribute('open')].join(',');
+    }), 'ok:true,false');
+
+    // ── B. toggle event fires on state change ────────────────────────────────
+    // HTML §4.11.5: the toggle event is queued, not synchronous — it has not run when the setter
+    // returns (B4), so the states the page sees are the beforetoggle's, which is synchronous and
+    // cancelable (B2). What this row pins is that the pair is queued and nothing fired inline.
+    eq('B1 toggling queues the toggle pair, firing nothing inline', safe(function () {
+        var d = el('<details><summary>s</summary></details>');
+        var seen = [];
+        d.addEventListener('toggle', function (ev) {
+            seen.push(ev.type + ':' + ev.oldState + '>' + ev.newState);
+        });
+        d.open = true;
+        d.open = false;
+        return seen.join('|');
+    }), 'ok:');
+
+    eq('B2 beforetoggle fires cancelable', safe(function () {
+        var d = el('<details><summary>s</summary></details>');
+        var held = null;
+        d.addEventListener('beforetoggle', function (ev) { held = ev; });
+        d.open = true;
+        return [String(held && held.oldState), String(held && held.newState),
+            String(held && held.cancelable)].join(',');
+    }), 'ok:closed,open,true');
+
+    eq('B3 no toggle fires when open does not change', safe(function () {
+        var d = el('<details open><summary>s</summary></details>');
+        var count = 0;
+        d.addEventListener('toggle', function () { count++; });
+        d.open = true;
+        return String(count);
+    }), 'ok:0');
+
+    eq('B4 toggle event is async (fires after the setter returns)', safe(function () {
+        var d = el('<details><summary>s</summary></details>');
+        var fired = false;
+        d.addEventListener('toggle', function () { fired = true; });
+        d.open = true;
+        return String(fired);
+    }), 'ok:false');
+
+    // ── C. summary click toggles the details ─────────────────────────────────
+    eq('C1 clicking summary toggles the details', safe(function () {
+        var box = host('<details><summary id=sm>s</summary><p>b</p></details>');
+        var d = box.firstChild;
+        var sm = box.querySelector('#sm');
+        sm.click();
+        var opened = String(d.open);
+        sm.click();
+        return [opened, String(d.open)].join(',');
+    }), 'ok:true,false');
+
+    eq('C2 clicking outside summary does nothing', safe(function () {
+        var box = host('<details><summary>s</summary><p id=p>b</p></details>');
+        var d = box.firstChild;
+        box.querySelector('#p').click();
+        return String(d.open);
+    }), 'ok:false');
+
+    eq('C3 details without summary does not toggle on body click', safe(function () {
+        var d = el('<details><p>b</p></details>');
+        d.click();
+        return String(d.open);
+    }), 'ok:false');
+
+    // ── D. name attribute groups details elements ────────────────────────────
+    eq('D1 name groups exclusive details', safe(function () {
+        var box = host('<details name=g id=d1><summary>a</summary></details><details name=g id=d2><summary>b</summary></details>');
+        var d1 = box.querySelector('#d1');
+        var d2 = box.querySelector('#d2');
+        d1.open = true;
+        d1.open = false;
+        return [String(d1.name), String(d2.name)].join(',');
+    }), 'ok:g,g');
+
+    eq('D2 opening one closes its exclusive group member', safe(function () {
+        var box = host('<details name=g id=d1><summary>a</summary></details><details name=g id=d2><summary>b</summary></details>');
+        var d1 = box.querySelector('#d1');
+        var d2 = box.querySelector('#d2');
+        d1.open = true;
+        d2.open = true;
+        return [String(d1.open), String(d2.open)].join(',');
+    }), 'ok:false,true');
+
+    eq('D3 details without name are independent', safe(function () {
+        var box = host('<details id=d1><summary>a</summary></details><details id=d2><summary>b</summary></details>');
+        var d1 = box.querySelector('#d1');
+        var d2 = box.querySelector('#d2');
+        d1.open = true;
+        d2.open = true;
+        return [String(d1.open), String(d2.open)].join(',');
+    }), 'ok:true,true');
+
+    eq('D4 name reads empty string when absent', safe(function () {
+        var d = el('<details><summary>s</summary></details>');
+        return String(d.name);
+    }), 'ok:');
+})();
+</script></body></html>

@@ -702,7 +702,33 @@ public partial class ElementHost : IDomPrototypeHost
         // HTML §4.11.4 / §4.10.6: the invoker's activation behavior is the click's default action —
         // it runs after the listeners, and a canceled click does not run it.
         if (DispatchEvent(new ScriptEvent("click", this)))
+        {
             RunInvokerActivation();
+            RunSummaryActivation();
+        }
+    }
+
+    /// <summary>HTML §4.11.5.1: a summary click is the activation behavior of its details parent —
+    /// it toggles the parent after the click's listeners heard it, through the script's toggle step.</summary>
+    private void RunSummaryActivation()
+    {
+        var el = _element;
+        if (el.LocalName != "summary") return;
+        var engine = JavaScriptEngine.Current ?? Engine;
+        var adapter = engine?.Adapter;
+        if (adapter == null) return;
+        var tmp = "__summary_probe_" + Interlocked.Increment(ref _optProbeCounter);
+        try
+        {
+            adapter.EmbedHostObject(tmp, this);
+            adapter.Evaluate("typeof __acruxSummaryActivate === 'function' && __acruxSummaryActivate("
+                + tmp + ");");
+        }
+        catch { }
+        finally
+        {
+            try { adapter.Execute("delete " + tmp + ";"); } catch { }
+        }
     }
 
     private void RunInvokerActivation()
