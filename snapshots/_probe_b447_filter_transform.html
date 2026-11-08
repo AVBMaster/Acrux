@@ -1,0 +1,27 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,el,props){ try{ const cs=getComputedStyle(el); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); }catch(e){ out.push(label+' ERR '+e.message); } }
+function mk(css){const d=document.createElement('div');d.style.cssText=css;document.body.appendChild(d);return d;}
+// b447: filter + backdrop-filter + transform computed
+s('f-blur', mk('filter:blur(5px)'), ['filter']);
+s('f-multi', mk('filter:blur(2px) brightness(1.5) contrast(0.8)'), ['filter']);
+s('f-drop', mk('filter:drop-shadow(2px 3px 4px red)'), ['filter']);
+s('f-none', mk('filter:none'), ['filter']);
+s('f-bogus', mk('filter:blur(bogus)'), ['filter']);
+s('bf-blur', mk('backdrop-filter:blur(10px)'), ['backdrop-filter']);
+s('bf-none', mk('backdrop-filter:none'), ['backdrop-filter']);
+s('t-translate', mk('transform:translate(10px,20px)'), ['transform']);
+s('t-rotate', mk('transform:rotate(45deg)'), ['transform']);
+s('t-scale', mk('transform:scale(2,3)'), ['transform']);
+s('t-skew', mk('transform:skewX(15deg)'), ['transform']);
+s('t-matrix', mk('transform:matrix(1,2,3,4,5,6)'), ['transform']);
+s('t-none', mk('transform:none'), ['transform']);
+s('t-3d', mk('transform:translate3d(1px,2px,3px)'), ['transform']);
+s('t-origin', mk('transform:rotate(30deg);transform-origin:10px 20px'), ['transform-origin']);
+s('t-style-flat', mk('transform-style:flat'), ['transform-style']);
+s('t-persp', mk('perspective:500px'), ['perspective']);
+s('t-backface', mk('backface-visibility:hidden'), ['backface-visibility']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
