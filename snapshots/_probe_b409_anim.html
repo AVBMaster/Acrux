@@ -1,0 +1,68 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// animation longhands
+t('animation-name','none');
+t('animation-name','slide');
+t('animation-name','slide, fade');
+t('animation-name','bogus');
+t('animation-duration','0s');
+t('animation-duration','1s');
+t('animation-duration','0.5s, 1s');
+t('animation-duration','-1s');
+t('animation-duration','bogus');
+t('animation-timing-function','ease');
+t('animation-timing-function','linear');
+t('animation-timing-function','ease-in-out');
+t('animation-timing-function','cubic-bezier(0.5, 0, 0.5, 1)');
+t('animation-timing-function','steps(3, end)');
+t('animation-timing-function','bogus');
+t('animation-delay','0s');
+t('animation-delay','0.5s');
+t('animation-delay','-1s');
+t('animation-delay','bogus');
+t('animation-iteration-count','1');
+t('animation-iteration-count','infinite');
+t('animation-iteration-count','2.5');
+t('animation-iteration-count','-1');
+t('animation-iteration-count','bogus');
+t('animation-direction','normal');
+t('animation-direction','reverse');
+t('animation-direction','alternate');
+t('animation-direction','alternate-reverse');
+t('animation-direction','bogus');
+t('animation-fill-mode','none');
+t('animation-fill-mode','forwards');
+t('animation-fill-mode','backwards');
+t('animation-fill-mode','both');
+t('animation-fill-mode','bogus');
+t('animation-play-state','running');
+t('animation-play-state','paused');
+t('animation-play-state','bogus');
+// animation shorthand
+t('animation','none');
+t('animation','slide 1s ease');
+t('animation','slide 1s ease-in-out 0.5s infinite alternate both');
+t('animation','bogus');
+// transition longhands (verify)
+t('transition-property','none');
+t('transition-property','opacity');
+t('transition-property','all');
+t('transition-property','opacity, color');
+t('transition-property','bogus');
+t('transition-duration','0s');
+t('transition-duration','1s');
+t('transition-duration','0.5s, 1s');
+t('transition-duration','-1s');
+t('transition-duration','bogus');
+t('transition-timing-function','ease');
+t('transition-timing-function','cubic-bezier(0.5, 0, 0.5, 1)');
+t('transition-delay','0s');
+t('transition-delay','-1s');
+t('transition-behavior','normal');
+t('transition-behavior','allow-discrete');
+t('transition','all 0.3s ease');
+t('transition','none');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
