@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b454: flexbox properties
+s('disp-flex','display:flex',['display']);
+s('disp-inline-flex','display:inline-flex',['display']);
+s('flex-dir-row','display:flex;flex-direction:row',['flex-direction']);
+s('flex-dir-col','display:flex;flex-direction:column',['flex-direction']);
+s('flex-dir-rr','display:flex;flex-direction:row-reverse',['flex-direction']);
+s('flex-wrap-nowrap','display:flex;flex-wrap:nowrap',['flex-wrap']);
+s('flex-wrap-wrap','display:flex;flex-wrap:wrap',['flex-wrap']);
+s('flex-flow','display:flex;flex-flow:row wrap',['flex-flow','flex-direction','flex-wrap']);
+s('justify-start','display:flex;justify-content:flex-start',['justify-content']);
+s('justify-center','display:flex;justify-content:center',['justify-content']);
+s('justify-between','display:flex;justify-content:space-between',['justify-content']);
+s('justify-around','display:flex;justify-content:space-around',['justify-content']);
+s('justify-evenly','display:flex;justify-content:space-evenly',['justify-content']);
+s('align-items','display:flex;align-items:center',['align-items']);
+s('align-content','display:flex;flex-wrap:wrap;align-content:center',['align-content']);
+s('flex-child','display:flex;flex:1',['flex','flex-grow','flex-shrink','flex-basis']);
+s('flex-grow','display:flex;flex-grow:2;flex-shrink:1;flex-basis:100px',['flex-grow','flex-shrink','flex-basis']);
+s('flex-none','display:flex;flex:none',['flex']);
+s('flex-auto','display:flex;flex:auto',['flex']);
+out.push('SUP display:flex = '+(()=>{try{return CSS.supports('display','flex')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP flex:1 = '+(()=>{try{return CSS.supports('flex','1')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP flex-flow:row wrap = '+(()=>{try{return CSS.supports('flex-flow','row wrap')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP justify-content:space-evenly = '+(()=>{try{return CSS.supports('justify-content','space-evenly')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
