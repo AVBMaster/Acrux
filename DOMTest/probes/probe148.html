@@ -1,0 +1,182 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe148 — the popover state machine, its toggle events and its invokers</title></head>
+<body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function el(html) { return host(html).firstChild; }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+
+    // ── A. the reflection the attribute carries ──────────────────────────────
+    eq('A1 popover reads the state the attribute names', safe(function () {
+        var e = el('<div>text</div>');
+        var none = String(e.popover);
+        e.setAttribute('popover', '');
+        var empty = e.popover;
+        e.setAttribute('popover', 'manual');
+        var manual = e.popover;
+        e.setAttribute('popover', 'bogus');
+        return [none, empty, manual, e.popover, e.getAttribute('popover')].join(',');
+    }), 'ok:null,auto,manual,auto,bogus');
+
+    eq('A2 the setter writes the value raw and null takes the attribute off', safe(function () {
+        var e = el('<div>text</div>');
+        e.popover = 'MANUAL';
+        var written = e.getAttribute('popover');
+        var read = e.popover;
+        e.popover = null;
+        return [written, read, String(e.popover), String(e.hasAttribute('popover'))].join(',');
+    }), 'ok:MANUAL,manual,null,false');
+
+    eq('A3 hint is a state the attribute names', safe(function () {
+        var e = el('<div popover=hint>text</div>');
+        return String(e.popover);
+    }), 'ok:hint');
+
+    // ── B. the showing state and its refusals ────────────────────────────────
+    eq('B1 showPopover refuses an element with no popover attribute', thrown(function () {
+        var e = el('<div>text</div>');
+        e.showPopover();
+    }), 'NotSupportedError');
+
+    eq('B2 show then hide moves the state the selector reads', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        e.showPopover();
+        var open = String(e.matches(':popover-open'));
+        e.hidePopover();
+        return [open, String(e.matches(':popover-open'))].join(',');
+    }), 'ok:true,false');
+
+    eq('B3 a second show refuses the state it is already in', thrown(function () {
+        var e = el('<div popover=auto>text</div>');
+        e.showPopover();
+        e.showPopover();
+    }), 'InvalidStateError');
+
+    eq('B4 hide refuses a popover that is not showing', thrown(function () {
+        var e = el('<div popover=auto>text</div>');
+        e.hidePopover();
+    }), 'InvalidStateError');
+
+    eq('B5 togglePopover answers the state it lands in', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        return [String(e.togglePopover()), String(e.togglePopover())].join(',');
+    }), 'ok:true,false');
+
+    eq('B6 the force argument holds the state it names', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        var a = e.togglePopover(true);
+        var b = e.togglePopover(true);
+        var c = e.togglePopover(false);
+        var d = e.togglePopover(false);
+        return [a, b, c, d].join(',');
+    }), 'ok:true,true,false,false');
+
+    // ── C. the toggle events the state change fires ──────────────────────────
+    eq('C1 show fires beforetoggle and toggle with the states', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        var seen = [];
+        e.addEventListener('beforetoggle', function (ev) {
+            seen.push(ev.type + ':' + ev.oldState + '>' + ev.newState);
+        });
+        e.addEventListener('toggle', function (ev) {
+            seen.push(ev.type + ':' + ev.oldState + '>' + ev.newState);
+        });
+        e.showPopover();
+        return seen.join('|');
+    }), 'ok:beforetoggle:closed>open|toggle:closed>open');
+
+    eq('C2 hide fires the pair the other way round', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        e.showPopover();
+        var seen = [];
+        e.addEventListener('beforetoggle', function (ev) {
+            seen.push(ev.oldState + '>' + ev.newState);
+        });
+        e.addEventListener('toggle', function (ev) {
+            seen.push(ev.oldState + '>' + ev.newState);
+        });
+        e.hidePopover();
+        return seen.join('|');
+    }), 'ok:open>closed|open>closed');
+
+    eq('C3 the events are ToggleEvents that bubble', safe(function () {
+        var e = el('<div popover=auto>text</div>');
+        var held = null;
+        e.addEventListener('toggle', function (ev) { held = ev; });
+        e.showPopover();
+        return [String(held instanceof ToggleEvent), String(held.bubbles),
+            String(held.cancelable), String(held.source)].join(',');
+    }), 'ok:true,true,false,null');
+
+    // ── D. the selector and the tree walk ────────────────────────────────────
+    eq('D1 querySelector finds the showing popover', safe(function () {
+        var box = host('<div><p popover=auto id=one>a</p><p popover=auto id=two>b</p></div>');
+        box.querySelector('#one').showPopover();
+        var found = box.querySelector(':popover-open');
+        return [String(found && found.id), String(box.querySelectorAll(':popover-open').length)].join(',');
+    }), 'ok:one,1');
+
+    // ── E. the invoker a button carries ──────────────────────────────────────
+    eq('E1 popoverTargetElement answers the element the id names', safe(function () {
+        var box = host('<div><button popovertarget=pp1>go</button><p id=pp1 popover=auto>x</p></div>');
+        var btn = box.querySelector('button');
+        var target = box.querySelector('#pp1');
+        return [String(btn.popoverTargetElement === target), btn.popoverTargetAction].join(',');
+    }), 'ok:true,toggle');
+
+    eq('E2 clicking the invoker toggles its target', safe(function () {
+        var box = host('<div><button popovertarget=pp2>go</button><p id=pp2 popover=auto>x</p></div>');
+        var btn = box.querySelector('button');
+        var target = box.querySelector('#pp2');
+        btn.click();
+        var open = String(target.matches(':popover-open'));
+        btn.click();
+        return [open, String(target.matches(':popover-open'))].join(',');
+    }), 'ok:true,false');
+
+    eq('E3 the action attribute holds the step it names', safe(function () {
+        var box = host('<div><button popovertarget=pp3 popovertargetaction=show>go</button><p id=pp3 popover=auto>x</p></div>');
+        var btn = box.querySelector('button');
+        var target = box.querySelector('#pp3');
+        btn.click();
+        btn.click();
+        return String(target.matches(':popover-open'));
+    }), 'ok:true');
+
+    eq('E4 the command button shows its target', safe(function () {
+        var box = host('<div><button commandfor=cp command=show-popover>go</button><p id=cp popover=auto>x</p></div>');
+        var btn = box.querySelector('button');
+        var target = box.querySelector('#cp');
+        btn.click();
+        return String(target.matches(':popover-open'));
+    }), 'ok:true');
+
+    eq('C4 the toggle the invoker click fires names the button as source', safe(function () {
+        var box = host('<div><button popovertarget=sp id=inv>go</button><p id=sp popover=auto>x</p></div>');
+        var btn = box.querySelector('button');
+        var target = box.querySelector('#sp');
+        var held = null;
+        target.addEventListener('toggle', function (ev) { held = ev; });
+        btn.click();
+        return String(held && held.source === btn);
+    }), 'ok:true');
+})();
+</script>
+<div>the popover state machine, its toggle events and its invokers</div></body></html>

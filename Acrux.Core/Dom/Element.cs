@@ -389,6 +389,10 @@ public abstract class Element : Node
     public ShadowRoot? ShadowRoot => InternalState.ShadowRoot;
     public Element? AssignedSlot => Dom.ShadowRoot.FindAssignedSlot(this);
 
+    /// <summary>HTML §4.11.4: a popover is showing between its show and hide steps — the state the
+    /// ':popover-open' selector matches and the toggle methods refuse to cross twice.</summary>
+    public bool IsPopoverShowing { get; set; }
+
     public ShadowRoot AttachShadow(ShadowRootInit init)
     {
         if (InternalState.ShadowRoot != null)

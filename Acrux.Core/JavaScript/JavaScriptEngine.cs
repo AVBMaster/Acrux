@@ -6708,7 +6708,7 @@ public class JavaScriptEngine : IDisposable
                     } catch (e) { }
                 }
                 eventCtor('SubmitEvent', [['submitter', null]]);
-                eventCtor('ToggleEvent', [['oldState', ''], ['newState', '']]);
+                eventCtor('ToggleEvent', [['oldState', ''], ['newState', ''], ['source', null]]);
                 // The form-data event the submit button carries (HTML §4.10.22.3) and the update event a
                 // payment request answers with (Payment Request §6): both are events with one member of
                 // their own, and the reference makes either with 'new' (measured).
@@ -13573,16 +13573,43 @@ public class JavaScriptEngine : IDisposable
                 fun('Document', 'startViewTransition', function (callback) { return viewTransition(callback); });
                 read('Document', 'activeViewTransition', null);
 
-                // The popover attribute (HTML §4.11.4): an enumerated value, and the three methods that
-                // refuse an element that carries none of it.
+                // The popover attribute (HTML §4.11.4): an enumerated value with a showing state the
+                // three methods move between, the pair of ToggleEvents every move fires, and the
+                // ':popover-open' selector that reads the same state the methods keep.
                 (function () {
                     var proto = levels['HTMLElement'];
                     if (!proto) return;
                     function popoverState(el) {
-                        var written = (el.getAttribute('popover') || '').toLowerCase();
-                        if (written === '') return null;
-                        if (written === 'manual') return 'manual';
+                        var written = el.getAttribute('popover');
+                        if (written === null || written === undefined) return null;
+                        var folded = String(written).toLowerCase();
+                        if (folded === 'manual') return 'manual';
+                        if (folded === 'hint') return 'hint';
                         return 'auto';
+                    }
+                    function showing(el) { return el.__popoverShowing === true; }
+                    function fireToggle(el, type, oldState, newState, source) {
+                        try {
+                            el.dispatchEvent(new ToggleEvent(type, { bubbles: true, cancelable: false,
+                                oldState: oldState, newState: newState,
+                                source: source === undefined ? null : source }));
+                        } catch (e) { }
+                    }
+                    function showStep(el, source) {
+                        fireToggle(el, 'beforetoggle', 'closed', 'open', source);
+                        el.__popoverShowing = true;
+                        fireToggle(el, 'toggle', 'closed', 'open', source);
+                    }
+                    function hideStep(el, source) {
+                        fireToggle(el, 'beforetoggle', 'open', 'closed', source);
+                        el.__popoverShowing = false;
+                        fireToggle(el, 'toggle', 'open', 'closed', source);
+                    }
+                    function refusePopover(method, self) {
+                        if (popoverState(self) === null) {
+                            throw new DOMException('Failed to execute ' + q(method) + ' on ' + q('HTMLElement')
+                                + ': The element does not have a popover attribute.', 'NotSupportedError');
+                        }
                     }
                     Object.defineProperty(proto, 'popover', { configurable: true, enumerable: true,
                         get: function () {
@@ -13591,29 +13618,81 @@ public class JavaScriptEngine : IDisposable
                         },
                         set: function (value) {
                             if (!this.setAttribute) throw new TypeError('Illegal invocation');
-                            var text = value === undefined || value === null ? '' : String(value).toLowerCase();
-                            if (text === '') { this.removeAttribute('popover'); return; }
-                            this.setAttribute('popover', text === 'manual' ? 'manual' : 'auto');
+                            // The setter writes the value as given — the folding to a state happens
+                            // on the read, the way an enumerated attribute keeps its spelling.
+                            if (value === undefined || value === null) { this.removeAttribute('popover'); return; }
+                            this.setAttribute('popover', String(value));
                         } });
-                    function refusePopover(method, self) {
-                        if (popoverState(self) === null) {
-                            throw new DOMException('Failed to execute ' + q(method) + ' on ' + q('HTMLElement')
-                                + ': The element does not have a popover attribute.', 'NotSupportedError');
-                        }
-                    }
-                    fun('HTMLElement', 'showPopover', function () {
+                    fun('HTMLElement', 'showPopover', function (options) {
+                        if (!this.getAttribute) throw new TypeError('Illegal invocation');
                         refusePopover('showPopover', this);
-                        try { this.dispatchEvent(new Event('beforetoggle')); } catch (e) { }
+                        if (showing(this)) {
+                            throw new DOMException('Failed to execute ' + q('showPopover') + ' on '
+                                + q('HTMLElement') + ': Popover is already showing.', 'InvalidStateError');
+                        }
+                        showStep(this, options && options.source);
                         return undefined;
                     });
-                    fun('HTMLElement', 'hidePopover', function () { refusePopover('hidePopover', this); });
-                    fun('HTMLElement', 'togglePopover', function (force) {
+                    fun('HTMLElement', 'hidePopover', function (options) {
+                        if (!this.getAttribute) throw new TypeError('Illegal invocation');
+                        refusePopover('hidePopover', this);
+                        if (!showing(this)) {
+                            throw new DOMException('Failed to execute ' + q('hidePopover') + ' on '
+                                + q('HTMLElement') + ': Popover is not showing.', 'InvalidStateError');
+                        }
+                        hideStep(this, options && options.source);
+                        return undefined;
+                    });
+                    fun('HTMLElement', 'togglePopover', function (force, options) {
+                        if (!this.getAttribute) throw new TypeError('Illegal invocation');
                         refusePopover('togglePopover', this);
-                        var shown = this.getAttribute('data-popover-shown') === '';
-                        var want = force === undefined ? !shown : !!force;
-                        this.setAttribute('data-popover-shown', want ? '' : 'x');
+                        var want = force === undefined ? !showing(this) : !!force;
+                        var source = options && options.source;
+                        if (want !== showing(this)) {
+                            if (want) showStep(this, source); else hideStep(this, source);
+                        }
                         return want;
                     });
+                    // The activation an invoker click runs (HTML §4.11.4, §4.10.6): the host's click
+                    // hands the element over after the listeners heard it, and the target's own
+                    // methods do the moving so the events and the refusals stay the same ones.
+                    window.__acruxInvokerActivate = function (el) {
+                        try {
+                            if (!el || !el.getAttribute) return;
+                            var tag = String(el.localName || '');
+                            if (tag !== 'button' && tag !== 'input') return;
+                            var popId = el.getAttribute('popovertarget');
+                            var cmdId = el.getAttribute('commandfor');
+                            var id = popId !== null ? popId : cmdId;
+                            if (id === null || id === undefined || id === '') return;
+                            var doc = el.ownerDocument || document;
+                            var target = doc.getElementById(id);
+                            if (!target || target === el) return;
+                            var action;
+                            if (popId !== null) {
+                                action = String(el.getAttribute('popovertargetaction') || 'toggle').toLowerCase();
+                                if (action !== 'show' && action !== 'hide') action = 'toggle';
+                            } else {
+                                var command = String(el.getAttribute('command') || '').toLowerCase();
+                                if (command === 'show-popover') action = 'show';
+                                else if (command === 'hide-popover') action = 'hide';
+                                else if (command === 'toggle-popover') action = 'toggle';
+                                else if (command === 'show-modal' && String(target.localName) === 'dialog') {
+                                    try { target.showModal(); } catch (e) { }
+                                    return;
+                                } else if (command === 'close' && String(target.localName) === 'dialog') {
+                                    try { target.close(); } catch (e) { }
+                                    return;
+                                } else return;
+                            }
+                            if (typeof target.showPopover !== 'function') return;
+                            if (target.getAttribute('popover') === null) return;
+                            var open = target.__popoverShowing === true;
+                            if (action === 'show') { if (!open) target.showPopover({ source: el }); }
+                            else if (action === 'hide') { if (open) target.hidePopover({ source: el }); }
+                            else target.togglePopover(undefined, { source: el });
+                        } catch (e) { }
+                    };
                 })();
 
                 // HTMLCanvasElement §4.8.3: the bitmap size and the two reads that hand its bytes out.
@@ -14912,7 +14991,7 @@ public class JavaScriptEngine : IDisposable
             // 'script.defer = true' finds 'defer' on the element and reads it back from the markup.
             (function () {
                 var BOOL = {'HTMLAreaElement':[['noHref','nohref']],'HTMLButtonElement':[['formNoValidate','formnovalidate']],'HTMLDetailsElement':[['open','open']],'HTMLDialogElement':[['open','open']],'HTMLHRElement':[['noShade','noshade']],'HTMLIFrameElement':[['adAuctionHeaders','adauctionheaders'],['allowPaymentRequest','allowpaymentrequest'],['browsingTopics','browsingtopics'],['credentialless','credentialless'],['sharedStorageWritable','sharedstoragewritable']],'HTMLImageElement':[['browsingTopics','browsingtopics'],['isMap','ismap'],['sharedStorageWritable','sharedstoragewritable']],'HTMLInputElement':[['formNoValidate','formnovalidate'],['incremental','incremental'],['webkitdirectory','webkitdirectory']],'HTMLOListElement':[['compact','compact'],['reversed','reversed']],'HTMLObjectElement':[['declare','declare']],'HTMLScriptElement':[['async','async'],['defer','defer'],['noModule','nomodule']],'HTMLTableCellElement':[['noWrap','nowrap']],'HTMLTemplateElement':[['shadowRootClonable','shadowrootclonable'],['shadowRootDelegatesFocus','shadowrootdelegatesfocus'],['shadowRootSerializable','shadowrootserializable']],'HTMLTrackElement':[['default','default']],'HTMLUListElement':[['compact','compact']],'HTMLVideoElement':[['disablePictureInPicture','disablepictureinpicture'],['playsInline','playsinline']],'HTMLMediaElement':[['autoplay','autoplay'],['controls','controls'],['loop','loop'],['defaultMuted','defaultmuted'],['disableRemotePlayback','disableremoteplayback'],['preservesPitch','preservespitch']]};
-                var STRING = {'HTMLAnchorElement':[['attributionSrc','attributionsrc'],['charset','charset'],['password','password'],['ping','ping'],['rev','rev'],['username','username']],'HTMLAreaElement':[['attributionSrc','attributionsrc'],['password','password'],['ping','ping'],['username','username']],'HTMLBRElement':[['clear','clear']],'HTMLBodyElement':[['aLink','alink'],['background','background'],['bgColor','bgcolor'],['link','link'],['vLink','vlink']],'HTMLButtonElement':[['command','command'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction']],'HTMLDialogElement':[['closedBy','closedby'],['returnValue','returnvalue']],'HTMLEmbedElement':[['align','align']],'HTMLFormElement':[['encoding','encoding']],'HTMLHRElement':[['align','align'],['color','color']],'HTMLIFrameElement':[['align','align'],['allow','allow'],['csp','csp'],['loading','loading'],['longDesc','longdesc'],['marginHeight','marginheight'],['marginWidth','marginwidth'],['privateToken','privatetoken'],['scrolling','scrolling']],'HTMLImageElement':[['align','align'],['attributionSrc','attributionsrc'],['border','border'],['longDesc','longdesc'],['lowsrc','lowsrc'],['useMap','usemap']],'HTMLInputElement':[['align','align'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['popoverTargetAction','popovertargetaction'],['useMap','usemap']],'HTMLLegendElement':[['align','align']],'HTMLLinkElement':[['as','as'],['charset','charset'],['imageSizes','imagesizes'],['imageSrcset','imagesrcset'],['integrity','integrity'],['rev','rev']],'HTMLMetaElement':[['content','content'],['httpEquiv','http-equiv'],['scheme','scheme']],'HTMLObjectElement':[['align','align'],['archive','archive'],['border','border'],['code','code'],['codeBase','codebase'],['codeType','codetype'],['data','data'],['standby','standby'],['useMap','usemap']],'HTMLParagraphElement':[['align','align']],'HTMLParamElement':[['valueType','valuetype']],'HTMLQuoteElement':[['cite','cite']],'HTMLScriptElement':[['attributionSrc','attributionsrc'],['charset','charset'],['event','event'],['integrity','integrity']],'HTMLTableCellElement':[['align','align'],['axis','axis'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableElement':[['align','align'],['bgColor','bgcolor'],['border','border'],['cellPadding','cellpadding'],['cellSpacing','cellspacing'],['frame','frame'],['rules','rules'],['summary','summary']],'HTMLTableRowElement':[['align','align'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableSectionElement':[['align','align'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTemplateElement':[['shadowRootCustomElementRegistry','shadowrootcustomelementregistry'],['shadowRootMode','shadowrootmode']],'HTMLTimeElement':[['dateTime','datetime']],'HTMLTrackElement':[['srclang','srclang']],'HTMLVideoElement':[['poster','poster']],'HTMLMediaElement':[['src','src']]};
+                var STRING = {'HTMLAnchorElement':[['attributionSrc','attributionsrc'],['charset','charset'],['password','password'],['ping','ping'],['rev','rev'],['username','username']],'HTMLAreaElement':[['attributionSrc','attributionsrc'],['password','password'],['ping','ping'],['username','username']],'HTMLBRElement':[['clear','clear']],'HTMLBodyElement':[['aLink','alink'],['background','background'],['bgColor','bgcolor'],['link','link'],['vLink','vlink']],'HTMLButtonElement':[['command','command'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget']],'HTMLDialogElement':[['closedBy','closedby'],['returnValue','returnvalue']],'HTMLEmbedElement':[['align','align']],'HTMLFormElement':[['encoding','encoding']],'HTMLHRElement':[['align','align'],['color','color']],'HTMLIFrameElement':[['align','align'],['allow','allow'],['csp','csp'],['loading','loading'],['longDesc','longdesc'],['marginHeight','marginheight'],['marginWidth','marginwidth'],['privateToken','privatetoken'],['scrolling','scrolling']],'HTMLImageElement':[['align','align'],['attributionSrc','attributionsrc'],['border','border'],['longDesc','longdesc'],['lowsrc','lowsrc'],['useMap','usemap']],'HTMLInputElement':[['align','align'],['formEnctype','formenctype'],['formMethod','formmethod'],['formTarget','formtarget'],['useMap','usemap']],'HTMLLegendElement':[['align','align']],'HTMLLinkElement':[['as','as'],['charset','charset'],['imageSizes','imagesizes'],['imageSrcset','imagesrcset'],['integrity','integrity'],['rev','rev']],'HTMLMetaElement':[['content','content'],['httpEquiv','http-equiv'],['scheme','scheme']],'HTMLObjectElement':[['align','align'],['archive','archive'],['border','border'],['code','code'],['codeBase','codebase'],['codeType','codetype'],['data','data'],['standby','standby'],['useMap','usemap']],'HTMLParagraphElement':[['align','align']],'HTMLParamElement':[['valueType','valuetype']],'HTMLQuoteElement':[['cite','cite']],'HTMLScriptElement':[['attributionSrc','attributionsrc'],['charset','charset'],['event','event'],['integrity','integrity']],'HTMLTableCellElement':[['align','align'],['axis','axis'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableElement':[['align','align'],['bgColor','bgcolor'],['border','border'],['cellPadding','cellpadding'],['cellSpacing','cellspacing'],['frame','frame'],['rules','rules'],['summary','summary']],'HTMLTableRowElement':[['align','align'],['bgColor','bgcolor'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTableSectionElement':[['align','align'],['ch','ch'],['chOff','choff'],['vAlign','valign']],'HTMLTemplateElement':[['shadowRootCustomElementRegistry','shadowrootcustomelementregistry'],['shadowRootMode','shadowrootmode']],'HTMLTimeElement':[['dateTime','datetime']],'HTMLTrackElement':[['srclang','srclang']],'HTMLVideoElement':[['poster','poster']],'HTMLMediaElement':[['src','src']]};
                 // HTML §2.5.1: an enumerated attribute has a fixed set of states, and the read answers
                 // one of them or the default the specification names — an attribute that is missing,
                 // empty or outside the set gives the default back rather than the text it holds
@@ -14924,9 +15003,10 @@ public class JavaScriptEngine : IDisposable
                 // subtitle track, and 'crossorigin' has no default at all so its answer is null
                 // (measured: 'video.preload' is metadata and 'video.crossOrigin' is null on an
                 // element with neither attribute).
-                var ENUM = {'HTMLMediaElement':[['preload','preload',['none','metadata','auto'],'metadata'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],
+                var ENUM = {'HTMLButtonElement':[['popoverTargetAction','popovertargetaction',['show','hide','toggle'],'toggle']],
+                    'HTMLMediaElement':[['preload','preload',['none','metadata','auto'],'metadata'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],
                     'HTMLTrackElement':[['kind','kind',['subtitles','captions','descriptions','chapters','metadata'],'subtitles']],
-                    'HTMLImageElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLLinkElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLScriptElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLTextAreaElement':[['wrap','wrap',['hard','soft','off','on'],'soft'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],'']],'HTMLInputElement':[['autocapitalize','autocapitalize',['off','on','none','sentences','words','characters'],'sentences'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],''],['spellcheck','spellcheck',['true','false'],'']]};
+                    'HTMLImageElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLLinkElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLScriptElement':[['fetchPriority','fetchpriority',['high','low'],'auto'],['crossOrigin','crossorigin',['anonymous','use-credentials'],null]],'HTMLTextAreaElement':[['wrap','wrap',['hard','soft','off','on'],'soft'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],'']],'HTMLInputElement':[['autocapitalize','autocapitalize',['off','on','none','sentences','words','characters'],'sentences'],['inputmode','inputmode',['none','text','decimal','numeric','tel','search','email','url'],''],['spellcheck','spellcheck',['true','false'],''],['popoverTargetAction','popovertargetaction',['show','hide','toggle'],'toggle']]};
                 var NUMBER = {'HTMLImageElement':[['hspace','hspace'],['vspace','vspace'],['y','y']],'HTMLOListElement':[['start','start']],'HTMLObjectElement':[['hspace','hspace'],['vspace','vspace']],'HTMLTrackElement':[['readyState','readystate']],'HTMLVideoElement':[['videoHeight','videoheight'],['videoWidth','videowidth'],['webkitDecodedFrameCount','webkitdecodedframecount'],['webkitDroppedFrameCount','webkitdroppedframecount']]};
                 var CONSTANTS = {'EventSource':{'CLOSED':2,'CONNECTING':0,'OPEN':1},'HTMLMediaElement':{'HAVE_CURRENT_DATA':2,'HAVE_ENOUGH_DATA':4,'HAVE_FUTURE_DATA':3,'HAVE_METADATA':1,'HAVE_NOTHING':0,'NETWORK_EMPTY':0,'NETWORK_IDLE':1,'NETWORK_LOADING':2,'NETWORK_NO_SOURCE':3},'HTMLTrackElement':{'ERROR':3,'LOADED':2,'LOADING':1,'NONE':0},'WebSocket':{'CLOSED':3,'CLOSING':2,'CONNECTING':0,'OPEN':1}};
                 var MORE_HANDLERS = {'AudioContext':['error','sinkchange'],'BroadcastChannel':['messageerror'],'Clipboard':['clipboardchange'],'Element':['beforecopy','beforecut','beforepaste','fullscreenchange','fullscreenerror','search','webkitfullscreenchange','webkitfullscreenerror'],'Notification':['click','close','error','show'],'ServiceWorkerContainer':['controllerchange','message','messageerror'],'ServiceWorkerRegistration':['updatefound'],'ShadowRoot':['slotchange'],'WebSocket':['close','error','message','open']};

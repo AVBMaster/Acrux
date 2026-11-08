@@ -282,7 +282,7 @@ public class SelectorChecker
             CssPseudoType.Defined => true,
             CssPseudoType.Target => false,
             CssPseudoType.Modal => false,
-            CssPseudoType.PopoverOpen => false,
+            CssPseudoType.PopoverOpen => element.IsPopoverShowing,
             CssPseudoType.Fullscreen => false,
             CssPseudoType.PictureInPicture => false,
             CssPseudoType.Is => MatchSelectorList(selector.SelectorList, element, true),

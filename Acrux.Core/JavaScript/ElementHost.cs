@@ -699,7 +699,32 @@ public partial class ElementHost : IDomPrototypeHost
 
     public void click()
     {
-        DispatchEvent(new ScriptEvent("click", this));
+        // HTML §4.11.4 / §4.10.6: the invoker's activation behavior is the click's default action —
+        // it runs after the listeners, and a canceled click does not run it.
+        if (DispatchEvent(new ScriptEvent("click", this)))
+            RunInvokerActivation();
+    }
+
+    private void RunInvokerActivation()
+    {
+        var el = _element;
+        if (el.LocalName != "button" && el.LocalName != "input") return;
+        if (el.GetAttribute("popovertarget") == null && el.GetAttribute("commandfor") == null) return;
+        var engine = JavaScriptEngine.Current ?? Engine;
+        var adapter = engine?.Adapter;
+        if (adapter == null) return;
+        var tmp = "__invoker_probe_" + Interlocked.Increment(ref _optProbeCounter);
+        try
+        {
+            adapter.EmbedHostObject(tmp, this);
+            adapter.Evaluate("typeof __acruxInvokerActivate === 'function' && __acruxInvokerActivate("
+                + tmp + ");");
+        }
+        catch { }
+        finally
+        {
+            try { adapter.Execute("delete " + tmp + ";"); } catch { }
+        }
     }
 
     public void focus()
@@ -790,6 +815,14 @@ public partial class ElementHost : IDomPrototypeHost
     /// shadow tree whose name matches the element's 'slot' attribute, or null outside a host.</summary>
     public object? assignedSlot => _element.AssignedSlot is { } slot
         ? JsIntegrationService.WrapAny(slot) : null;
+
+    /// <summary>HTML §4.11.4: the showing state the popover methods keep — the script's state machine
+    /// writes it here so the selector matcher and the methods read one state.</summary>
+    public bool __popoverShowing
+    {
+        get => _element.IsPopoverShowing;
+        set => _element.IsPopoverShowing = value;
+    }
 
     public DomRect getBoundingClientRect()
     {
