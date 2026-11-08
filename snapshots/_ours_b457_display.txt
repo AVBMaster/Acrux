@@ -1,0 +1,22 @@
+disp-block display=block
+disp-none display=none
+disp-inline display=inline
+disp-inline-block display=inline-block
+disp-table display=table
+disp-table-cell display=table-cell
+disp-list-item display=list-item
+disp-flow-root display=flow-root
+disp-contents display=contents
+disp-grid display=grid
+vis-hidden visibility=hidden | display=block
+vis-collapse visibility=collapse
+content-empty content=""
+content-none content=normal
+content-norm content=normal
+content-attr content=""
+content-counter content=counter(c)
+content-quotes content=open-quote close-quote
+SUP display:contents = Y
+SUP display:flow-root = Y
+SUP content:counter(c) = Y
+SUP content:open-quote = Y

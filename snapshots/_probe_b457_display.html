@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b456: display family + visibility + box generation
+s('disp-block','display:block',['display']);
+s('disp-none','display:none',['display']);
+s('disp-inline','display:inline',['display']);
+s('disp-inline-block','display:inline-block',['display']);
+s('disp-table','display:table',['display']);
+s('disp-table-cell','display:table-cell',['display']);
+s('disp-list-item','display:list-item',['display']);
+s('disp-flow-root','display:flow-root',['display']);
+s('disp-contents','display:contents',['display']);
+s('disp-grid','display:grid',['display']);
+s('vis-hidden','visibility:hidden',['visibility','display']);
+s('vis-collapse','visibility:collapse',['visibility']);
+s('content-empty','content:""',['content']);
+s('content-none','content:none',['content']);
+s('content-norm','content:normal',['content']);
+s('content-attr','content:attr(data-x)',['content']);
+s('content-counter','content:counter(c)',['content']);
+s('content-quotes','content:open-quote close-quote',['content']);
+out.push('SUP display:contents = '+(()=>{try{return CSS.supports('display','contents')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP display:flow-root = '+(()=>{try{return CSS.supports('display','flow-root')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP content:counter(c) = '+(()=>{try{return CSS.supports('content','counter(c)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP content:open-quote = '+(()=>{try{return CSS.supports('content','open-quote')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
