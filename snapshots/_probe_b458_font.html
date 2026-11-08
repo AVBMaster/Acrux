@@ -1,0 +1,34 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b458: font properties
+s('fam-serif','font-family:serif',['font-family']);
+s('fam-sans','font-family:sans-serif',['font-family']);
+s('fam-mono','font-family:monospace',['font-family']);
+s('fam-custom','font-family:"My Font",serif',['font-family']);
+s('size-px','font-size:20px',['font-size']);
+s('size-em','font-size:1.5em',['font-size']);
+s('size-rem','font-size:2rem',['font-size']);
+s('size-pct','font-size:120%',['font-size']);
+s('size-xlarge','font-size:x-large',['font-size']);
+s('weight-400','font-weight:400',['font-weight']);
+s('weight-bold','font-weight:bold',['font-weight']);
+s('weight-900','font-weight:900',['font-weight']);
+s('style-italic','font-style:italic',['font-style']);
+s('style-oblique','font-style:oblique',['font-style']);
+s('variant-normal','font-variant:normal',['font-variant']);
+s('variant-small-caps','font-variant:small-caps',['font-variant']);
+s('stretch-condensed','font-stretch:condensed',['font-stretch']);
+s('lineheight-norm','line-height:normal',['line-height']);
+s('font-shorthand','font:italic bold 16px/1.5 serif',['font-style','font-weight','font-size','font-family']);
+s('font-shorthand2','font:bold 20px sans-serif',['font-style','font-weight','font-size','font-family']);
+out.push('SUP font-family:serif = '+(()=>{try{return CSS.supports('font-family','serif')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-size:1.5em = '+(()=>{try{return CSS.supports('font-size','1.5em')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-variant:small-caps = '+(()=>{try{return CSS.supports('font-variant','small-caps')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font:italic bold 16px/1.5 serif = '+(()=>{try{return CSS.supports('font','italic bold 16px/1.5 serif')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

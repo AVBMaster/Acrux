@@ -1,0 +1,24 @@
+fam-serif font-family=serif
+fam-sans font-family=sans-serif
+fam-mono font-family=monospace
+fam-custom font-family="My Font", serif
+size-px font-size=20px
+size-em font-size=24px
+size-rem font-size=32px
+size-pct font-size=19.2px
+size-xlarge font-size=24px
+weight-400 font-weight=400
+weight-bold font-weight=700
+weight-900 font-weight=900
+style-italic font-style=italic
+style-oblique font-style=italic
+variant-normal font-variant=normal
+variant-small-caps font-variant=small-caps
+stretch-condensed font-stretch=75%
+lineheight-norm line-height=normal
+font-shorthand font-style=italic | font-weight=700 | font-size=16px | font-family=serif
+font-shorthand2 font-style=normal | font-weight=700 | font-size=20px | font-family=sans-serif
+SUP font-family:serif = Y
+SUP font-size:1.5em = Y
+SUP font-variant:small-caps = Y
+SUP font:italic bold 16px/1.5 serif = Y
