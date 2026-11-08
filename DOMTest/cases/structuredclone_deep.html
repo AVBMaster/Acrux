@@ -1,0 +1,129 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. primitives and plain objects ─────────────────────────────────────
+    eq('A1 a number clones', safe(function () {
+        return String(structuredClone(42));
+    }), 'ok:42');
+
+    eq('A2 a string clones', safe(function () {
+        return structuredClone('hi');
+    }), 'ok:hi');
+
+    eq('A3 null and undefined clone', safe(function () {
+        return [String(structuredClone(null)), String(structuredClone(undefined))].join(',');
+    }), 'ok:null,undefined');
+
+    eq('A4 a nested object deep-clones', safe(function () {
+        var c = structuredClone({ a: { b: [1, 2, { c: 3 }] } });
+        return [c.a.b[2].c, c !== undefined].join(',');
+    }), 'ok:3,true');
+
+    eq('A5 arrays clone and keep length', safe(function () {
+        var c = structuredClone([1, 'x', true, null]);
+        return [c.length, c[1], String(c[2]), String(c[3])].join(',');
+    }), 'ok:4,x,true,null');
+
+    eq('A6 a clone is not the same object', safe(function () {
+        var o = { a: 1 };
+        var c = structuredClone(o);
+        return String(c !== o);
+    }), 'ok:true');
+
+    // ── B. Map / Set ─────────────────────────────────────────────────────────
+    eq('B1 a Map clones', safe(function () {
+        var m = new Map([['k', 1]]);
+        var c = structuredClone(m);
+        return [c instanceof Map, c.size, c.get('k')].join(',');
+    }), 'ok:true,1,1');
+
+    eq('B2 a Set clones', safe(function () {
+        var s = new Set([1, 2, 3]);
+        var c = structuredClone(s);
+        return [c instanceof Set, c.size, c.has(2)].join(',');
+    }), 'ok:true,3,true');
+
+    eq('B3 a Map of objects deep-clones the values', safe(function () {
+        var m = new Map([['o', { v: 7 }]]);
+        var c = structuredClone(m);
+        return [c.get('o').v, c.get('o') !== m.get('o')].join(',');
+    }), 'ok:7,true');
+
+    // ── C. Date / RegExp ─────────────────────────────────────────────────────
+    eq('C1 a Date clones and keeps its time', safe(function () {
+        var d = new Date(1000);
+        var c = structuredClone(d);
+        return [c instanceof Date, String(c.getTime())].join(',');
+    }), 'ok:true,1000');
+
+    eq('C2 a RegExp clones and keeps its source', safe(function () {
+        var r = /ab+c/gi;
+        var c = structuredClone(r);
+        return [c instanceof RegExp, c.source, c.flags].join(',');
+    }), 'ok:true,ab+c,gi');
+
+    // ── D. circular references ───────────────────────────────────────────────
+    eq('D1 a circular object clones without looping', safe(function () {
+        var o = { n: 1 };
+        o.self = o;
+        var c = structuredClone(o);
+        return [c.n, c.self === c].join(',');
+    }), 'ok:1,true');
+
+    eq('D2 a shared reference is preserved as one object', safe(function () {
+        var shared = { v: 5 };
+        var o = { a: shared, b: shared };
+        var c = structuredClone(o);
+        return String(c.a === c.b);
+    }), 'ok:true');
+
+    // ── E. typed arrays and buffers ──────────────────────────────────────────
+    eq('E1 a Uint8Array clones', safe(function () {
+        var a = new Uint8Array([1, 2, 3]);
+        var c = structuredClone(a);
+        return [c instanceof Uint8Array, c.length, c[1]].join(',');
+    }), 'ok:true,3,2');
+
+    eq('E2 an ArrayBuffer clones', safe(function () {
+        var b = new ArrayBuffer(8);
+        var c = structuredClone(b);
+        return [c instanceof ArrayBuffer, c.byteLength].join(',');
+    }), 'ok:true,8');
+
+    eq('E3 transferring an ArrayBuffer detaches the source', safe(function () {
+        var b = new ArrayBuffer(4);
+        var c = structuredClone(b, { transfer: [b] });
+        return [c.byteLength, String(b.byteLength)].join(',');
+    }), 'ok:4,0');
+
+    // ── F. the uncloneable refusal ───────────────────────────────────────────
+    eq('F1 a function is refused', thrown(function () {
+        structuredClone(function () {});
+    }), 'DataCloneError');
+
+    eq('F2 a DOM node is refused', thrown(function () {
+        structuredClone(document.createElement('div'));
+    }), 'DataCloneError');
+
+    eq('F3 no arguments is refused', thrown(function () {
+        structuredClone();
+    }), 'TypeError');
+
+    eq('F4 a non-iterable transfer list is refused', thrown(function () {
+        structuredClone({}, { transfer: 5 });
+    }), 'TypeError');
+})();
+</script></body></html>
