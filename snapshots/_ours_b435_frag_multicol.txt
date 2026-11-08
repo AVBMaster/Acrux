@@ -1,0 +1,23 @@
+break-before-page break-before=page
+break-after-column break-after=column
+break-inside-avoid break-inside=avoid
+break-before-bogus break-before=auto
+break-inside-region break-inside=auto
+columns-sh column-count=3 | column-width=auto
+columns-wgap column-count=2 | column-width=40px
+column-count column-count=5
+column-width column-width=120px
+column-gap column-gap=30px
+column-rule column-rule=2px solid rgb(255, 0, 0)
+column-span column-span=all
+column-fill-bal column-fill=balance
+column-fill-auto column-fill=auto
+ruby-align ruby-align=center
+ruby-position ruby-position=over
+ruby-merge ruby-merge=
+SUP break-before:page = Y
+SUP break-before:bogus = N
+SUP columns:3 = Y
+SUP column-span:all = Y
+SUP column-fill:balance = Y
+SUP ruby-align:center = Y
