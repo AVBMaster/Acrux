@@ -1,0 +1,20 @@
+bg-color background-color=rgb(255, 128, 0)
+bg-img background-image=url("file:///home/master/Acrux/snapshots/x.png")
+bg-none background-image=none
+bg-repeat background-repeat=no-repeat
+bg-repeat-xy background-repeat=repeat-x
+bg-pos background-position=10px 20px
+bg-pos-pct background-position=50% 50%
+bg-size background-size=cover
+bg-size-px background-size=100px 50px
+bg-attach background-attachment=fixed
+bg-origin background-origin=border-box
+bg-clip background-clip=padding-box
+bg-shorthand background-color=rgb(255, 255, 255) | background-image=url("file:///home/master/Acrux/snapshots/a.png") | background-repeat=no-repeat
+bd-style border-style=dashed | border-top-style=dashed
+bd-width border-width=3px | border-top-color=rgb(255, 0, 0)
+bd-radius border-radius=10px 20px
+bd-color border-color=rgb(255, 0, 0) rgb(0, 128, 0) | border-left-color=rgb(0, 128, 0)
+bd-img border-image-source=url("file:///home/master/Acrux/snapshots/x.png") | border-image-slice=30
+SUP background-size:cover = Y
+SUP border-image:url(x.png) 30 = Y

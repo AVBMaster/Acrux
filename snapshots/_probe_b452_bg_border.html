@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b452: background + border
+s('bg-color','background-color:#ff8000',['background-color']);
+s('bg-img','background-image:url(x.png)',['background-image']);
+s('bg-none','background-image:none',['background-image']);
+s('bg-repeat','background-repeat:no-repeat',['background-repeat']);
+s('bg-repeat-xy','background-repeat:repeat-x',['background-repeat']);
+s('bg-pos','background-position:10px 20px',['background-position']);
+s('bg-pos-pct','background-position:50% 50%',['background-position']);
+s('bg-size','background-size:cover',['background-size']);
+s('bg-size-px','background-size:100px 50px',['background-size']);
+s('bg-attach','background-attachment:fixed',['background-attachment']);
+s('bg-origin','background-origin:border-box',['background-origin']);
+s('bg-clip','background-clip:padding-box',['background-clip']);
+s('bg-shorthand','background:#fff url(a.png) no-repeat center',['background-color','background-image','background-repeat']);
+s('bd-style','border-style:dashed',['border-style','border-top-style']);
+s('bd-width','border:3px solid red',['border-width','border-top-color']);
+s('bd-radius','border-radius:10px 20px',['border-radius']);
+s('bd-color','border-color:red green',['border-color','border-left-color']);
+s('bd-img','border-image:url(x.png) 30',['border-image-source','border-image-slice']);
+out.push('SUP background-size:cover = '+(()=>{try{return CSS.supports('background-size','cover')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP border-image:url(x.png) 30 = '+(()=>{try{return CSS.supports('border-image','url(x.png) 30')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
