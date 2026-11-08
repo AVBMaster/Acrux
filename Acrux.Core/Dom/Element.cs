@@ -277,6 +277,10 @@ public abstract class Element : Node
     public Dictionary<string, string>? FirstLineStyles { get; set; }
     /// <summary>Collected ::first-letter declarations (CSS Pseudo-Elements 4 §3).</summary>
     public Dictionary<string, string>? FirstLetterStyles { get; set; }
+    /// <summary>Collected ::selection declarations (CSS Pseudo-Elements 4 §4).</summary>
+    public Dictionary<string, string>? SelectionStyles { get; set; }
+    /// <summary>Collected ::placeholder declarations (CSS Selectors 4 §3.2).</summary>
+    public Dictionary<string, string>? PlaceholderStyles { get; set; }
 
     /// <summary>Collected ::-webkit-scrollbar-* part styles (side-car).</summary>
     public ScrollbarStyles? ScrollbarCustom { get; set; }

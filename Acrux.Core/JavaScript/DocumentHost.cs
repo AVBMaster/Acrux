@@ -871,7 +871,7 @@ public class DocumentHost : IDomPrototypeHost
         }
     }
     /// <summary>What the second argument of <c>getComputedStyle</c> named.</summary>
-    private enum PseudoArgument { Element, Before, After, FirstLine, FirstLetter, Marker, Unknown }
+    private enum PseudoArgument { Element, Before, After, FirstLine, FirstLetter, Marker, Selection, Placeholder, Unknown }
 
     /// <summary>The pseudo-element a page asked for, or <see cref="PseudoArgument.Unknown"/> when
     /// the string names none. One or two colons both parse (measured), and a bare name parses too
@@ -888,6 +888,8 @@ public class DocumentHost : IDomPrototypeHost
             "first-line" or "firstline" => PseudoArgument.FirstLine,
             "first-letter" or "firstletter" => PseudoArgument.FirstLetter,
             "marker" => PseudoArgument.Marker,
+            "selection" => PseudoArgument.Selection,
+            "placeholder" => PseudoArgument.Placeholder,
             _ => PseudoArgument.Unknown,
         };
     }
@@ -902,6 +904,8 @@ public class DocumentHost : IDomPrototypeHost
             PseudoArgument.FirstLine => element.FirstLineStyles,
             PseudoArgument.FirstLetter => element.FirstLetterStyles,
             PseudoArgument.Marker => element.MarkerStyles,
+            PseudoArgument.Selection => element.SelectionStyles,
+            PseudoArgument.Placeholder => element.PlaceholderStyles,
             _ => null,
         };
 

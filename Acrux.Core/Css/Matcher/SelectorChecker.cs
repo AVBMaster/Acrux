@@ -191,10 +191,12 @@ public class SelectorChecker
             case CssSelectorMatchType.PseudoElement:
                 // ::before/::after/::marker/::first-line/::first-letter match their
                 // originating element so their rules can be routed to the element side-cars.
-                // Every other pseudo-element (::selection, ::placeholder, ...) creates a
-                // separate style context and must not apply to the element itself.
+                // ::selection and ::placeholder are routed the same way — their declarations
+                // live in a side-car and are only reported through getComputedStyle, never
+                // applied to the element's own box.
                 return selector.PseudoType is CssPseudoType.Before or CssPseudoType.After or CssPseudoType.Marker
-                    or CssPseudoType.FirstLine or CssPseudoType.FirstLetter;
+                    or CssPseudoType.FirstLine or CssPseudoType.FirstLetter
+                    or CssPseudoType.Selection or CssPseudoType.Placeholder;
 
             default:
                 return true;

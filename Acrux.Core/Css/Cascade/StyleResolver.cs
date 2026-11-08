@@ -540,6 +540,20 @@ public class StyleResolver
                             [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
                     return;
                 }
+                if (HasPseudoElement(selectorText, "selection"))
+                {
+                    foreach (var p in rule.Properties.Properties)
+                        (element.SelectionStyles ??= new Dictionary<string, string>())
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
+                    return;
+                }
+                if (HasPseudoElement(selectorText, "placeholder"))
+                {
+                    foreach (var p in rule.Properties.Properties)
+                        (element.PlaceholderStyles ??= new Dictionary<string, string>())
+                            [CssPropertyIdExtensions.BehaviourName(p.Name.ToCssString())] = p.Value.CssText();
+                    return;
+                }
 
                 selector.ComputeSpecificity();
                 state.MatchedRules.Add(new MatchedRuleEntry
