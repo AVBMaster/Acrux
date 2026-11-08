@@ -2330,16 +2330,28 @@ public partial class ElementHost : IDomPrototypeHost
         set
         {
             var options = OptionElements();
-            for (int i = 0; i < options.Count; i++)
+            if (value < 0)
             {
-                if (i == value) options[i].SetAttribute("selected", "");
-                else options[i].RemoveAttribute("selected");
+                _explicitDeselect = true;
+                foreach (var opt in options) opt.RemoveAttribute("selected");
+            }
+            else
+            {
+                _explicitDeselect = false;
+                for (int i = 0; i < options.Count; i++)
+                {
+                    if (i == value) options[i].SetAttribute("selected", "");
+                    else options[i].RemoveAttribute("selected");
+                }
             }
         }
     }
 
-    public object[] options => OptionElements()
-        .Select(e => (object)(WrapWithCache(e) ?? new ElementHost(e))).ToArray();
+    private bool _explicitDeselect;
+
+    /// <summary>HTML §4.10.9: the select's 'options' answers an HTMLOptionsCollection — the option
+    /// list with the indexed and named reads a collection has, not a bare array.</summary>
+    public object options => new JsOptionsCollection(_element, JavaScriptEngine.Current ?? Engine);
 
     /// <summary>HTML §4.10.9: the select answers its option list through the two reads a named
     /// collection has — the option at an index, and the option whose name (or id) is the one asked
@@ -2389,13 +2401,14 @@ public partial class ElementHost : IDomPrototypeHost
     /// <summary>Which options the select answers as chosen: the ones the page marked, and — for a
     /// single-choice select with nothing marked — its first option, which is what the reference
     /// reports before a page touches the list at all (measured: 'selectedIndex' is 0 and
-    /// 'selectedOptions' holds one option for a fresh select with an option in it).</summary>
+    /// 'selectedOptions' holds one option for a fresh select with an option in it). An explicit
+    /// selectedIndex = -1 suppresses that fallback until a page selects an option again.</summary>
     private List<Element> SelectedOptionElements()
     {
         var options = OptionElements();
         var marked = options.Where(o => o.HasAttribute("selected")).ToList();
         if (marked.Count > 0) return multiple ? marked : new List<Element> { marked[0] };
-        if (!multiple && options.Count > 0) return new List<Element> { options[0] };
+        if (!multiple && options.Count > 0 && !_explicitDeselect) return new List<Element> { options[0] };
         return marked;
     }
 

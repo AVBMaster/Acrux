@@ -605,3 +605,112 @@ public class LiveListHost : IList, IDomPrototypeHost
     public void Remove(object? value) => throw new NotSupportedException();
     public void RemoveAt(int index) => throw new NotSupportedException();
 }
+
+/// <summary>HTML §4.10.9: a select's 'options' answers an HTMLOptionsCollection — the option list
+/// with the named read ('namedItem') and the indexed read ('item') a collection has, over the live
+/// option elements (the ones inside an option group included, in tree order).</summary>
+public class JsOptionsCollection : IList, IDomPrototypeHost
+{
+    private readonly DomElement _select;
+    private readonly JavaScriptEngine? _engine;
+
+    public JsOptionsCollection(DomElement select, JavaScriptEngine? engine = null)
+    {
+        _select = select;
+        _engine = engine ?? JavaScriptEngine.Current;
+    }
+
+    public string? __domType => "HTMLOptionsCollection";
+    public string[] __domTypeChain => new[] { "HTMLCollection", "HTMLOptionsCollection" };
+    public override string ToString() => DomHostString.Tagged(this);
+
+    private List<DomElement> Options()
+    {
+        var outList = new List<DomElement>();
+        Collect(_select, outList);
+        return outList;
+    }
+
+    private static void Collect(DomElement root, List<DomElement> into)
+    {
+        foreach (var child in root.Children.OfType<DomElement>())
+        {
+            var tag = child.TagName;
+            if (tag.Equals("OPTION", StringComparison.OrdinalIgnoreCase)) into.Add(child);
+            else if (tag.Equals("OPTGROUP", StringComparison.OrdinalIgnoreCase)) Collect(child, into);
+        }
+    }
+
+    private object Wrap(DomElement el)
+    {
+        var engine = JavaScriptEngine.Current ?? _engine;
+        if (engine?.IntegrationService != null)
+            return engine.IntegrationService.WrapDomNode(el)!;
+        var host = new ElementHost(el);
+        if (host.Engine == null && engine != null) host.Engine = engine;
+        return host;
+    }
+
+    public int length => Options().Count;
+    public int Length => length;
+
+    public object? this[int index]
+    {
+        get
+        {
+            var list = Options();
+            return index >= 0 && index < list.Count ? Wrap(list[index]) : null;
+        }
+        set => throw new NotSupportedException();
+    }
+
+    public object? item(int index) => this[index];
+
+    /// <summary>'select.options.namedItem(name)': the first option whose 'id' answers, then the
+    /// first whose 'name' does; a missing or empty name answers null.</summary>
+    public object? namedItem(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        foreach (var el in Options())
+        {
+            if (el.Id == name || el.GetAttribute("name") == name)
+                return Wrap(el);
+        }
+        return null;
+    }
+
+    public object? NamedItem(string name) => namedItem(name);
+
+    public object? this[string name] => namedItem(name);
+
+    public IEnumerator<object> GetEnumerator()
+    {
+        foreach (var el in Options())
+            yield return Wrap(el);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public int Count => length;
+    public bool IsReadOnly => true;
+    public bool IsFixedSize => true;
+    public bool IsSynchronized => false;
+    public object SyncRoot => this;
+
+    public bool Contains(object? value) => IndexOf(value) >= 0;
+
+    public int IndexOf(object? value)
+    {
+        var list = Options();
+        for (int i = 0; i < list.Count; i++)
+            if (ReferenceEquals(Wrap(list[i]), value)) return i;
+        return -1;
+    }
+
+    public void Insert(int index, object? value) => throw new NotSupportedException();
+    public void Remove(object? value) => throw new NotSupportedException();
+    public void RemoveAt(int index) => throw new NotSupportedException();
+    public int Add(object? value) => throw new NotSupportedException();
+    public void Clear() => throw new NotSupportedException();
+    public void CopyTo(Array array, int index) => Options().Select(Wrap).ToArray().CopyTo(array, index);
+}

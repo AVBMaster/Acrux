@@ -1,0 +1,110 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    var root = document.getElementById('root');
+    function host(html) {
+        var made = document.createElement('div');
+        made.innerHTML = html;
+        root.appendChild(made);
+        return made;
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function SEL() { return host('<select id=s><option value=a>a</option><option value=b selected>b</option><option value=c>c</option></select>').querySelector('#s'); }
+
+    // ── A. the options collection ────────────────────────────────────────────
+    eq('A1 options lists the option children', safe(function () {
+        var s = SEL();
+        return [s.options.length, s.options[0].value, s.options[2].text].join(',');
+    }), 'ok:3,a,c');
+
+    eq('A2 the select is iterable through item and namedItem', safe(function () {
+        var s = SEL();
+        return [s.item(1).value, String(s.namedItem('b') === null)].join(',');
+    }), 'ok:b,true');
+
+    eq('A3 options.hi is undefined', safe(function () {
+        var s = SEL();
+        return [String(s.options.namedItem('zzz')), String(s.options.namedItem(null))].join(',');
+    }), 'ok:null,null');
+
+    // ── B. selectedIndex and value ───────────────────────────────────────────
+    eq('B1 selectedIndex answers the selected option', safe(function () {
+        var s = SEL();
+        return [s.selectedIndex, s.value].join(',');
+    }), 'ok:1,b');
+
+    eq('B2 setting selectedIndex selects it', safe(function () {
+        var s = SEL();
+        s.selectedIndex = 2;
+        return [s.selectedIndex, s.value, s.options[1].selected].join(',');
+    }), 'ok:2,c,false');
+
+    eq('B3 selectedIndex = -1 deselects all', safe(function () {
+        var s = SEL();
+        s.selectedIndex = -1;
+        return [s.selectedIndex, s.value, s.options[1].selected].join(',');
+    }), 'ok:-1,,false');
+
+    eq('B4 a multiple select with none selected answers -1 and empty', safe(function () {
+        var s = host('<select multiple id=m><option value=a>a</option></select>').querySelector('#m');
+        return [s.selectedIndex, s.value].join(',');
+    }), 'ok:-1,');
+
+    // ── C. add / remove ──────────────────────────────────────────────────────
+    eq('C1 add appends an option', safe(function () {
+        var s = SEL();
+        var o = document.createElement('option');
+        o.value = 'd'; o.text = 'd';
+        s.add(o);
+        return [s.options.length, s.options[3].value].join(',');
+    }), 'ok:4,d');
+
+    eq('C2 add before an index places it there', safe(function () {
+        var s = SEL();
+        var o = document.createElement('option');
+        o.value = 'z';
+        s.add(o, 0);
+        return [s.options.length, s.options[0].value].join(',');
+    }), 'ok:4,z');
+
+    eq('C3 add before a reference option places it before', safe(function () {
+        var s = SEL();
+        var o = document.createElement('option');
+        o.value = 'z';
+        s.add(o, s.options[1]);
+        return [s.options.length, s.options[1].value].join(',');
+    }), 'ok:4,z');
+
+    eq('C4 remove takes an option out', safe(function () {
+        var s = SEL();
+        s.remove(1);
+        return [s.options.length, s.options[1].value].join(',');
+    }), 'ok:2,c');
+
+    eq('C5 add of an optgroup does not add to options', safe(function () {
+        var s = SEL();
+        var g = document.createElement('optgroup');
+        g.label = 'grp';
+        s.add(g);
+        return [s.options.length, s.options[3]].join(',');
+    }), 'ok:3,');
+
+    // ── D. selectedOptions and value on change ───────────────────────────────
+    eq('D1 selectedOptions lists the chosen ones', safe(function () {
+        var s = host('<select multiple id=m><option value=a selected>a</option><option value=b>b</option><option value=c selected>c</option></select>').querySelector('#m');
+        return [s.selectedOptions.length, s.selectedOptions[0].value, s.selectedOptions[1].value].join(',');
+    }), 'ok:2,a,c');
+
+    eq('D2 a select with no options answers empty and -1', safe(function () {
+        var s = host('<select id=e></select>').querySelector('#e');
+        return [s.options.length, s.selectedIndex, String(s.value)].join(',');
+    }), 'ok:0,-1,');
+})();
+</script></body></html>
