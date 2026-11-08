@@ -1,0 +1,5 @@
+oi-only overflow-inline=hidden | overflow-x=hidden
+ob-only overflow-block=clip | overflow-y=clip
+oi-then-phys overflow-inline=auto | overflow-x=auto
+phys-then-oi overflow-inline=hidden | overflow-x=hidden
+both-logical overflow-inline=hidden | overflow-block=hidden | overflow-x=hidden | overflow-y=hidden

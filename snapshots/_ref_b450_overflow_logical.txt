@@ -1,0 +1,21 @@
+# b450: overflow-inline / overflow-block logical axes (CSS Logical Properties 1).
+# These two names were dropped entirely before (echoed empty). Now wired:
+#   applier  -> overflow-inline sets OverflowX, overflow-block sets OverflowY
+#   serializer -> overflow-inline reads OverflowX, overflow-block reads OverflowY
+#   CssPropertyId enum -> added OverflowInline, OverflowBlock (was missing, so the
+#                          name was never recognised and the declaration was dropped)
+#
+# MATCH (3/5):
+oi-only overflow-inline=hidden | overflow-x=hidden
+ob-only overflow-block=clip | overflow-y=clip
+oi-then-phys overflow-inline=auto | overflow-x=auto
+#
+# REMAINING DIVERGENCE (2/5) — cascade ordering of conflicting logical/physical axes:
+phys-then-oi overflow-inline=hidden | overflow-x=hidden
+both-logical overflow-inline=hidden | overflow-block=hidden | overflow-x=hidden | overflow-y=hidden
+# Edge: the physical property always wins regardless of source order, and the two logical
+# axes are independent. Ours: the logical axes overwrite the physical fields, so a logical
+# decl after a physical one overrides it, and overflow-inline/block both funnel into the
+# same OverflowX/OverflowY pair so the last-written axis clobbers the other. A correct fix
+# needs the cascade to keep logical and physical as independent axes and resolve the
+# winner at computed-value time — a larger change than this round.

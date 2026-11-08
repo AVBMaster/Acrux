@@ -1,0 +1,19 @@
+ml-inline margin-inline-start=10px | margin-inline-end=20px
+ml-block margin-block-start=5px | margin-block-end=15px
+pl-inline padding-inline-start=10px | padding-inline-end=20px
+pl-block padding-block-start=5px | padding-block-end=15px
+bd-inline border-inline-start-width=2px | border-inline-start-style=solid | border-inline-end-color=rgb(255, 0, 0)
+bd-block-w border-block-start-width=0px | border-block-end-width=0px
+bl-inline border-start-start-radius=8px | border-end-end-radius=0px
+in-inline inset-inline-start=10px | inset-inline-end=20px
+in-block inset-block-start=5px | inset-block-end=15px
+inset inset=10px 20px 30px 40px | top=10px | right=20px
+bs-inline inline-size=100px | block-size=50px
+min-bs min-inline-size=80px | max-block-size=40px
+ov-inline overflow-inline=hidden
+ov-block overflow-block=clip
+ov-x overflow-x=auto | overflow-y=hidden
+SUP margin-inline-start:10px = Y
+SUP border-inline:2px solid red = Y
+SUP inline-size:100px = Y
+SUP overflow-inline:hidden = Y

@@ -345,6 +345,11 @@ public static class ComputedValueSerializer
             // 'overflow: visible auto' reads back one word (all measured).
             case "overflow-x": return OverflowAxisText(style, x: true);
             case "overflow-y": return OverflowAxisText(style, x: false);
+            // The logical overflow axes read the physical axis they map onto
+            // (CSS Logical Properties 1): 'inline' is horizontal and 'block' vertical
+            // in a horizontal writing mode, so 'overflow-inline: hidden' echoes 'hidden'.
+            case "overflow-inline": return OverflowAxisText(style, x: true);
+            case "overflow-block": return OverflowAxisText(style, x: false);
             // CSS 2.1 §11.1.2: the computed rect prices every side the way the rest of the
             // computed surface does — '1em' is the font of the element that wrote it (measured:
             // 'rect(1em 2em 3em 4em)' reads 'rect(16px, 32px, 48px, 64px)') — while 'auto' stays

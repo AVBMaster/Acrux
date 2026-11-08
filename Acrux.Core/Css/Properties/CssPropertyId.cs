@@ -116,6 +116,8 @@ public enum CssPropertyId
     Overflow,
     OverflowX,
     OverflowY,
+    OverflowInline,
+    OverflowBlock,
     OverflowClipMargin,
     OverflowAnchor,
     Padding,

@@ -1,0 +1,28 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,el,props){ try{ const cs=getComputedStyle(el); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); }catch(e){ out.push(label+' ERR '+e.message); } }
+function mk(css){const d=document.createElement('div');d.style.cssText=css;document.body.appendChild(d);return d;}
+// b449: logical box/border/margin/padding/inset/size
+s('ml-inline', mk('margin-inline-start:10px;margin-inline-end:20px'), ['margin-inline-start','margin-inline-end']);
+s('ml-block', mk('margin-block-start:5px;margin-block-end:15px'), ['margin-block-start','margin-block-end']);
+s('pl-inline', mk('padding-inline:10px 20px'), ['padding-inline-start','padding-inline-end']);
+s('pl-block', mk('padding-block:5px 15px'), ['padding-block-start','padding-block-end']);
+s('bd-inline', mk('border-inline:2px solid red'), ['border-inline-start-width','border-inline-start-style','border-inline-end-color']);
+s('bd-block-w', mk('border-block-width:3px'), ['border-block-start-width','border-block-end-width']);
+s('bl-inline', mk('border-start-start-radius:8px'), ['border-start-start-radius','border-end-end-radius']);
+s('in-inline', mk('inset-inline:10px 20px;position:absolute'), ['inset-inline-start','inset-inline-end']);
+s('in-block', mk('inset-block:5px 15px;position:absolute'), ['inset-block-start','inset-block-end']);
+s('inset', mk('inset:10px 20px 30px 40px;position:absolute'), ['inset','top','right']);
+s('bs-inline', mk('inline-size:100px;block-size:50px'), ['inline-size','block-size']);
+s('min-bs', mk('min-inline-size:80px;max-block-size:40px'), ['min-inline-size','max-block-size']);
+s('ov-inline', mk('overflow-inline:hidden'), ['overflow-inline']);
+s('ov-block', mk('overflow-block:clip'), ['overflow-block']);
+s('ov-x', mk('overflow-x:auto;overflow-y:hidden'), ['overflow-x','overflow-y']);
+out.push('SUP margin-inline-start:10px = '+(()=>{try{return CSS.supports('margin-inline-start','10px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP border-inline:2px solid red = '+(()=>{try{return CSS.supports('border-inline','2px solid red')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP inline-size:100px = '+(()=>{try{return CSS.supports('inline-size','100px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP overflow-inline:hidden = '+(()=>{try{return CSS.supports('overflow-inline','hidden')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

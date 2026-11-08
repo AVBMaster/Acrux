@@ -576,6 +576,12 @@ public static class CssPropertyApplier
                 }
                 break;
             case "overflow-x": style.OverflowX = ParseOverflow(value); break;
+            // The logical overflow axes map straight onto the physical ones (CSS Logical
+            // Properties 1): 'inline' is the horizontal axis in a horizontal writing mode
+            // and 'block' the vertical, so 'overflow-inline: hidden' reads back on
+            // 'overflow-x'. Without this arm the declaration is dropped and both read empty.
+            case "overflow-inline": style.OverflowX = ParseOverflow(value); break;
+            case "overflow-block": style.OverflowY = ParseOverflow(value); break;
             case "overflow-clip-margin":
                 // CSS Overflow 3 §4.1: 'content-box' | 'border-box' | 'padding-box' | <length>.
                 // A negative length is out of range and drops the declaration.
