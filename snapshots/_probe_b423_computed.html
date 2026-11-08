@@ -1,0 +1,71 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function m(label,val){out.push(label+' -> '+val);}
+// computed width on various display types
+const b=document.createElement('div');b.style.cssText='display:block;width:200px';document.body.appendChild(b);
+m('block-width',getComputedStyle(b).width);b.remove();
+const ib=document.createElement('div');ib.style.cssText='display:inline-block;width:auto';ib.textContent='x';document.body.appendChild(ib);
+m('inline-block-width',getComputedStyle(ib).width);ib.remove();
+// flex-basis computed
+const fc=document.createElement('div');fc.style.cssText='display:flex';
+const fi=document.createElement('div');fi.style.cssText='flex-basis:200px';fi.textContent='x';
+fc.appendChild(fi);document.body.appendChild(fc);
+m('flex-basis-computed',getComputedStyle(fi).flexBasis);
+m('flex-grow-computed',getComputedStyle(fi).flexGrow);
+fc.remove();fi.remove();
+// computed min-width on replaced vs non-replaced
+const mw=document.createElement('div');mw.style.cssText='min-width:0';document.body.appendChild(mw);
+m('min-width-zero',getComputedStyle(mw).minWidth);mw.remove();
+// computed padding on box-sizing:border-box
+const bb=document.createElement('div');bb.style.cssText='box-sizing:border-box;width:200px;padding:20px';
+document.body.appendChild(bb);
+m('bb-width',getComputedStyle(bb).width);
+m('bb-paddingLeft',getComputedStyle(bb).paddingLeft);
+m('bb-contentWidth',bb.getBoundingClientRect().width);
+bb.remove();
+// computed height on percentage parent
+const ph=document.createElement('div');ph.style.cssText='height:200px';
+const phc=document.createElement('div');phc.style.cssText='height:50%';
+ph.appendChild(phc);document.body.appendChild(ph);
+m('pct-height-child',getComputedStyle(phc).height);
+ph.remove();phc.remove();
+// computed left on static vs absolute
+const st=document.createElement('div');st.style.cssText='position:static;left:10px';
+document.body.appendChild(st);
+m('static-left',getComputedStyle(st).left);
+st.remove();
+const ab=document.createElement('div');ab.style.cssText='position:absolute;left:10px';
+document.body.appendChild(ab);
+m('absolute-left',getComputedStyle(ab).left);
+ab.remove();
+// computed margin auto centering
+const mac=document.createElement('div');mac.style.cssText='width:100px;margin:0 auto';
+document.body.appendChild(mac);
+m('margin-auto-left',getComputedStyle(mac).marginLeft);
+m('margin-auto-right',getComputedStyle(mac).marginRight);
+mac.remove();
+// max-width none vs 0
+const mw0=document.createElement('div');mw0.style.cssText='max-width:0';document.body.appendChild(mw0);
+m('max-width-zero',getComputedStyle(mw0).maxWidth);mw0.remove();
+const mwn=document.createElement('div');mwn.style.cssText='max-width:none';document.body.appendChild(mwn);
+m('max-width-none',getComputedStyle(mwn).maxWidth);mwn.remove();
+// computed line-height normal vs number
+const lh=document.createElement('div');lh.style.cssText='font-size:16px;line-height:normal';
+document.body.appendChild(lh);
+m('line-height-normal',getComputedStyle(lh).lineHeight);
+lh.remove();
+const lh2=document.createElement('div');lh2.style.cssText='font-size:16px;line-height:1.5';
+document.body.appendChild(lh2);
+m('line-height-1-5',getComputedStyle(lh2).lineHeight);
+lh2.remove();
+const lh3=document.createElement('div');lh3.style.cssText='font-size:16px;line-height:24px';
+document.body.appendChild(lh3);
+m('line-height-24px',getComputedStyle(lh3).lineHeight);
+lh3.remove();
+const lh4=document.createElement('div');lh4.style.cssText='font-size:16px;line-height:150%';
+document.body.appendChild(lh4);
+m('line-height-150pct',getComputedStyle(lh4).lineHeight);
+lh4.remove();
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
