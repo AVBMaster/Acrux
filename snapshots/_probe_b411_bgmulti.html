@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(p,v){const el=document.createElement('div');document.body.appendChild(el);el.style.cssText='';el.style.setProperty(p,v);out.push(p+'='+JSON.stringify(v)+' sup='+CSS.supports(p,v)+' echo='+JSON.stringify(el.style.getPropertyValue(p)));el.remove();}
+// background-clip multi-layer
+t('background-clip','border-box, border-box');
+t('background-clip','padding-box, content-box');
+t('background-clip','text, border-box');
+t('background-origin','padding-box, padding-box');
+t('background-origin','border-box, padding-box');
+// mask shorthand
+t('mask','none');
+t('mask','url(a.png)');
+t('mask','url(a.png) center / cover no-repeat');
+t('mask','linear-gradient(red, blue)');
+t('mask','url(a.png) luminance');
+t('mask','url(a.png) subtract');
+// background-image multiple layers
+t('background-image','url(a.png), url(b.png)');
+t('background-image','linear-gradient(red, blue), url(a.png)');
+t('background-repeat','repeat, no-repeat');
+t('background-position','center, left top');
+t('background-size','auto, cover');
+t('background-attachment','scroll, fixed');
+// background shorthand multi-layer
+t('background','url(a.png) no-repeat center / cover, red');
+t('background','red, url(a.png)');
+document.getElementById('rec').textContent=out.join('\n');
+console.log(out.join('\n'));
+</script></body></html>
