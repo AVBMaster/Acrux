@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b467: CSS Grid layout
+s('grid-cols','display:grid;grid-template-columns:100px 200px',['grid-template-columns']);
+s('grid-cols-fr','display:grid;grid-template-columns:1fr 2fr',['grid-template-columns']);
+s('grid-cols-repeat','display:grid;grid-template-columns:repeat(3, 1fr)',['grid-template-columns']);
+s('grid-rows','display:grid;grid-template-rows:50px 100px',['grid-template-rows']);
+s('grid-areas','display:grid;grid-template-areas:"a b" "c d"',['grid-template-areas']);
+s('grid-gap','display:grid;gap:10px 20px',['gap','row-gap','column-gap']);
+s('grid-row-gap','display:grid;row-gap:15px',['row-gap']);
+s('grid-col-gap','display:grid;column-gap:25px',['column-gap']);
+s('grid-auto-rows','display:grid;grid-auto-rows:80px',['grid-auto-rows']);
+s('grid-auto-cols','display:grid;grid-auto-columns:100px',['grid-auto-columns']);
+s('grid-auto-flow','display:grid;grid-auto-flow:column',['grid-auto-flow']);
+s('grid-auto-flow-dense','display:grid;grid-auto-flow:row dense',['grid-auto-flow']);
+s('grid-placement','display:grid;grid-row:1 / 3;grid-column:2 / 4',['grid-row','grid-column']);
+s('grid-area','display:grid;grid-area:main',['grid-area']);
+s('grid-justify','display:grid;justify-items:center',['justify-items']);
+s('grid-align','display:grid;align-items:end',['align-items']);
+s('grid-place','display:grid;place-items:center start',['place-items']);
+s('grid-subgrid','display:grid;grid-template-rows:subgrid',['grid-template-rows']);
+out.push('SUP grid-template-columns:repeat(3, 1fr) = '+(()=>{try{return CSS.supports('grid-template-columns','repeat(3, 1fr)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP grid-template-areas:"a b" = '+(()=>{try{return CSS.supports('grid-template-areas','"a b"')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP grid-template-rows:subgrid = '+(()=>{try{return CSS.supports('grid-template-rows','subgrid')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP gap:10px 20px = '+(()=>{try{return CSS.supports('gap','10px 20px')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

@@ -1,0 +1,22 @@
+grid-cols grid-template-columns=100px 200px
+grid-cols-fr grid-template-columns=261.328px 522.672px
+grid-cols-repeat grid-template-columns=261.328px 261.328px 261.344px
+grid-rows grid-template-rows=50px 100px
+grid-areas grid-template-areas="a b" "c d"
+grid-gap gap=10px 20px | row-gap=10px | column-gap=20px
+grid-row-gap row-gap=15px
+grid-col-gap column-gap=25px
+grid-auto-rows grid-auto-rows=80px
+grid-auto-cols grid-auto-columns=100px
+grid-auto-flow grid-auto-flow=column
+grid-auto-flow-dense grid-auto-flow=dense
+grid-placement grid-row=1 / 3 | grid-column=2 / 4
+grid-area grid-area=main
+grid-justify justify-items=center
+grid-align align-items=end
+grid-place place-items=center start
+grid-subgrid grid-template-rows=none
+SUP grid-template-columns:repeat(3, 1fr) = Y
+SUP grid-template-areas:"a b" = Y
+SUP grid-template-rows:subgrid = Y
+SUP gap:10px 20px = Y

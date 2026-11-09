@@ -2266,6 +2266,10 @@ public static class ComputedValueSerializer
     {
         var authored = string.IsNullOrWhiteSpace(style.GridTemplateRows)
             ? null : style.GridTemplateRows!.Trim();
+        // 'subgrid' is not supported: the reference engine drops it to the initial 'none'
+        // (measured: 'grid-template-rows: subgrid' reads 'none').
+        if (string.Equals(authored, "subgrid", StringComparison.OrdinalIgnoreCase))
+            return "none";
         var list = authored != null && authored != "none"
             ? authored
             : style.GridUsedRowSizes is { Length: > 0 } used
@@ -2318,6 +2322,10 @@ public static class ComputedValueSerializer
     private static string GridTrackListText(string? specified, float[]? used)
     {
         var authored = string.IsNullOrWhiteSpace(specified) ? null : specified!.Trim();
+        // 'subgrid' is not supported: the reference engine drops it to the initial 'none'
+        // (measured: 'grid-template-rows: subgrid' reads 'none').
+        if (string.Equals(authored, "subgrid", StringComparison.OrdinalIgnoreCase))
+            return "none";
         if (used == null || used.Length == 0) return authored == null ? "none" : TrackListText(authored);
         var sizes = used.Select(v => Px(v)).ToList();
         if (authored == null || authored == "none") return string.Join(" ", sizes);
