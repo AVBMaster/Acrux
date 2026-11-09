@@ -1366,10 +1366,12 @@ public static class ComputedValueSerializer
         // matrix(), while 'scaleZ(2)' is not (all measured).
         var m = Acrux.Core.Css.TransformParser.ToMatrix4(operations);
         // A matrix entry the engine multiplied its way to is printed as nothing when the product is
-        // under a ten-millionth of a unit: 'rotate(0.5turn)' is 'matrix(-1, 0, 0, -1, 0, 0)' and not
-        // the -8.74228e-08 its own cosine of π produced (measured). The rule belongs to this print
-        // alone — a number a page wrote is never hidden (measured: 'opacity: 1e-30' reads '1e-30').
-        string N(float value) => System.Math.Abs(value) < 1e-7 ? "0" : CssValueTokenizer.Num(value);
+        // under a millionth of a unit: 'rotate(0.5turn)' is 'matrix(-1, 0, 0, -1, 0, 0)' and not
+        // the -8.74228e-08 its own cosine of π produced, and 'rotate(360deg)' is 'matrix(1, 0, 0,
+        // 1, 0, 0)' and not the 1.74846e-07 the accumulated sin of 2π left in the off-diagonal
+        // (both measured). The rule belongs to this print alone — a number a page wrote is never
+        // hidden (measured: 'opacity: 1e-30' reads '1e-30').
+        string N(float value) => System.Math.Abs(value) < 1e-6 ? "0" : CssValueTokenizer.Num(value);
         // The two entries that carry a pixel distance answer with the largest pixel distance a
         // computed length can be (measured: 'translateX(2147483647px)' is
         // 'matrix(1, 0, 0, 1, 3.35544e+07, 0)'); the ratios have no such ceiling.

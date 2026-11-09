@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b460: complex transform
+s('t-scaleX','transform:scaleX(2)',['transform']);
+s('t-scaleY','transform:scaleY(0.5)',['transform']);
+s('t-rotateX','transform:rotateX(45deg)',['transform']);
+s('t-rotateY','transform:rotateY(30deg)',['transform']);
+s('t-rotateZ','transform:rotateZ(90deg)',['transform']);
+s('t-translateX','transform:translateX(10px)',['transform']);
+s('t-translateY','transform:translateY(-20px)',['transform']);
+s('t-translate-both','transform:translate(10px,20px)',['transform']);
+s('t-combine','transform:translate(10px,20px) rotate(45deg) scale(2)',['transform']);
+s('t-scale0','transform:scale(0)',['transform']);
+s('t-neg-scale','transform:scale(-1)',['transform']);
+s('t-rotate-360','transform:rotate(360deg)',['transform']);
+s('t-neg-rotate','transform:rotate(-90deg)',['transform']);
+s('t-matrix3d','transform:matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)',['transform']);
+s('t-perspective','transform:perspective(500px)',['transform']);
+s('t-none','transform:none',['transform']);
+s('transform-origin','transform-origin:50% 50%',['transform-origin']);
+s('transform-origin-px','transform-origin:10px 20px',['transform-origin']);
+s('backface-vis','backface-visibility:hidden',['backface-visibility']);
+out.push('SUP transform:rotateX(45deg) = '+(()=>{try{return CSS.supports('transform','rotateX(45deg)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP transform:matrix3d(...) = '+(()=>{try{return CSS.supports('transform','matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP transform-origin:50% 50% = '+(()=>{try{return CSS.supports('transform-origin','50% 50%')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP backface-visibility:hidden = '+(()=>{try{return CSS.supports('backface-visibility','hidden')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
