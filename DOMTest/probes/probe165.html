@@ -1,0 +1,111 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 30);
+        });
+    }
+
+    // ── A. Headers ───────────────────────────────────────────────────────────
+    eq('A1 Headers.append and get', safe(function () {
+        var h = new Headers();
+        h.append('Content-Type', 'text/plain');
+        return h.get('content-type');
+    }), 'ok:text/plain');
+
+    eq('A2 Headers.has answers presence', safe(function () {
+        var h = new Headers();
+        h.set('X-A', '1');
+        return [String(h.has('x-a')), String(h.has('x-b'))].join(',');
+    }), 'ok:true,false');
+
+    eq('A3 Headers.delete removes a header', safe(function () {
+        var h = new Headers();
+        h.set('X-A', '1');
+        h.delete('x-a');
+        return String(h.has('x-a'));
+    }), 'ok:false');
+
+    eq('A4 Headers constructor accepts an object', safe(function () {
+        var h = new Headers({ 'Content-Type': 'text/plain' });
+        return h.get('content-type');
+    }), 'ok:text/plain');
+
+    eq('A5 Headers.set replaces an existing value', safe(function () {
+        var h = new Headers();
+        h.append('X-A', '1');
+        h.set('X-A', '2');
+        return h.get('x-a');
+    }), 'ok:2');
+
+    eq('A6 Headers.get is case-insensitive', safe(function () {
+        var h = new Headers();
+        h.set('Content-Type', 'text/plain');
+        return h.get('CONTENT-TYPE');
+    }), 'ok:text/plain');
+
+    // ── B. Response ──────────────────────────────────────────────────────────
+    eq('B1 Response.ok mirrors the status', safe(function () {
+        return [String(new Response(null, { status: 200 }).ok),
+            String(new Response(null, { status: 404 }).ok)].join(',');
+    }), 'ok:true,false');
+
+    eq('B2 Response.status answers the status', safe(function () {
+        return String(new Response(null, { status: 201 }).status);
+    }), 'ok:201');
+
+    eq('B3 Response.statusText answers the reason', safe(function () {
+        return new Response(null, { status: 404, statusText: 'Not Found' }).statusText;
+    }), 'ok:Not Found');
+
+    eq('B4 Response.json() parses the body', safe(function () {
+        return String(new Response('{"a":1}').json() instanceof Promise);
+    }), 'ok:true');
+
+    pl('B5 Response.json() resolves to the object', function (done) {
+        new Response('{"a":7}').json().then(function (o) { done(String(o.a)); });
+    }, '7');
+
+    // ── C. Request ───────────────────────────────────────────────────────────
+    eq('C1 Request answers its method and url', safe(function () {
+        var r = new Request('http://ex.test/api');
+        return [r.method, r.url].join(',');
+    }), 'ok:GET,http://ex.test/api');
+
+    eq('C2 Request.post carries a POST method', safe(function () {
+        return new Request('http://ex.test/api', { method: 'POST' }).method;
+    }), 'ok:POST');
+
+    eq('C3 Request headers are readable', safe(function () {
+        var r = new Request('http://ex.test/api', { headers: { 'X-A': '1' } });
+        return r.headers.get('x-a');
+    }), 'ok:1');
+
+    // ── D. fetch ─────────────────────────────────────────────────────────────
+    eq('D1 fetch answers a promise', safe(function () {
+        return String(fetch('http://ex.test/api') instanceof Promise);
+    }), 'ok:true');
+
+    pl('D2 fetch of a data: url resolves to a Response', function (done) {
+        fetch('data:text/plain,hello').then(function (r) {
+            return r.text().then(function (t) { done(r.ok + ',' + t); });
+        }, function () { done('rejected'); });
+    }, 'true,hello');
+})();
+</script></body></html>
