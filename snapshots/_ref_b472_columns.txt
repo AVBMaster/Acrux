@@ -1,0 +1,21 @@
+col-count column-count=3
+col-width column-width=100px
+col-width-auto column-width=auto
+col-gap column-gap=20px
+col-gap-normal column-gap=normal
+col-rule-w column-rule-width=3px
+col-rule-style column-rule-style=dashed
+col-rule-color column-rule-color=rgb(255, 0, 0)
+col-rule column-rule-width=2px | column-rule-style=solid | column-rule-color=rgb(0, 0, 255)
+col-rule-none column-rule-style=none | column-rule-width=3px
+col-span column-span=all
+col-span-none column-span=none
+col-fill column-fill=balance
+col-fill-auto column-fill=auto
+columns-sh column-count=3 | column-width=auto
+columns-sh-px column-count=auto | column-width=100px
+columns-sh-2 column-count=2 | column-width=100px
+SUP column-count:3 = Y
+SUP column-rule:2px solid blue = Y
+SUP column-span:all = Y
+SUP column-fill:balance = Y
