@@ -1,0 +1,12 @@
+bef-display display=inline | content=none
+bef-position position=static
+bef-color color=rgb(255, 0, 0)
+bef-fontsize font-size=20px
+bef-display-block display=inline
+aft-display display=inline | content=none
+aft-position position=static
+aft-color color=rgb(0, 0, 255)
+aft-fontsize font-size=20px
+aft-display-block display=inline
+SUP content:"x" = Y
+SUP ::before = Y

@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function before(css,content){ const d=document.createElement('div');
+  d.style.cssText='content:"BEFORE"'+(css?';'+css:'');
+  document.body.appendChild(d); return d; }
+function after(css,content){ const d=document.createElement('div');
+  d.style.cssText='content:"AFTER"'+(css?';'+css:'');
+  document.body.appendChild(d); return d; }
+function read(el,pseudo,props){ const cs=getComputedStyle(el,pseudo); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p)); return parts.join(' | '); }
+
+const b1=before(''); out.push('bef-display '+read(b1,'::before',['display','content']));
+const b2=before('position:absolute',['position']);
+out.push('bef-position '+read(b2,'::before',['position']));
+const b3=before('color:red',['color']);
+out.push('bef-color '+read(b3,'::before',['color']));
+const b4=before('font-size:20px',['font-size']);
+out.push('bef-fontsize '+read(b4,'::before',['font-size']));
+const b5=before('display:block',['display']);
+out.push('bef-display-block '+read(b5,'::before',['display']));
+const a1=after(''); out.push('aft-display '+read(a1,'::after',['display','content']));
+const a2=after('position:absolute',['position']);
+out.push('aft-position '+read(a2,'::after',['position']));
+const a3=after('color:blue',['color']);
+out.push('aft-color '+read(a3,'::after',['color']));
+const a4=after('font-size:20px',['font-size']);
+out.push('aft-fontsize '+read(a4,'::after',['font-size']));
+const a5=after('display:block',['display']);
+out.push('aft-display-block '+read(a5,'::after',['display']));
+out.push('SUP content:"x" = '+(()=>{try{return CSS.supports('content','"x"')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP ::before = '+(()=>{try{const s=document.createElement('style');s.textContent='x::before{content:"y"}';document.head.appendChild(s);const ok=CSS.supports('content','"y"');document.head.removeChild(s);return ok?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

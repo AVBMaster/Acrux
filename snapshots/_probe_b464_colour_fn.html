@@ -1,0 +1,27 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function c(label,css){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const v=getComputedStyle(d).color; d.remove(); out.push(label+' -> '+v); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b464: colour functions
+c('hex-3','#f00');
+c('hex-6','#ff0000');
+c('hex-8','#ff000080');
+c('named-red','red');
+c('named-transparent','transparent');
+c('rgb','rgb(255,0,0)');
+c('rgba','rgba(255,0,0,0.5)');
+c('hsl','hsl(0,100%,50%)');
+c('hsla','hsla(0,100%,50%,0.5)');
+c('oklab','oklab(0.627955 0.224863 0.125846)');
+c('oklch','oklch(0.627955 0.25768 29.234)');
+c('lab','lab(54.29% 80.8 69.9)');
+c('lch','lch(54.29% 106.8 40)');
+c('color-srgb','color(srgb 1 0 0)');
+c('color-disp-p3','color(display-p3 1 0 0)');
+c('color-mix-srgb','color-mix(in srgb, red, blue)');
+c('color-mix-oklab','color-mix(in oklab, red, blue)');
+c('currentcolor','currentColor');
+c('inherit-color','inherit');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
