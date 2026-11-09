@@ -1,0 +1,89 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 20);
+        });
+    }
+
+    // ── A. navigator.clipboard ───────────────────────────────────────────────
+    eq('A1 navigator.clipboard answers an object', safe(function () {
+        return String(typeof navigator.clipboard);
+    }), 'ok:object');
+
+    eq('A2 the clipboard methods are functions', safe(function () {
+        var c = navigator.clipboard;
+        return [typeof c.writeText, typeof c.readText, typeof c.write, typeof c.read].join(',');
+    }), 'ok:function,function,function,function');
+
+    eq('A3 the clipboard is an EventTarget', safe(function () {
+        var c = navigator.clipboard;
+        return [typeof c.addEventListener, typeof c.removeEventListener].join(',');
+    }), 'ok:function,function');
+
+    // ── B. the clipboard methods reject (no permission prompt here) ──────────
+    pl('B1 writeText rejects with NotAllowedError', function (done) {
+        navigator.clipboard.writeText('x').then(
+            function () { done('resolved'); },
+            function (e) { done('rejected:' + e.name); }
+        );
+    }, 'rejected:NotAllowedError');
+
+    pl('B2 readText rejects with NotAllowedError', function (done) {
+        navigator.clipboard.readText().then(
+            function () { done('resolved'); },
+            function (e) { done('rejected:' + e.name); }
+        );
+    }, 'rejected:NotAllowedError');
+
+    pl('B3 write rejects with NotAllowedError', function (done) {
+        navigator.clipboard.write([]).then(
+            function () { done('resolved'); },
+            function (e) { done('rejected:' + e.name); }
+        );
+    }, 'rejected:NotAllowedError');
+
+    pl('B4 read rejects with NotAllowedError', function (done) {
+        navigator.clipboard.read().then(
+            function () { done('resolved'); },
+            function (e) { done('rejected:' + e.name); }
+        );
+    }, 'rejected:NotAllowedError');
+
+    // ── C. ClipboardEvent ────────────────────────────────────────────────────
+    eq('C1 a ClipboardEvent can be constructed', safe(function () {
+        var e = new ClipboardEvent('copy');
+        return [e.type, String(e.clipboardData)].join(',');
+    }), 'ok:copy,null');
+
+    eq('C2 ClipboardEvent is an Event', safe(function () {
+        return String(new ClipboardEvent('copy') instanceof Event);
+    }), 'ok:true');
+
+    // ── D. ClipboardItem ─────────────────────────────────────────────────────
+    eq('D1 ClipboardItem is a constructor', safe(function () {
+        return typeof ClipboardItem;
+    }), 'ok:function');
+
+    eq('D2 ClipboardItem.supports answers a boolean', safe(function () {
+        return String(typeof ClipboardItem.supports('text/plain'));
+    }), 'ok:boolean');
+
+    eq('D3 a ClipboardItem answers its types', safe(function () {
+        var it = new ClipboardItem({ 'text/plain': 'x' });
+        return it.types.join(',');
+    }), 'ok:text/plain');
+})();
+</script></body></html>
