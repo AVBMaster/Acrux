@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b475: object-fit + object-position + list-style detailed
+s('of-fill','object-fit:fill',['object-fit']);
+s('of-contain','object-fit:contain',['object-fit']);
+s('of-cover','object-fit:cover',['object-fit']);
+s('of-none','object-fit:none',['object-fit']);
+s('of-scaledown','object-fit:scale-down',['object-fit']);
+s('op-center','object-position:center',['object-position']);
+s('op-px','object-position:10px 20px',['object-position']);
+s('op-pct','object-position:50% 50%',['object-position']);
+s('op-left','object-position:left top',['object-position']);
+s('ls-none','list-style:none',['list-style-type','list-style-position','list-style-image']);
+s('ls-disc','list-style-type:disc',['list-style-type']);
+s('ls-decimal','list-style-type:decimal',['list-style-type']);
+s('ls-square','list-style-type:square',['list-style-type']);
+s('ls-inside','list-style-position:inside',['list-style-position']);
+s('ls-outside','list-style-position:outside',['list-style-position']);
+s('ls-image','list-style-image:url(x.png)',['list-style-image']);
+s('ls-none-img','list-style-image:none',['list-style-image']);
+s('ls-shorthand','list-style:square inside',['list-style-type','list-style-position']);
+s('ls-shorthand2','list-style:none',['list-style-type','list-style-image','list-style-position']);
+out.push('SUP object-fit:cover = '+(()=>{try{return CSS.supports('object-fit','cover')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP list-style:none = '+(()=>{try{return CSS.supports('list-style','none')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP list-style-image:url(x.png) = '+(()=>{try{return CSS.supports('list-style-image','url(x.png)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP object-position:50% 50% = '+(()=>{try{return CSS.supports('object-position','50% 50%')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

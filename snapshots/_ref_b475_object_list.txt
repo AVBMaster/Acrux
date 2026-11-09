@@ -1,0 +1,23 @@
+of-fill object-fit=fill
+of-contain object-fit=contain
+of-cover object-fit=cover
+of-none object-fit=none
+of-scaledown object-fit=scale-down
+op-center object-position=50% 50%
+op-px object-position=10px 20px
+op-pct object-position=50% 50%
+op-left object-position=0% 0%
+ls-none list-style-type=none | list-style-position=outside | list-style-image=none
+ls-disc list-style-type=disc
+ls-decimal list-style-type=decimal
+ls-square list-style-type=square
+ls-inside list-style-position=inside
+ls-outside list-style-position=outside
+ls-image list-style-image=url("file:///home/master/Acrux/snapshots/x.png")
+ls-none-img list-style-image=none
+ls-shorthand list-style-type=square | list-style-position=inside
+ls-shorthand2 list-style-type=none | list-style-image=none | list-style-position=outside
+SUP object-fit:cover = Y
+SUP list-style:none = Y
+SUP list-style-image:url(x.png) = Y
+SUP object-position:50% 50% = Y
