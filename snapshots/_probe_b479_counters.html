@@ -1,0 +1,34 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b479: counters detailed
+s('ctr-reset-multi','counter-reset:a b c',['counter-reset']);
+s('ctr-reset-none','counter-reset:none',['counter-reset']);
+s('ctr-reset-inherit','counter-reset:inherit',['counter-reset']);
+s('ctr-incr-multi','counter-increment:a b',['counter-increment']);
+s('ctr-incr-none','counter-increment:none',['counter-increment']);
+s('ctr-set-none','counter-set:none',['counter-set']);
+s('ctr-reset-neg','counter-reset:x -5',['counter-reset']);
+s('ctr-incr-neg','counter-increment:x -1',['counter-increment']);
+s('ctr-set-neg','counter-set:x -1',['counter-set']);
+s('ctr-reset-2','counter-reset:a 1 b',['counter-reset']);
+// content with counters
+function ct(label,css){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const v=getComputedStyle(d,'::before').content;
+  out.push(label+' content='+v); d.remove(); }catch(e){ out.push(label+' ERR '+e.message); } }
+ct('ctr-content','counter-reset:x 5;counter-increment:x;content:counter(x)');
+ct('ctr-content-dec','counter-reset:x 5;content:counter(x,decimal)');
+ct('ctr-content-lower','counter-reset:x 3;content:counter(x,lower-roman)');
+ct('ctr-content-upper','counter-reset:x 3;content:counter(x,upper-alpha)');
+ct('ctr-content-none','counter-reset:x 5;content:counter(x,none)');
+ct('ctr-content-2','counter-reset:a 1 b 2;content:counter(a) "/" counter(b)');
+out.push('SUP counter-reset:section = '+(()=>{try{return CSS.supports('counter-reset','section')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP counter-reset:none = '+(()=>{try{return CSS.supports('counter-reset','none')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP counter-reset:x -5 = '+(()=>{try{return CSS.supports('counter-reset','x -5')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP counter-set:none = '+(()=>{try{return CSS.supports('counter-set','none')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
