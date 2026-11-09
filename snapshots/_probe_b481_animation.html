@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b481: animation detailed
+s('an-basic','animation:slide 1s ease 0s 1 normal forwards running',['animation-name','animation-duration','animation-timing-function','animation-delay','animation-iteration-count','animation-direction','animation-fill-mode','animation-play-state']);
+s('an-name-only','animation-name:fade',['animation-name']);
+s('an-name-none','animation-name:none',['animation-name']);
+s('an-name-multi','animation-name:fade,slide',['animation-name']);
+s('an-dur-0','animation-duration:0s',['animation-duration']);
+s('an-dur-ms','animation-duration:500ms',['animation-duration']);
+s('an-iter-num','animation-iteration-count:3',['animation-iteration-count']);
+s('an-iter-inf','animation-iteration-count:infinite',['animation-iteration-count']);
+s('an-dir-normal','animation-direction:normal',['animation-direction']);
+s('an-dir-reverse','animation-direction:reverse',['animation-direction']);
+s('an-dir-alt','animation-direction:alternate',['animation-direction']);
+s('an-dir-altrev','animation-direction:alternate-reverse',['animation-direction']);
+s('an-fill-none','animation-fill-mode:none',['animation-fill-mode']);
+s('an-fill-forwards','animation-fill-mode:forwards',['animation-fill-mode']);
+s('an-fill-backwards','animation-fill-mode:backwards',['animation-fill-mode']);
+s('an-fill-both','animation-fill-mode:both',['animation-fill-mode']);
+s('an-play-running','animation-play-state:running',['animation-play-state']);
+s('an-play-paused','animation-play-state:paused',['animation-play-state']);
+s('an-timing-linear','animation-timing-function:linear',['animation-timing-function']);
+s('an-timing-ease','animation-timing-function:ease',['animation-timing-function']);
+s('an-timing-steps','animation-timing-function:steps(3,end)',['animation-timing-function']);
+out.push('SUP animation:none = '+(()=>{try{return CSS.supports('animation','none')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP animation-duration:500ms = '+(()=>{try{return CSS.supports('animation-duration','500ms')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP animation-iteration-count:3 = '+(()=>{try{return CSS.supports('animation-iteration-count','3')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP animation-fill-mode:both = '+(()=>{try{return CSS.supports('animation-fill-mode','both')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

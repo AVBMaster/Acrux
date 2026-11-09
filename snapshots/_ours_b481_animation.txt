@@ -1,0 +1,25 @@
+an-basic animation-name=slide | animation-duration=1s | animation-timing-function=ease | animation-delay=0s | animation-iteration-count=1 | animation-direction=normal | animation-fill-mode=forwards | animation-play-state=running
+an-name-only animation-name=fade
+an-name-none animation-name=none
+an-name-multi animation-name=fade, slide
+an-dur-0 animation-duration=0s
+an-dur-ms animation-duration=0.5s
+an-iter-num animation-iteration-count=3
+an-iter-inf animation-iteration-count=infinite
+an-dir-normal animation-direction=normal
+an-dir-reverse animation-direction=reverse
+an-dir-alt animation-direction=alternate
+an-dir-altrev animation-direction=alternate-reverse
+an-fill-none animation-fill-mode=none
+an-fill-forwards animation-fill-mode=forwards
+an-fill-backwards animation-fill-mode=backwards
+an-fill-both animation-fill-mode=both
+an-play-running animation-play-state=running
+an-play-paused animation-play-state=paused
+an-timing-linear animation-timing-function=linear
+an-timing-ease animation-timing-function=ease
+an-timing-steps animation-timing-function=steps(3)
+SUP animation:none = Y
+SUP animation-duration:500ms = Y
+SUP animation-iteration-count:3 = Y
+SUP animation-fill-mode:both = Y
