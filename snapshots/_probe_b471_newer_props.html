@@ -1,0 +1,43 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b471: newer properties
+s('accent','accent-color:red',['accent-color']);
+s('accent-auto','accent-color:auto',['accent-color']);
+s('colorscheme','color-scheme:dark',['color-scheme']);
+s('colorscheme-2','color-scheme:light dark',['color-scheme']);
+s('willchange-t','will-change:transform',['will-change']);
+s('willchange-multi','will-change:transform,opacity',['will-change']);
+s('willchange-auto','will-change:auto',['will-change']);
+s('contain-none','contain:none',['contain']);
+s('contain-size','contain:size',['contain']);
+s('contain-layout','contain:layout',['contain']);
+s('contain-paint','contain:paint',['contain']);
+s('contain-strict','contain:strict',['contain']);
+s('contain-content','contain:content',['contain']);
+s('contain-inline','contain:inline-size',['contain']);
+s('contain-cis','contain-intrinsic-size:100px 50px',['contain-intrinsic-width','contain-intrinsic-height']);
+s('contain-cis-auto','contain-intrinsic-size:auto 50px',['contain-intrinsic-width','contain-intrinsic-height']);
+s('resize-both','resize:both',['resize']);
+s('resize-horiz','resize:horizontal',['resize']);
+s('resize-vert','resize:vertical',['resize']);
+s('resize-none','resize:none',['resize']);
+s('touch-none','touch-action:none',['touch-action']);
+s('touch-panx','touch-action:pan-x',['touch-action']);
+s('touch-pinch','touch-action:pinch-zoom',['touch-action']);
+s('touch-manip','touch-action:manipulation',['touch-action']);
+s('userselect-none','user-select:none',['user-select']);
+s('userselect-all','user-select:all',['user-select']);
+s('userselect-text','user-select:text',['user-select']);
+s('caret-red','caret-color:red',['caret-color']);
+s('caret-auto','caret-color:auto',['caret-color']);
+out.push('SUP accent-color:red = '+(()=>{try{return CSS.supports('accent-color','red')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP color-scheme:dark = '+(()=>{try{return CSS.supports('color-scheme','dark')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP contain:strict = '+(()=>{try{return CSS.supports('contain','strict')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP touch-action:none = '+(()=>{try{return CSS.supports('touch-action','none')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

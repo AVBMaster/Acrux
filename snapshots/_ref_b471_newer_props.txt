@@ -1,0 +1,33 @@
+accent accent-color=rgb(255, 0, 0)
+accent-auto accent-color=auto
+colorscheme color-scheme=dark
+colorscheme-2 color-scheme=light dark
+willchange-t will-change=transform
+willchange-multi will-change=transform, opacity
+willchange-auto will-change=auto
+contain-none contain=none
+contain-size contain=size
+contain-layout contain=layout
+contain-paint contain=paint
+contain-strict contain=strict
+contain-content contain=content
+contain-inline contain=inline-size
+contain-cis contain-intrinsic-width=100px | contain-intrinsic-height=50px
+contain-cis-auto contain-intrinsic-width=auto 50px | contain-intrinsic-height=auto 50px
+resize-both resize=both
+resize-horiz resize=horizontal
+resize-vert resize=vertical
+resize-none resize=none
+touch-none touch-action=none
+touch-panx touch-action=pan-x
+touch-pinch touch-action=pinch-zoom
+touch-manip touch-action=manipulation
+userselect-none user-select=none
+userselect-all user-select=all
+userselect-text user-select=text
+caret-red caret-color=rgb(255, 0, 0)
+caret-auto caret-color=rgb(0, 0, 0)
+SUP accent-color:red = Y
+SUP color-scheme:dark = Y
+SUP contain:strict = Y
+SUP touch-action:none = Y
