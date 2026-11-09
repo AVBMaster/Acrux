@@ -1,0 +1,166 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 40);
+        });
+    }
+    var root = document.getElementById('root');
+
+    // ── A. construction ──────────────────────────────────────────────────────
+    eq('A1 MutationObserver is a constructor', safe(function () {
+        return typeof MutationObserver;
+    }), 'ok:function');
+
+    eq('A2 observe is a function', safe(function () {
+        return typeof new MutationObserver(function () {}).observe;
+    }), 'ok:function');
+
+    eq('A3 disconnect and takeRecords are functions', safe(function () {
+        var mo = new MutationObserver(function () {});
+        return [typeof mo.disconnect, typeof mo.takeRecords].join(',');
+    }), 'ok:function,function');
+
+    // ── B. childList mutation ────────────────────────────────────────────────
+    pl('B1 childList observes an added node', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var seen = 'none';
+        var mo = new MutationObserver(function (records) {
+            if (records.length > 0 && records[0].type === 'childList') seen = records[0].addedNodes.length;
+            mo.disconnect();
+        });
+        mo.observe(target, { childList: true });
+        target.appendChild(document.createElement('span'));
+        done('pending');
+    }, 'pending');
+
+    pl('B2 childList addedNodes answers the added element', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            var r = records[0];
+            mo.disconnect();
+            done(r.addedNodes[0].tagName);
+        });
+        mo.observe(target, { childList: true });
+        target.appendChild(document.createElement('b'));
+    }, 'B');
+
+    pl('B3 removedNodes answers a removed element', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var kid = document.createElement('span');
+        target.appendChild(kid);
+        var mo = new MutationObserver(function (records) {
+            var r = records[0];
+            mo.disconnect();
+            done(r.removedNodes[0].tagName);
+        });
+        mo.observe(target, { childList: true });
+        target.removeChild(kid);
+    }, 'SPAN');
+
+    // ── C. attributes mutation ───────────────────────────────────────────────
+    pl('C1 attributes observes a changed attribute', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            var r = records[0];
+            mo.disconnect();
+            done(r.attributeName);
+        });
+        mo.observe(target, { attributes: true });
+        target.setAttribute('data-x', '1');
+    }, 'data-x');
+
+    pl('C2 attributeOldValue records the old value', function (done) {
+        var target = document.createElement('div');
+        target.setAttribute('data-x', 'old');
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            var r = records[0];
+            mo.disconnect();
+            done(String(r.oldValue));
+        });
+        mo.observe(target, { attributes: true, attributeOldValue: true });
+        target.setAttribute('data-x', 'new');
+    }, 'old');
+
+    // ── D. subtree ───────────────────────────────────────────────────────────
+    pl('D1 subtree observes a grandchild mutation', function (done) {
+        var target = document.createElement('div');
+        var mid = document.createElement('div');
+        target.appendChild(mid);
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            mo.disconnect();
+            done(String(records.length > 0));
+        });
+        mo.observe(target, { childList: true, subtree: true });
+        mid.appendChild(document.createElement('span'));
+    }, 'true');
+
+    // ── E. characterData ─────────────────────────────────────────────────────
+    pl('E1 characterData observes a text change', function (done) {
+        var text = document.createTextNode('before');
+        root.appendChild(text);
+        var mo = new MutationObserver(function (records) {
+            mo.disconnect();
+            done(String(records[0].type));
+        });
+        mo.observe(text, { characterData: true });
+        text.data = 'after';
+    }, 'characterData');
+
+    // ── F. attributeFilter ───────────────────────────────────────────────────
+    pl('F1 attributeFilter only reports the named attribute', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            var r = records[0];
+            mo.disconnect();
+            done(r.attributeName);
+        });
+        mo.observe(target, { attributes: true, attributeFilter: ['data-keep'] });
+        target.setAttribute('data-drop', '1');
+        target.setAttribute('data-keep', '1');
+    }, 'data-keep');
+
+    // ── G. takeRecords ───────────────────────────────────────────────────────
+    pl('G1 takeRecords answers queued records', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var mo = new MutationObserver(function () {});
+        mo.observe(target, { attributes: true });
+        target.setAttribute('data-x', '1');
+        done(String(mo.takeRecords().length > 0));
+    }, 'true');
+
+    // ── H. disconnect ────────────────────────────────────────────────────────
+    pl('H1 disconnect stops the observations', function (done) {
+        var target = document.createElement('div');
+        root.appendChild(target);
+        var mo = new MutationObserver(function (records) {
+            mo.disconnect();
+            done(String(records.length > 0));
+        });
+        mo.observe(target, { childList: true });
+        mo.disconnect();
+        target.appendChild(document.createElement('span'));
+        setTimeout(function () { done('no-record'); }, 40);
+    }, 'no-record');
+})();
+</script></body></html>
