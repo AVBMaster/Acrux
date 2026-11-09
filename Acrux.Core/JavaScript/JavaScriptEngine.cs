@@ -19286,6 +19286,12 @@ public class JavaScriptEngine : IDisposable
                         Object.defineProperty(window.Notification, 'permission', { value: 'default',
                             writable: false, enumerable: true, configurable: false });
                     } catch (e) { }
+                    // Notification.maxActions (Notification API §5): the largest number of actions a
+                    // notification may carry — a static number on the constructor, not on an instance.
+                    try {
+                        Object.defineProperty(window.Notification, 'maxActions', { value: 2,
+                            writable: false, enumerable: true, configurable: false });
+                    } catch (e) { }
                     window.Notification.requestPermission = function requestPermission(callback) {
                         var made = Promise.resolve('denied');
                         if (typeof callback === 'function') made.then(callback);

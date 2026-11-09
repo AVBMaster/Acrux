@@ -1,0 +1,85 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // A promise-returning row: settle it on a timer so the harness drains it.
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 20);
+        });
+    }
+
+    // ── A. geolocation ───────────────────────────────────────────────────────
+    eq('A1 navigator.geolocation answers an object', safe(function () {
+        return String(typeof navigator.geolocation);
+    }), 'ok:object');
+
+    eq('A2 getCurrentPosition is a function', safe(function () {
+        return typeof navigator.geolocation.getCurrentPosition;
+    }), 'ok:function');
+
+    eq('A3 watchPosition is a function', safe(function () {
+        return typeof navigator.geolocation.watchPosition;
+    }), 'ok:function');
+
+    eq('A4 clearWatch is a function', safe(function () {
+        return typeof navigator.geolocation.clearWatch;
+    }), 'ok:function');
+
+    // getCurrentPosition with no provider rejects with POSITION_UNAVAILABLE (code 2).
+    pl('A5 getCurrentPosition with no provider rejects', function (done) {
+        navigator.geolocation.getCurrentPosition(
+            function () { done('resolved'); },
+            function (err) { done('rejected:' + err.code); }
+        );
+    }, 'rejected:2');
+
+    // ── B. permissions ───────────────────────────────────────────────────────
+    eq('B1 navigator.permissions answers an object', safe(function () {
+        return String(typeof navigator.permissions);
+    }), 'ok:object');
+
+    eq('B2 permissions.query is a function', safe(function () {
+        return typeof navigator.permissions.query;
+    }), 'ok:function');
+
+    pl('B3 query(geolocation) resolves to a PermissionStatus', function (done) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function (s) {
+            done(String(typeof s.state));
+        }, function () { done('rejected'); });
+    }, 'string');
+
+    // ── C. Notification ──────────────────────────────────────────────────────
+    eq('C1 Notification answers a permission string', safe(function () {
+        var p = Notification.permission;
+        return String(p === 'default' || p === 'granted' || p === 'denied');
+    }), 'ok:true');
+
+    eq('C2 requestPermission answers a promise', safe(function () {
+        return String(typeof Notification.requestPermission());
+    }), 'ok:object');
+
+    eq('C3 maxActions is a number', safe(function () {
+        return String(typeof Notification.maxActions);
+    }), 'ok:number');
+
+    // ── D. the permission query refuses a bad name ───────────────────────────
+    eq('D1 query refuses an unknown permission name', thrown(function () {
+        navigator.permissions.query({ name: 'not-a-permission' });
+    }), 'TypeError');
+})();
+</script></body></html>
