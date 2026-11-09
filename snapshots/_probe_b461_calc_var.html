@@ -1,0 +1,28 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b461: calc() and CSS variables edge cases
+s('calc-add','width:calc(100px + 50px)',['width']);
+s('calc-sub','width:calc(100px - 30px)',['width']);
+s('calc-mul','width:calc(10px * 3)',['width']);
+s('calc-div','width:calc(100px / 4)',['width']);
+s('calc-nested','width:calc(calc(100px + 50px) - 25px)',['width']);
+s('calc-neg','width:calc(100px - 150px)',['width']);
+s('calc-em','font-size:16px;width:calc(10em + 5px)',['width']);
+s('calc-pct','width:calc(50% + 10px)',['width']);
+s('calc-zero','width:calc(0px)',['width']);
+s('calc-var','--w:100px;width:calc(var(--w) + 10px)',['width']);
+s('var-undefined','width:var(--undefined, 50px)',['width']);
+s('var-nested','--a:10px;--b:var(--a);width:var(--b)',['width']);
+s('var-calc-in','--w:calc(100px + 50px);width:var(--w)',['width']);
+s('var-fallback','--w:100px;width:var(--missing, calc(var(--w) * 2))',['width']);
+out.push('SUP calc(100px + 50px) = '+(()=>{try{return CSS.supports('width','calc(100px + 50px)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP var(--x) = '+(()=>{try{return CSS.supports('width','var(--x)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP var(--x, 50px) = '+(()=>{try{return CSS.supports('width','var(--x, 50px)')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP calc(10px * 3) = '+(()=>{try{return CSS.supports('width','calc(10px * 3)')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
