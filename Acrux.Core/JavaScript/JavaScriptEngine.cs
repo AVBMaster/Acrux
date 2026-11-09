@@ -6653,6 +6653,7 @@ public class JavaScriptEngine : IDisposable
                     ['pageX', function () { return this.clientX; }],
                     ['pageY', function () { return this.clientY; }],
                     ['movementX', 0], ['movementY', 0], ['button', 0], ['buttons', 0],
+                    ['detail', 0],
                     ['ctrlKey', false], ['shiftKey', false], ['altKey', false], ['metaKey', false],
                     ['relatedTarget', null], ['region', '']]);
                 eventCtor('KeyboardEvent', [['key', ''], ['code', ''], ['location', 0],

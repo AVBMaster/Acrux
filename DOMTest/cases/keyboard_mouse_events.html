@@ -1,0 +1,83 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. KeyboardEvent construction ────────────────────────────────────────
+    eq('A1 a KeyboardEvent carries its key and code', safe(function () {
+        var e = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA' });
+        return [e.type, e.key, e.code].join(',');
+    }), 'ok:keydown,a,KeyA');
+
+    eq('A2 KeyboardEvent modifiers default false', safe(function () {
+        var e = new KeyboardEvent('keydown');
+        return [String(e.ctrlKey), String(e.altKey), String(e.shiftKey),
+            String(e.metaKey)].join(',');
+    }), 'ok:false,false,false,false');
+
+    eq('A3 KeyboardEvent modifiers read the init', safe(function () {
+        var e = new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true });
+        return [String(e.ctrlKey), String(e.shiftKey), String(e.altKey)].join(',');
+    }), 'ok:true,true,false');
+
+    eq('A4 a KeyboardEvent is a UIEvent and an Event', safe(function () {
+        var e = new KeyboardEvent('keydown');
+        return [String(e instanceof UIEvent), String(e instanceof Event)].join(',');
+    }), 'ok:true,true');
+
+    eq('A5 KeyboardEvent repeats default false', safe(function () {
+        return String(new KeyboardEvent('keydown').repeat);
+    }), 'ok:false');
+
+    eq('A6 KeyboardEvent repeats reads the init', safe(function () {
+        return String(new KeyboardEvent('keydown', { repeat: true }).repeat);
+    }), 'ok:true');
+
+    // ── B. MouseEvent construction ───────────────────────────────────────────
+    eq('B1 a MouseEvent carries its coordinates', safe(function () {
+        var e = new MouseEvent('click', { clientX: 10, clientY: 20, screenX: 30,
+            screenY: 40, pageX: 50, pageY: 60 });
+        return [e.clientX, e.clientY, e.screenX, e.screenY, e.pageX, e.pageY].join(',');
+    }), 'ok:10,20,30,40,50,60');
+
+    eq('B2 MouseEvent button and buttons', safe(function () {
+        var e = new MouseEvent('mousedown', { button: 2, buttons: 4 });
+        return [e.button, e.buttons].join(',');
+    }), 'ok:2,4');
+
+    eq('B3 MouseEvent modifiers default false', safe(function () {
+        var e = new MouseEvent('click');
+        return [String(e.ctrlKey), String(e.metaKey), String(e.altKey),
+            String(e.shiftKey)].join(',');
+    }), 'ok:false,false,false,false');
+
+    eq('B4 a MouseEvent is a UIEvent', safe(function () {
+        return String(new MouseEvent('click') instanceof UIEvent);
+    }), 'ok:true');
+
+    eq('B5 MouseEvent.detail reads the init', safe(function () {
+        return String(new MouseEvent('click', { detail: 2 }).detail);
+    }), 'ok:2');
+
+    eq('B6 MouseEvent.relatedTarget defaults null', safe(function () {
+        return String(new MouseEvent('mouseover').relatedTarget);
+    }), 'ok:null');
+
+    // ── C. UIEvent ───────────────────────────────────────────────────────────
+    eq('C1 a UIEvent carries its detail and view', safe(function () {
+        var e = new UIEvent('ui', { detail: 3 });
+        return [e.type, e.detail].join(',');
+    }), 'ok:ui,3');
+
+    eq('C2 a UIEvent is an Event', safe(function () {
+        return String(new UIEvent('ui') instanceof Event);
+    }), 'ok:true');
+})();
+</script></body></html>
