@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. setItem / getItem ─────────────────────────────────────────────────
+    eq('A1 setItem then getItem round-trips', safe(function () {
+        localStorage.setItem('k1', 'v1');
+        return localStorage.getItem('k1');
+    }), 'ok:v1');
+
+    eq('A2 getItem of a missing key answers null', safe(function () {
+        return String(localStorage.getItem('nope'));
+    }), 'ok:null');
+
+    eq('A3 setItem overwrites an existing key', safe(function () {
+        localStorage.setItem('k2', 'a');
+        localStorage.setItem('k2', 'b');
+        return localStorage.getItem('k2');
+    }), 'ok:b');
+
+    eq('A4 removeItem takes a key off', safe(function () {
+        localStorage.setItem('k3', 'v');
+        localStorage.removeItem('k3');
+        return String(localStorage.getItem('k3'));
+    }), 'ok:null');
+
+    eq('A5 removeItem of a missing key is a no-throw', safe(function () {
+        localStorage.removeItem('nope');
+        return 'ok';
+    }), 'ok:ok');
+
+    // ── B. length and key ────────────────────────────────────────────────────
+    eq('B1 length counts the items', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('a', '1');
+        localStorage.setItem('b', '2');
+        return String(localStorage.length);
+    }), 'ok:2');
+
+    eq('B2 key(i) answers the i-th key', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('x', '1');
+        localStorage.setItem('y', '2');
+        return localStorage.key(0);
+    }), 'ok:x');
+
+    eq('B3 key past the end answers null', safe(function () {
+        return String(localStorage.key(99));
+    }), 'ok:null');
+
+    // ── C. clear ─────────────────────────────────────────────────────────────
+    eq('C1 clear removes every item', safe(function () {
+        localStorage.setItem('c1', '1');
+        localStorage.setItem('c2', '2');
+        localStorage.clear();
+        return [String(localStorage.length), String(localStorage.getItem('c1'))].join(',');
+    }), 'ok:0,null');
+
+    // ── D. named access ──────────────────────────────────────────────────────
+    eq('D1 a stored item is readable by name', safe(function () {
+        localStorage.clear();
+        localStorage.setItem('named', 'val');
+        return localStorage.named;
+    }), 'ok:val');
+
+    eq('D2 storage is not an array', safe(function () {
+        return [String(Array.isArray(localStorage)), String(typeof localStorage.getItem)].join(',');
+    }), 'ok:false,function');
+
+    // ── E. sessionStorage is a separate area ─────────────────────────────────
+    eq('E1 sessionStorage is isolated from localStorage', safe(function () {
+        localStorage.clear();
+        sessionStorage.clear();
+        sessionStorage.setItem('s', 'sv');
+        return [String(sessionStorage.getItem('s')), String(localStorage.getItem('s'))].join(',');
+    }), 'ok:sv,null');
+
+    eq('E2 sessionStorage has its own length', safe(function () {
+        sessionStorage.clear();
+        sessionStorage.setItem('s1', '1');
+        return String(sessionStorage.length);
+    }), 'ok:1');
+})();
+</script></body></html>
