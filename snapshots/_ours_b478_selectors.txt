@@ -1,0 +1,20 @@
+:is(div) -> MATCH
+:is(.test) -> MATCH
+:is(#target) -> MATCH
+:is(div,.test) -> MATCH
+:is(div p) -> no
+:where(.test) -> MATCH
+:where(div,.test) -> MATCH
+:has(.inner) -> MATCH
+:has(span) -> MATCH
+:has(p) -> no
+:not(.other) -> MATCH
+:not(div) -> no
+:not(.other,.other2) -> MATCH
+:is(div):is(.test) -> MATCH
+:is(div > span) -> no
+:has(> span) -> MATCH
+SUP :is(div) = Y
+SUP :has(.inner) = Y
+SUP :where(div) = Y
+SUP :not(.other) = Y
