@@ -1,0 +1,43 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function t(label,css,parentCss,prop){ try{
+  const p=document.createElement('div');
+  if(parentCss) p.style.cssText=parentCss;
+  const d=document.createElement('div'); d.style.cssText=css;
+  p.appendChild(d); document.body.appendChild(p);
+  const v=getComputedStyle(d).getPropertyValue(prop);
+  out.push(label+' '+prop+'='+v);
+  document.body.removeChild(p);
+ }catch(e){ out.push(label+' ERR '+e.message); } }
+// b480: inherit/initial/unset on non-inherited vs inherited properties
+// inherited props
+t('color-inherit','color:inherit','color:red','color');
+t('color-initial','color:initial','color:red','color');
+t('color-unset','color:unset','color:red','color');
+t('font-inherit','font-size:inherit','font-size:20px','font-size');
+t('font-initial','font-size:initial','font-size:20px','font-size');
+t('font-unset','font-size:unset','font-size:20px','font-size');
+// non-inherited props
+t('width-inherit','width:inherit','width:200px','width');
+t('width-initial','width:initial','width:200px','width');
+t('width-unset','width:unset','width:200px','width');
+t('margin-inherit','margin-top:inherit','margin-top:10px','margin-top');
+t('margin-initial','margin-top:initial','margin-top:10px','margin-top');
+t('margin-unset','margin-top:unset','margin-top:10px','margin-top');
+// more non-inherited
+t('border-inherit','border-width:inherit','border:3px solid red','border-top-width');
+t('border-initial','border-width:initial','border:3px solid red','border-top-width');
+t('padding-inherit','padding-top:inherit','padding-top:10px','padding-top');
+t('display-inherit','display:inherit','display:none','display');
+t('display-initial','display:initial','display:none','display');
+t('display-unset','display:unset','display:none','display');
+// counter-reset (non-inherited)
+t('ctr-inherit','counter-reset:inherit','','counter-reset');
+t('ctr-initial','counter-reset:initial','','counter-reset');
+t('ctr-unset','counter-reset:unset','','counter-reset');
+out.push('SUP color:inherit = '+(()=>{try{return CSS.supports('color','inherit')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP width:initial = '+(()=>{try{return CSS.supports('width','initial')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP width:unset = '+(()=>{try{return CSS.supports('width','unset')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP counter-reset:inherit = '+(()=>{try{return CSS.supports('counter-reset','inherit')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
