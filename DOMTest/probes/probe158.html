@@ -1,0 +1,118 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // A promise-returning row: settle it on a timer so the harness drains it.
+    function pl(label, build, expected) {
+        var settled = false, got = null;
+        build(function (v) { got = v; settled = true; });
+        setTimeout(function () {
+            window.__T(label, String(got) === String(expected),
+                'got=[' + String(got) + '] want=[' + String(expected) + ']');
+        }, 30);
+    }
+
+    // ── A. initial state ─────────────────────────────────────────────────────
+    eq('A1 readyState starts at 0', safe(function () {
+        return String(new FileReader().readyState);
+    }), 'ok:0');
+
+    eq('A2 result starts null', safe(function () {
+        return String(new FileReader().result);
+    }), 'ok:null');
+
+    eq('A3 error starts null', safe(function () {
+        return String(new FileReader().error);
+    }), 'ok:null');
+
+    eq('A4 FileReader is an EventTarget with null handler slots', safe(function () {
+        var r = new FileReader();
+        // A fresh reader's on* slots start empty: 'onload' is null (typeof null is 'object'),
+        // while the EventTarget methods are functions.
+        return [typeof r.addEventListener, typeof r.onload, String(r.onload)].join(',');
+    }), 'ok:function,object,null');
+
+    // ── B. readAsText resolves with the text ─────────────────────────────────
+    pl('B1 readAsText resolves with the text', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.result)); };
+        r.readAsText(new Blob(['hello'], { type: 'text/plain' }));
+    }, 'hello');
+
+    pl('B2 readAsText fires loadend after load', function (done) {
+        var r = new FileReader();
+        var seen = [];
+        r.onload = function () { seen.push('load'); };
+        r.onloadend = function () { seen.push('loadend'); done(seen.join('|')); };
+        r.readAsText(new Blob(['x'], { type: 'text/plain' }));
+    }, 'load|loadend');
+
+    pl('B3 readyState is 2 (done) after a read', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.readyState)); };
+        r.readAsText(new Blob(['x'], { type: 'text/plain' }));
+    }, '2');
+
+    // ── C. readAsDataURL ─────────────────────────────────────────────────────
+    pl('C1 readAsDataURL answers a data URL', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.result.indexOf('data:') === 0)); };
+        r.readAsDataURL(new Blob(['hi'], { type: 'text/plain' }));
+    }, 'true');
+
+    pl('C2 readAsDataURL encodes the type', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.result.indexOf('data:text/plain;base64,') === 0)); };
+        r.readAsDataURL(new Blob(['hi'], { type: 'text/plain' }));
+    }, 'true');
+
+    // ── D. readAsArrayBuffer ─────────────────────────────────────────────────
+    pl('D1 readAsArrayBuffer answers an ArrayBuffer', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.result instanceof ArrayBuffer) + ',' + String(r.result.byteLength)); };
+        r.readAsArrayBuffer(new Blob(['abcd'], { type: 'text/plain' }));
+    }, 'true,4');
+
+    // ── E. readAsBinaryString ────────────────────────────────────────────────
+    pl('E1 readAsBinaryString answers the bytes as a string', function (done) {
+        var r = new FileReader();
+        r.onload = function () { done(String(r.result)); };
+        r.readAsBinaryString(new Blob(['AB'], { type: 'text/plain' }));
+    }, 'AB');
+
+    // ── F. abort ─────────────────────────────────────────────────────────────
+    eq('F1 abort without a read is a no-throw', safe(function () {
+        new FileReader().abort();
+        return 'ok';
+    }), 'ok:ok');
+
+    pl('F2 abort fires an abort event', function (done) {
+        var r = new FileReader();
+        var seen = [];
+        r.onabort = function () { seen.push('abort'); };
+        r.onloadend = function () { seen.push('loadend'); done(seen.join('|')); };
+        r.readAsText(new Blob(['a very long text value to read slowly'], { type: 'text/plain' }));
+        r.abort();
+    }, 'abort|loadend');
+
+    // ── G. reading a non-Blob is refused ─────────────────────────────────────
+    eq('G1 readAsText of a non-Blob is refused', thrown(function () {
+        new FileReader().readAsText('not a blob');
+    }), 'TypeError');
+
+    eq('G2 readAsDataURL of a non-Blob is refused', thrown(function () {
+        new FileReader().readAsDataURL('not a blob');
+    }), 'TypeError');
+})();
+</script></body></html>

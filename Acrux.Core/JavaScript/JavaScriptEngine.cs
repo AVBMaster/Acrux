@@ -3150,8 +3150,13 @@ public class JavaScriptEngine : IDisposable
                 self.readyState = 1;
                 self.result = null;
                 self.error = null;
+                // A read the page aborts must not also complete: the abort step sets the state to
+                // DONE and fires its own sequence, so the pending read's continuation bails when it
+                // finds the read no longer loading (File API §4: an aborted read fires no load).
+                self.__aborted = false;
                 readerFire(self, 'loadstart');
                 Promise.resolve().then(function () {
+                    if (self.__aborted === true || self.readyState !== 1) return;
                     var value;
                     try { value = FILE_READERS[method](blob); }
                     catch (error) {
@@ -3216,6 +3221,7 @@ public class JavaScriptEngine : IDisposable
             FileReader.prototype.abort = function () {
                 if (this.readyState === 0 || this.readyState === 2) return;
                 this.readyState = 2;
+                this.__aborted = true;
                 this.result = null;
                 this.error = new DOMException('The user aborted a request.', 'AbortError');
                 readerFire(this, 'error');
