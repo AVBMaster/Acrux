@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head>
+<style id="base-style">body { margin: 0; }</style>
+</head><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. document.styleSheets ──────────────────────────────────────────────
+    eq('A1 styleSheets is an object with length', safe(function () {
+        var ss = document.styleSheets;
+        return [String(typeof ss), String(ss.length > 0)].join(',');
+    }), 'ok:object,true');
+
+    eq('A2 styleSheets[0] is a CSSStyleSheet', safe(function () {
+        var s = document.styleSheets[0];
+        return String(s instanceof CSSStyleSheet);
+    }), 'ok:true');
+
+    // ── B. a constructed stylesheet ──────────────────────────────────────────
+    eq('B1 CSSStyleSheet is a constructor', safe(function () {
+        return typeof CSSStyleSheet;
+    }), 'ok:function');
+
+    eq('B2 a new stylesheet starts empty', safe(function () {
+        var s = new CSSStyleSheet();
+        return String(s.cssRules.length);
+    }), 'ok:0');
+
+    eq('B3 insertRule adds a rule', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('div { color: red; }');
+        return String(s.cssRules.length);
+    }), 'ok:1');
+
+    eq('B4 insertRule at an index places it there', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('a { color: red; }');
+        s.insertRule('b { color: blue; }', 0);
+        return s.cssRules[0].selectorText;
+    }), 'ok:b');
+
+    eq('B5 deleteRule removes a rule', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('a { color: red; }');
+        s.deleteRule(0);
+        return String(s.cssRules.length);
+    }), 'ok:0');
+
+    eq('B6 deleteRule past the end is refused', thrown(function () {
+        var s = new CSSStyleSheet();
+        s.deleteRule(5);
+    }), 'IndexSizeError');
+
+    // ── C. CSSStyleRule ──────────────────────────────────────────────────────
+    eq('C1 a rule answers its selectorText', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('div.x { color: red; }');
+        return s.cssRules[0].selectorText;
+    }), 'ok:div.x');
+
+    eq('C2 a rule answers its cssText', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('div { color: red; }');
+        return String(s.cssRules[0].cssText.indexOf('color') >= 0);
+    }), 'ok:true');
+
+    eq('C3 a rule style reads a declared property', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('div { color: red; }');
+        return s.cssRules[0].style.color;
+    }), 'ok:red');
+
+    eq('C4 a rule is a CSSStyleRule', safe(function () {
+        var s = new CSSStyleSheet();
+        s.insertRule('div { color: red; }');
+        return String(s.cssRules[0] instanceof CSSStyleRule);
+    }), 'ok:true');
+
+    // ── D. ownerNode ─────────────────────────────────────────────────────────
+    eq('D1 a style element stylesheet names its ownerNode', safe(function () {
+        var st = document.getElementById('base-style');
+        return String(document.styleSheets[0].ownerNode === st);
+    }), 'ok:true');
+
+    eq('D2 a constructed stylesheet has no ownerNode', safe(function () {
+        return String(new CSSStyleSheet().ownerNode);
+    }), 'ok:null');
+})();
+</script></body></html>

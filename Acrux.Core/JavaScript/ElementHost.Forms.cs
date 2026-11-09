@@ -388,30 +388,56 @@ public partial class ElementHost
 
     // ── the control's place in a form ────────────────────────────────────────
     /// <summary>HTML §4.10.13: the form the control belongs to — the one its 'form' attribute names
-    /// (an orphan control can be associated by id), or the nearest form ancestor. The page holds the
+    /// (an orphan control can be associated by id), or the nearest form ancestor. A label is form-
+    /// associated too (§4.10.3): it belongs to the form of the control it names. The page holds the
     /// very object it has for that form, so the read answers the cached wrapper, not a fresh one.</summary>
     public object? form
     {
         get
         {
-            if (!IsFormControl(_element)) return null;
-            var byId = _element.GetAttribute("form");
-            if (!string.IsNullOrEmpty(byId))
+            // A label is form-associated through the control it names (its 'for', or the control it
+            // wraps), so resolve that control's form rather than the label's own.
+            if (TagIs(_element, "LABEL"))
             {
-                // The form an orphan control names may live outside the subtree innerHTML built —
-                // whose nodes the parser leaves without an owner document — so fall back to the
-                // running document the way Node.ownerDocument does.
-                var doc = _element.OwnerDocument
-                    ?? JavaScriptEngine.Current?.IntegrationService?.Document?.NativeDocument;
-                var named = doc?.GetElementById(byId);
-                if (named is not null && TagIs(named, "FORM"))
-                    return JsIntegrationService.WrapAny(named);
-                return null;
+                var control = FindLabelControl(_element);
+                return control is null ? null : FormOf(control);
             }
-            for (var node = _element.ParentElement; node != null; node = node.ParentElement)
-                if (TagIs(node, "FORM")) return JsIntegrationService.WrapAny(node);
+            return FormOf(_element);
+        }
+    }
+
+    private static DomElement? FindLabelControl(DomElement label)
+    {
+        var forId = label.GetAttribute("for");
+        if (!string.IsNullOrEmpty(forId))
+        {
+            var doc = label.OwnerDocument
+                ?? JavaScriptEngine.Current?.IntegrationService?.Document?.NativeDocument;
+            return doc?.GetElementById(forId);
+        }
+        foreach (var child in label.Children.OfType<DomElement>())
+            if (!child.TagName.Equals("LABEL", StringComparison.OrdinalIgnoreCase)) return child;
+        return null;
+    }
+
+    private object? FormOf(DomElement el)
+    {
+        var byId = el.GetAttribute("form");
+        if (!string.IsNullOrEmpty(byId))
+        {
+            // The form an orphan control names may live outside the subtree innerHTML built —
+            // whose nodes the parser leaves without an owner document — so fall back to the
+            // running document the way Node.ownerDocument does.
+            var doc = el.OwnerDocument
+                ?? JavaScriptEngine.Current?.IntegrationService?.Document?.NativeDocument;
+            var named = doc?.GetElementById(byId);
+            if (named is not null && TagIs(named, "FORM"))
+                return JsIntegrationService.WrapAny(named);
             return null;
         }
+        for (var node = el.ParentElement; node != null; node = node.ParentElement)
+            if (TagIs(node, "FORM")) return JsIntegrationService.WrapAny(node);
+        return null;
     }
 
     private static bool IsFormControl(DomElement el)
