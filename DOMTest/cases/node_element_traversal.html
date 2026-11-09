@@ -1,0 +1,130 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function tree() {
+        var made = document.createElement('div');
+        made.innerHTML = '<ul><li id=a>a</li><li id=b><b id=bb>bold</b></li>'
+            + '<li id=c>c</li></ul><p id=p>para</p>';
+        root.appendChild(made);
+        return made;
+    }
+    var root = document.getElementById('root');
+
+    // ── A. parent / child relationships ──────────────────────────────────────
+    eq('A1 parentElement of a list item is the ul', safe(function () {
+        var made = tree();
+        return made.querySelector('#a').parentElement.tagName;
+    }), 'ok:UL');
+
+    eq('A2 parentElement of the innerHTML wrapper is the host div', safe(function () {
+        var made = tree();
+        // tree() appends the wrapper div under #root, so its parentElement is that DIV.
+        return made.parentElement.tagName;
+    }), 'ok:DIV');
+
+    eq('A3 children counts only element children', safe(function () {
+        var made = tree();
+        return String(made.querySelector('ul').children.length);
+    }), 'ok:3');
+
+    eq('A4 firstElementChild / lastElementChild', safe(function () {
+        var ul = tree().querySelector('ul');
+        return [ul.firstElementChild.id, ul.lastElementChild.id].join(',');
+    }), 'ok:a,c');
+
+    // ── B. sibling relationships ─────────────────────────────────────────────
+    eq('B1 nextElementSibling skips text', safe(function () {
+        var a = tree().querySelector('#a');
+        return a.nextElementSibling.id;
+    }), 'ok:b');
+
+    eq('B2 previousElementSibling of the last item', safe(function () {
+        var c = tree().querySelector('#c');
+        return c.previousElementSibling.id;
+    }), 'ok:b');
+
+    eq('B3 the first item has no previous element sibling', safe(function () {
+        var a = tree().querySelector('#a');
+        return String(a.previousElementSibling);
+    }), 'ok:null');
+
+    eq('B4 nextSibling of an element between text nodes is a text node', safe(function () {
+        var made = document.createElement('div');
+        root.appendChild(made);
+        made.innerHTML = '<b>x</b>tail';
+        return made.querySelector('b').nextSibling.nodeType;
+    }), 'ok:3');
+
+    // ── C. closest / contains ────────────────────────────────────────────────
+    eq('C1 closest walks up to a matching ancestor', safe(function () {
+        var bb = tree().querySelector('#bb');
+        return bb.closest('li').id;
+    }), 'ok:b');
+
+    eq('C2 closest matches the element itself first', safe(function () {
+        var a = tree().querySelector('#a');
+        return a.closest('#a').id;
+    }), 'ok:a');
+
+    eq('C3 closest answers null when nothing matches', safe(function () {
+        var a = tree().querySelector('#a');
+        return String(a.closest('table'));
+    }), 'ok:null');
+
+    eq('C4 contains answers true for a descendant', safe(function () {
+        var made = tree();
+        return String(made.querySelector('ul').contains(made.querySelector('#bb')));
+    }), 'ok:true');
+
+    eq('C5 contains answers false for a non-descendant', safe(function () {
+        var made = tree();
+        return String(made.querySelector('#a').contains(made.querySelector('#c')));
+    }), 'ok:false');
+
+    eq('C6 contains answers true for the element itself', safe(function () {
+        var a = tree().querySelector('#a');
+        return String(a.contains(a));
+    }), 'ok:true');
+
+    // ── D. querySelector / querySelectorAll ──────────────────────────────────
+    eq('D1 querySelector answers the first match', safe(function () {
+        return tree().querySelector('li').id;
+    }), 'ok:a');
+
+    eq('D2 querySelector answers null with no match', safe(function () {
+        return String(tree().querySelector('table'));
+    }), 'ok:null');
+
+    eq('D3 querySelectorAll counts the matches', safe(function () {
+        return String(tree().querySelectorAll('li').length);
+    }), 'ok:3');
+
+    eq('D4 querySelectorAll is scoped to the element', safe(function () {
+        var made = tree();
+        return String(made.querySelector('ul').querySelectorAll('li').length);
+    }), 'ok:3');
+
+    // ── E. getElementsByClassName ────────────────────────────────────────────
+    eq('E1 getElementsByClassName answers matching elements', safe(function () {
+        var made = document.createElement('div');
+        root.appendChild(made);
+        made.innerHTML = '<i class="x">1</i><i class="x y">2</i><i class="y">3</i>';
+        return made.getElementsByClassName('x').length;
+    }), 'ok:2');
+
+    eq('E2 getElementsByClassName with multiple classes', safe(function () {
+        var made = document.createElement('div');
+        root.appendChild(made);
+        made.innerHTML = '<i class="x y">1</i><i class="x">2</i>';
+        return made.getElementsByClassName('x y').length;
+    }), 'ok:1');
+})();
+</script></body></html>
