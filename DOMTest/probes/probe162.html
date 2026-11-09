@@ -1,0 +1,116 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. origin for the special and opaque schemes ─────────────────────────
+    eq('A1 http origin names scheme, host, port', safe(function () {
+        return new URL('https://user:pw@ex.com:8080/p?q#f').origin;
+    }), 'ok:https://ex.com:8080');
+
+    eq('A2 an opaque scheme origin serialises to null', safe(function () {
+        return new URL('file:///tmp/x').origin;
+    }), 'ok:null');
+
+    eq('A3 an about:blank origin serialises to null', safe(function () {
+        return new URL('about:blank').origin;
+    }), 'ok:null');
+
+    // ── B. host / hostname / port ────────────────────────────────────────────
+    eq('B1 host with an explicit port', safe(function () {
+        return new URL('http://ex.com:8080/p').host;
+    }), 'ok:ex.com:8080');
+
+    eq('B2 the default port is left out of host', safe(function () {
+        return new URL('http://ex.com:80/p').host;
+    }), 'ok:ex.com');
+
+    eq('B3 an IPv6 hostname keeps its brackets', safe(function () {
+        return new URL('http://[::1]:8080/p').hostname;
+    }), 'ok:[::1]');
+
+    eq('B4 an IPv6 host with its port', safe(function () {
+        return new URL('http://[::1]:8080/p').host;
+    }), 'ok:[::1]:8080');
+
+    // ── C. pathname, search, hash ────────────────────────────────────────────
+    eq('C1 an empty pathname answers a slash for a special scheme', safe(function () {
+        return new URL('http://ex.com').pathname;
+    }), 'ok:/');
+
+    eq('C2 the search includes the question mark', safe(function () {
+        return new URL('http://ex.com/p?a=1&b=2').search;
+    }), 'ok:?a=1&b=2');
+
+    eq('C3 the hash includes the hash mark', safe(function () {
+        return new URL('http://ex.com/p#frag').hash;
+    }), 'ok:#frag');
+
+    eq('C4 a bare hash answers an empty search', safe(function () {
+        return new URL('http://ex.com/p#frag').search;
+    }), 'ok:');
+
+    eq('C5 setting search without the question mark', safe(function () {
+        var u = new URL('http://ex.com/p');
+        u.search = 'a=1';
+        return u.search;
+    }), 'ok:?a=1');
+
+    // ── D. URLSearchParams round-trip ────────────────────────────────────────
+    eq('D1 searchParams reads the pairs', safe(function () {
+        var u = new URL('http://ex.com/?a=1&b=2');
+        return [u.searchParams.get('a'), u.searchParams.get('b')].join(',');
+    }), 'ok:1,2');
+
+    eq('D2 searchParams.set writes through to search', safe(function () {
+        var u = new URL('http://ex.com/?a=1');
+        u.searchParams.set('a', '2');
+        return u.search;
+    }), 'ok:?a=2');
+
+    eq('D3 searchParams.append adds a second value', safe(function () {
+        var u = new URL('http://ex.com/?a=1');
+        u.searchParams.append('a', '2');
+        return [u.searchParams.getAll('a').length, u.searchParams.get('a')].join(',');
+    }), 'ok:2,1');
+
+    eq('D4 searchParams.delete removes the pair', safe(function () {
+        var u = new URL('http://ex.com/?a=1&b=2');
+        u.searchParams.delete('a');
+        return u.search;
+    }), 'ok:?b=2');
+
+    eq('D5 searchParams.has answers presence', safe(function () {
+        var u = new URL('http://ex.com/?a=1');
+        return [String(u.searchParams.has('a')), String(u.searchParams.has('zz'))].join(',');
+    }), 'ok:true,false');
+
+    // ── E. the two parse refusals ────────────────────────────────────────────
+    eq('E1 a scheme-less input with no base is refused', thrown(function () {
+        new URL('not a url');
+    }), 'TypeError');
+
+    eq('E2 a relative input with a base resolves', safe(function () {
+        return new URL('/p', 'http://ex.com/a/b').href;
+    }), 'ok:http://ex.com/p');
+
+    eq('E3 URL.canParse answers true for a valid url', safe(function () {
+        return String(URL.canParse('http://ex.com/'));
+    }), 'ok:true');
+
+    eq('E4 URL.canParse answers false for an invalid url', safe(function () {
+        return String(URL.canParse('not a url'));
+    }), 'ok:false');
+})();
+</script></body></html>
