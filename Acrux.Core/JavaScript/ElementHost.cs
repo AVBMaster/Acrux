@@ -2239,7 +2239,8 @@ public partial class ElementHost : IDomPrototypeHost
     /// element keeps the attribute-backed form-control behaviour.</summary>
     public bool disabled
     {
-        get => IsSheetOwner ? _element.SheetDisabled : _element.HasAttribute("disabled");
+        get => IsSheetOwner ? _element.SheetDisabled
+            : _element.HasAttribute("disabled") || InDisabledFieldset();
         set
         {
             if (IsSheetOwner)
@@ -2253,6 +2254,19 @@ public partial class ElementHost : IDomPrototypeHost
             else if (value) _element.SetAttribute("disabled", "");
             else _element.RemoveAttribute("disabled");
         }
+    }
+
+    /// <summary>HTML §4.10.4: a form control is disabled when it carries the attribute or is a
+    /// descendant of a disabled fieldset — the fieldset's own disabled is what propagates to the
+    /// controls inside it.</summary>
+    private bool InDisabledFieldset()
+    {
+        for (var node = _element.ParentElement; node != null; node = node.ParentElement)
+        {
+            if (node.TagName.Equals("FIELDSET", StringComparison.OrdinalIgnoreCase)
+                && node.HasAttribute("disabled")) return true;
+        }
+        return false;
     }
 
     private bool IsSheetOwner =>
@@ -2633,8 +2647,12 @@ public partial class ElementHost : IDomPrototypeHost
                 var type = (el.GetAttribute("type") ?? "text").ToLowerInvariant();
                 if (type is "checkbox" or "radio")
                 {
+                    // The 'checked' property reads inputChecked, so reset must sync that field
+                    // alongside the attribute or the page's read stays where it was unchecked.
                     if (el.HasAttribute("checked")) el.SetAttribute("checked", "");
                     else el.RemoveAttribute("checked");
+                    if (JsIntegrationService.WrapAny(el) is ElementHost host)
+                        host.inputChecked = el.HasAttribute("checked");
                 }
                 else el.Value = el.GetAttribute("value") ?? "";
                 break;

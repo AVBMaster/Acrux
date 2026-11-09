@@ -1,0 +1,118 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var root = document.getElementById('root');
+    function mk(inner) {
+        var made = document.createElement('div');
+        made.innerHTML = '<form id=f>' + inner + '</form>';
+        root.appendChild(made);
+        return made;
+    }
+
+    // ── A. checkValidity / reportValidity ────────────────────────────────────
+    eq('A1 a valid input answers checkValidity true', safe(function () {
+        return String(mk('<input value=x>').querySelector('input').checkValidity());
+    }), 'ok:true');
+
+    eq('A2 a required empty input answers checkValidity false', safe(function () {
+        return String(mk('<input required>').querySelector('input').checkValidity());
+    }), 'ok:false');
+
+    eq('A3 a valid form answers checkValidity true', safe(function () {
+        return String(mk('<input value=x>').querySelector('form').checkValidity());
+    }), 'ok:true');
+
+    eq('A4 an invalid form answers checkValidity false', safe(function () {
+        return String(mk('<input required>').querySelector('form').checkValidity());
+    }), 'ok:false');
+
+    eq('A5 reportValidity mirrors checkValidity', safe(function () {
+        return String(mk('<input required>').querySelector('input').reportValidity());
+    }), 'ok:false');
+
+    // ── B. fieldset ──────────────────────────────────────────────────────────
+    eq('B1 a fieldset is a form-associated container', safe(function () {
+        var box = mk('<fieldset><input></fieldset>');
+        var fs = box.querySelector('fieldset');
+        return [String(fs.form === box.querySelector('form')), fs.elements.length,
+            fs.tagName, box.tagName].join(',');
+    }), 'ok:true,1,FIELDSET,DIV');
+
+    eq('B2 fieldset.disabled disables its controls', safe(function () {
+        var box = mk('<fieldset disabled><input id=i></fieldset>');
+        var fs = box.querySelector('fieldset');
+        var inp = box.querySelector('#i');
+        return [String(fs.disabled), String(inp.disabled), inp.tagName,
+            String(fs.contains(inp))].join(',');
+    }), 'ok:true,true,INPUT,true');
+
+    eq('B3 a fieldset has no disabled by default', safe(function () {
+        var box = mk('<fieldset><input></fieldset>');
+        return String(box.querySelector('fieldset').disabled);
+    }), 'ok:false');
+
+    // ── C. form.elements ─────────────────────────────────────────────────────
+    eq('C1 form.elements lists the controls', safe(function () {
+        var f = mk('<input><input><select></select>');
+        return String(f.querySelector('form').elements.length);
+    }), 'ok:3');
+
+    eq('C2 form.elements named access answers a control', safe(function () {
+        var f = mk('<input name=nm>');
+        return String(f.querySelector('form').elements.namedItem('nm') !== null);
+    }), 'ok:true');
+
+    // ── D. the form* attributes on a control ─────────────────────────────────
+    eq('D1 formMethod answers the formmethod attribute', safe(function () {
+        var f = mk('<input formmethod=post>');
+        return f.querySelector('input').formMethod;
+    }), 'ok:post');
+
+    eq('D2 formNoValidate reflects the formnovalidate attribute', safe(function () {
+        var f = mk('<input formnovalidate>');
+        return String(f.querySelector('input').formNoValidate);
+    }), 'ok:true');
+
+    eq('D3 formTarget answers the formtarget attribute', safe(function () {
+        var f = mk('<button formtarget=_blank>b</button>');
+        return f.querySelector('button').formTarget;
+    }), 'ok:_blank');
+
+    eq('D4 formEnctype answers the formenctype attribute', safe(function () {
+        var f = mk('<button formenctype="multipart/form-data">b</button>');
+        return f.querySelector('button').formEnctype;
+    }), 'ok:multipart/form-data');
+
+    // ── E. label association ─────────────────────────────────────────────────
+    eq('E1 label.form answers the form the control is in', safe(function () {
+        var box = mk('<label id=lb><input></label>');
+        var lb = box.querySelector('label');
+        return String(lb.form === box.querySelector('form'));
+    }), 'ok:true');
+
+    // ── F. form.reset ────────────────────────────────────────────────────────
+    eq('F1 reset restores the default value', safe(function () {
+        var f = mk('<input value=orig>');
+        var i = f.querySelector('input');
+        i.value = 'changed';
+        f.querySelector('form').reset();
+        return i.value;
+    }), 'ok:orig');
+
+    eq('F2 form.reset clears a checkbox', safe(function () {
+        var f = mk('<input type=checkbox checked>');
+        var c = f.querySelector('input');
+        c.checked = false;
+        f.querySelector('form').reset();
+        return String(c.checked);
+    }), 'ok:true');
+})();
+</script></body></html>
