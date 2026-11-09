@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. the WebSocket constants and initial state ─────────────────────────
+    eq('A1 the readyState constants are on the constructor', safe(function () {
+        return [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING,
+            WebSocket.CLOSED].join(',');
+    }), 'ok:0,1,2,3');
+
+    eq('A2 a fresh socket is CONNECTING', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return String(ws.readyState);
+    }), 'ok:0');
+
+    eq('A3 the constructor names the interface', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return ws.constructor.name;
+    }), 'ok:WebSocket');
+
+    eq('A4 binaryType defaults to blob', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return ws.binaryType;
+    }), 'ok:blob');
+
+    eq('A5 setting binaryType accepts arraybuffer', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        ws.binaryType = 'arraybuffer';
+        return ws.binaryType;
+    }), 'ok:arraybuffer');
+
+    // ── B. the url and the members the interface names ───────────────────────
+    eq('B1 the url answers the address given', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return ws.url;
+    }), 'ok:ws://ex.test/sock');
+
+    eq('B2 the interface names its members', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return [typeof ws.send, typeof ws.close, typeof ws.addEventListener].join(',');
+    }), 'ok:function,function,function');
+
+    eq('B3 bufferedAmount starts at zero', safe(function () {
+        var ws = new WebSocket('ws://ex.test/sock');
+        return String(ws.bufferedAmount);
+    }), 'ok:0');
+
+    // ── C. a non-ws scheme is refused ────────────────────────────────────────
+    eq('C1 an http scheme is refused', thrown(function () {
+        new WebSocket('http://ex.test/sock');
+    }), 'SyntaxError');
+
+    // ── D. EventSource ───────────────────────────────────────────────────────
+    eq('D1 EventSource starts CONNECTING', safe(function () {
+        var es = new EventSource('/events');
+        return String(es.readyState);
+    }), 'ok:0');
+
+    eq('D2 EventSource.url resolves the address', safe(function () {
+        var es = new EventSource('/events');
+        // The url is the ABSOLUTE resolved address, not the literal string passed.
+        return [es.url.indexOf('/events') >= 0, es.url.indexOf('://') >= 0].join(',');
+    }), 'ok:true,true');
+
+    eq('D3 the readyState constants are on the constructor', safe(function () {
+        return [EventSource.CONNECTING, EventSource.OPEN, EventSource.CLOSED].join(',');
+    }), 'ok:0,1,2');
+})();
+</script></body></html>

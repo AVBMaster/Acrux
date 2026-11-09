@@ -20471,6 +20471,28 @@ public class JavaScriptEngine : IDisposable
                             if (btoa !== timers[5]) return f('btoa');
                             if (typeof __g_store !== 'function' || typeof __g_invoke !== 'function')
                                 return f('cb-store');
+                            // The probe must also cover the host globals the setup script installs
+                            // after the snapshot is captured: a restore that reverts the global
+                            // bindings can drop these even when the prototype levels above are
+                            // intact, and a probe that only checks the levels would call such a
+                            // realm intact and skip the re-bootstrap that reinstalls them.
+                            if (typeof window.history !== 'object' || typeof window.history.pushState !== 'function')
+                                return f('history');
+                            var nav = window.navigator;
+                            if (!nav) return f('navigator');
+                            if (!nav.geolocation || typeof nav.geolocation.getCurrentPosition !== 'function')
+                                return f('geolocation');
+                            if (!nav.permissions || typeof nav.permissions.query !== 'function')
+                                return f('permissions');
+                            if (!nav.storage || typeof nav.storage.length !== 'number')
+                                return f('storage');
+                            if (!window.CSS || !window.CSS.highlights
+                                || typeof window.CSS.highlights.set !== 'function')
+                                return f('highlights');
+                            if (typeof window.localStorage.getItem !== 'function')
+                                return f('localStorage');
+                            if (typeof window.onmessage !== 'undefined' && typeof window.postMessage !== 'function')
+                                return f('postMessage');
                             return 1;
                         } catch (e) { return 0; }
                     };
