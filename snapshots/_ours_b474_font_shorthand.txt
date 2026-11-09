@@ -1,0 +1,19 @@
+fs-basic font-style=normal | font-weight=700 | font-size=16px | line-height=normal | font-family=serif
+fs-italic font-style=italic | font-weight=400 | font-size=16px | font-family=serif
+fs-oblique font-style=italic | font-size=16px | font-family=serif
+fs-weight font-weight=300 | font-size=16px | font-family=serif
+fs-weight-900 font-weight=900 | font-size=16px | font-family=serif
+fs-variant font-variant=small-caps | font-size=16px | font-family=serif
+fs-stretch font-stretch=75% | font-size=16px | font-family=serif
+fs-lh font-size=16px | line-height=24px | font-family=serif
+fs-lh-px font-size=16px | line-height=24px | font-family=serif
+fs-lh-em font-size=16px | line-height=32px | font-family=serif
+fs-lh-num font-size=16px | line-height=32px | font-family=serif
+fs-multi-family font-size=16px | font-family=Arial, sans-serif
+fs-quoted font-size=16px | font-family="Times New Roman"
+fs-caption font-size=16px | font-family=Arial
+fs-menu font-size=16px | font-family=Arial
+SUP font:italic bold 16px/1.5 serif = Y
+SUP font:caption = Y
+SUP font:16px/24px serif = Y
+SUP font:300 16px serif = Y
