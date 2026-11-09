@@ -1,0 +1,22 @@
+mask-none mask-image=none | mask-mode=match-source
+mask-img mask-image=url("file:///home/master/Acrux/snapshots/m.png")
+mask-size mask-size=50% 50%
+mask-repeat mask-repeat=no-repeat
+mask-pos mask-position=50% 50%
+mask-clip mask-clip=border-box
+mask-origin mask-origin=padding-box
+mask-composite mask-composite=add
+mask-mode-alpha mask-mode=alpha
+mask-mode-lum mask-mode=luminance
+clip-none clip-path=none
+clip-circle clip-path=circle(50%)
+clip-ellipse clip-path=ellipse(50% 50%)
+clip-inset clip-path=inset(10px)
+clip-polygon clip-path=polygon(0% 0%, 100% 0%, 100% 100%)
+clip-path clip-path=path("M 0 0 L 100 100")
+clip-margin-box clip-path=circle(50% at 50% 50%)
+clip-rule clip-path=polygon(evenodd, 0% 0%, 100% 0%, 100% 100%)
+SUP mask-image:url(m.png) = Y
+SUP clip-path:circle(50%) = Y
+SUP clip-path:polygon(0% 0%,100% 0%,100% 100%) = Y
+SUP mask-mode:alpha = Y
