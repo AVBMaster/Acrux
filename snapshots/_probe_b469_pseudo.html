@@ -1,0 +1,48 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// Inject real stylesheet rules so ::before/::after get proper content and styles
+const st=document.createElement('style');
+st.textContent=[
+ '.b1::before{content:"B"}',
+ '.b2::before{content:"B";display:block}',
+ '.b3::before{content:"B";position:absolute}',
+ '.b4::before{content:"B";color:red}',
+ '.b5::before{content:"B";font-size:20px}',
+ '.b6::before{content:"B";width:50px;height:30px}',
+ '.b7::before{content:"B";margin:5px;padding:3px}',
+ '.a1::after{content:"A"}',
+ '.a2::after{content:"A";display:block}',
+ '.a3::after{content:"A";position:relative}',
+ '.a4::after{content:"A";color:blue}',
+ '.a5::after{content:"A";font-size:16px}',
+ '.n1::before{content:none}',
+ '.n2::before{}',
+].join('\n');
+document.head.appendChild(st);
+
+function rd(label,cls,pseudo,props){ try{
+  const d=document.createElement('div'); d.className=cls; document.body.appendChild(d);
+  const cs=getComputedStyle(d,pseudo); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove();
+ }catch(e){ out.push(label+' ERR '+e.message); } }
+
+rd('bef-content','b1','::before',['content']);
+rd('bef-display','b1','::before',['display']);
+rd('bef-display-block','b2','::before',['display']);
+rd('bef-position','b3','::before',['position']);
+rd('bef-color','b4','::before',['color']);
+rd('bef-fontsize','b5','::before',['font-size']);
+rd('bef-wh','b6','::before',['width','height']);
+rd('bef-margin','b7','::before',['margin-top']);
+rd('bef-padding','b7','::before',['padding-top']);
+rd('aft-content','a1','::after',['content']);
+rd('aft-display','a1','::after',['display']);
+rd('aft-display-block','a2','::after',['display']);
+rd('aft-position','a3','::after',['position']);
+rd('aft-color','a4','::after',['color']);
+rd('aft-fontsize','a5','::after',['font-size']);
+rd('none-content','n1','::before',['content']);
+rd('empty-rule','n2','::before',['content','display']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

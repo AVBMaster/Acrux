@@ -1,0 +1,17 @@
+bef-content content="B"
+bef-display display=inline
+bef-display-block display=block
+bef-position position=absolute
+bef-color color=rgb(255, 0, 0)
+bef-fontsize font-size=20px
+bef-wh width=50px | height=30px
+bef-margin margin-top=5px
+bef-padding padding-top=3px
+aft-content content="A"
+aft-display display=inline
+aft-display-block display=block
+aft-position position=relative
+aft-color color=rgb(0, 0, 255)
+aft-fontsize font-size=16px
+none-content content=none
+empty-rule content=none | display=inline
