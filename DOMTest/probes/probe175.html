@@ -1,0 +1,108 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var root = document.getElementById('root');
+    function mk(inner) {
+        var made = document.createElement('div');
+        made.innerHTML = '<form id=f>' + inner + '</form>';
+        root.appendChild(made);
+        return made;
+    }
+
+    // ── A. input value / type ────────────────────────────────────────────────
+    eq('A1 an input value reads and writes', safe(function () {
+        var i = mk('<input>').querySelector('input');
+        i.value = 'typed';
+        return i.value;
+    }), 'ok:typed');
+
+    eq('A2 an input type defaults to text', safe(function () {
+        return mk('<input>').querySelector('input').type;
+    }), 'ok:text');
+
+    eq('A3 an input type reflects the attribute', safe(function () {
+        return mk('<input type=email>').querySelector('input').type;
+    }), 'ok:email');
+
+    eq('A4 defaultValue answers the value attribute', safe(function () {
+        var i = mk('<input value=orig>').querySelector('input');
+        i.value = 'changed';
+        return [i.defaultValue, i.value].join(',');
+    }), 'ok:orig,changed');
+
+    // ── B. checkbox / radio ──────────────────────────────────────────────────
+    eq('B1 a checkbox checked reads and writes', safe(function () {
+        var c = mk('<input type=checkbox>').querySelector('input');
+        c.checked = true;
+        return String(c.checked);
+    }), 'ok:true');
+
+    eq('B2 a checkbox defaultChecked answers the attribute', safe(function () {
+        return String(mk('<input type=checkbox checked>').querySelector('input').defaultChecked);
+    }), 'ok:true');
+
+    eq('B3 a radio answers its value', safe(function () {
+        return mk('<input type=radio value=rb>').querySelector('input').value;
+    }), 'ok:rb');
+
+    // ── C. select ────────────────────────────────────────────────────────────
+    eq('C1 select value answers the selected option', safe(function () {
+        var s = mk('<select><option value=a>a</option><option value=b selected>b</option>'
+            + '</select>').querySelector('select');
+        return s.value;
+    }), 'ok:b');
+
+    eq('C2 select.selectedIndex answers the index', safe(function () {
+        var s = mk('<select><option value=a>a</option><option value=b selected>b</option>'
+            + '</select>').querySelector('select');
+        return String(s.selectedIndex);
+    }), 'ok:1');
+
+    eq('C3 setting selectedIndex selects the option', safe(function () {
+        var s = mk('<select><option value=a>a</option><option value=b>b</option></select>')
+            .querySelector('select');
+        s.selectedIndex = 0;
+        return [s.value, String(s.options[0].selected)].join(',');
+    }), 'ok:a,true');
+
+    eq('C4 a multiple select answers selectedOptions', safe(function () {
+        var s = mk('<select multiple><option value=a selected>a</option>'
+            + '<option value=b selected>b</option></select>').querySelector('select');
+        return [String(s.multiple), s.selectedOptions.length].join(',');
+    }), 'ok:true,2');
+
+    // ── D. textarea ──────────────────────────────────────────────────────────
+    eq('D1 a textarea value reads the text content', safe(function () {
+        return mk('<textarea>text</textarea>').querySelector('textarea').value;
+    }), 'ok:text');
+
+    eq('D2 a textarea value writes', safe(function () {
+        var t = mk('<textarea>text</textarea>').querySelector('textarea');
+        t.value = 'changed';
+        return t.value;
+    }), 'ok:changed');
+
+    eq('D3 a textarea defaultValue answers the text content', safe(function () {
+        return mk('<textarea>orig</textarea>').querySelector('textarea').defaultValue;
+    }), 'ok:orig');
+
+    // ── E. form association ──────────────────────────────────────────────────
+    eq('E1 an input in a form answers that form', safe(function () {
+        var f = mk('<input>');
+        return String(f.querySelector('input').form === f.querySelector('form'));
+    }), 'ok:true');
+
+    eq('E2 a form lists its controls', safe(function () {
+        var f = mk('<input><input><button></button>');
+        return String(f.querySelector('form').elements.length);
+    }), 'ok:3');
+})();
+</script></body></html>
