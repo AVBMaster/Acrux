@@ -1,0 +1,97 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 20);
+        });
+    }
+
+    // ── A. the channel and its two ports ─────────────────────────────────────
+    eq('A1 MessageChannel answers two ports', safe(function () {
+        var ch = new MessageChannel();
+        return [ch.port1 instanceof MessagePort, ch.port2 instanceof MessagePort].join(',');
+    }), 'ok:true,true');
+
+    eq('A2 the two ports are distinct objects', safe(function () {
+        var ch = new MessageChannel();
+        return String(ch.port1 !== ch.port2);
+    }), 'ok:true');
+
+    eq('A3 a port has the members the interface names', safe(function () {
+        var ch = new MessageChannel();
+        return [typeof ch.port1.postMessage, typeof ch.port1.start, typeof ch.port1.close,
+            typeof ch.port1.onmessage].join(',');
+    }), 'ok:function,function,function,object');
+
+    // ── B. a posted message arrives ──────────────────────────────────────────
+    pl('B1 a message posted on port2 arrives on port1', function (done) {
+        var ch = new MessageChannel();
+        ch.port1.onmessage = function (e) { done(String(e.data)); };
+        ch.port2.postMessage('ping');
+    }, 'ping');
+
+    pl('B2 the message event carries the port as target', function (done) {
+        var ch = new MessageChannel();
+        ch.port1.onmessage = function (e) { done(String(e.target === ch.port1)); };
+        ch.port2.postMessage('x');
+    }, 'true');
+
+    pl('B3 structured data arrives intact', function (done) {
+        var ch = new MessageChannel();
+        ch.port1.onmessage = function (e) { done(e.data.n + ',' + e.data.list[1]); };
+        ch.port2.postMessage({ n: 5, list: [1, 2, 3] });
+    }, '5,2');
+
+    // ── C. close ─────────────────────────────────────────────────────────────
+    eq('C1 close is a function on each port', safe(function () {
+        var ch = new MessageChannel();
+        return [typeof ch.port1.close, typeof ch.port2.close].join(',');
+    }), 'ok:function,function');
+
+    pl('C2 a closed port receives no message', function (done) {
+        var ch = new MessageChannel();
+        var seen = 'nothing';
+        ch.port1.onmessage = function (e) { seen = String(e.data); };
+        ch.port1.start();
+        ch.port2.close();
+        ch.port2.postMessage('late');
+        setTimeout(function () { done(seen); }, 30);
+    }, 'nothing');
+
+    // ── D. a port transfers through another channel ──────────────────────────
+    pl('D1 a port transfers through a second channel', function (done) {
+        var outer = new MessageChannel();
+        var inner = new MessageChannel();
+        outer.port1.onmessage = function (e) {
+            var arrived = e.ports && e.ports[0];
+            arrived.onmessage = function (ev) { done(String(ev.data)); };
+            arrived.start();
+        };
+        outer.port2.postMessage('wire', [inner.port1]);
+        inner.port2.postMessage('carried');
+    }, 'carried');
+
+    // ── E. postMessage on window ─────────────────────────────────────────────
+    pl('E1 window.postMessage arrives on message', function (done) {
+        window.onmessage = function (e) { done(String(e.data)); };
+        window.postMessage('win-msg');
+    }, 'win-msg');
+
+    pl('E2 window message carries the origin', function (done) {
+        window.onmessage = function (e) { done(String(typeof e.origin)); };
+        window.postMessage('o');
+    }, 'string');
+})();
+</script></body></html>
