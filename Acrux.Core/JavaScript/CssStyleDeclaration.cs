@@ -89,8 +89,20 @@ public class CssStyleDeclaration : CssStyleDeclarationBase
         bool important = inlinePrio.Length > 0
             || (!string.IsNullOrEmpty(priority)
                 && priority.Equals("important", StringComparison.OrdinalIgnoreCase));
-        if (important) StoreDeclaration(CssPropertyIdExtensions.CanonicalName(propertyName), clean + " !important");
-        else setProperty(propertyName, value);
+        var name = CssPropertyIdExtensions.CanonicalName(propertyName);
+        // Validate the clean value the way SetStyle does, then store the clean value plus the
+        // priority flag so getPropertyPriority can read it back. Storing clean alone dropped the
+        // flag; storing clean + ' !important' bypassed SetStyle's grammar check.
+        SetStyle(name, clean);
+        string stored = "";
+        if (important)
+        {
+            _element.Style.TryGetValue(name, out stored);
+            InlineStyleBlock.Store(_element, name, stored + " !important");
+            SyncAttribute();
+            DirtyState.AddSelf(_element, DirtyFlags.Style | DirtyFlags.Layout | DirtyFlags.Paint);
+            DomMutationTracker.Notify();
+        }
     }
 
     public string getPropertyPriority(string propertyName)

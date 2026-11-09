@@ -1,0 +1,128 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function cls() {
+        var made = document.createElement('div');
+        made.className = 'a b';
+        return made;
+    }
+
+    // ── A. DOMTokenList add / remove ─────────────────────────────────────────
+    eq('A1 classList.add adds a token', safe(function () {
+        var c = cls();
+        c.classList.add('c');
+        return String(c.classList.contains('c'));
+    }), 'ok:true');
+
+    eq('A2 classList.remove takes a token off', safe(function () {
+        var c = cls();
+        c.classList.remove('a');
+        return String(c.classList.contains('a'));
+    }), 'ok:false');
+
+    eq('A3 classList.add is idempotent', safe(function () {
+        var c = cls();
+        c.classList.add('a');
+        return c.classList.length;
+    }), 'ok:2');
+
+    eq('A4 classList.length counts the tokens', safe(function () {
+        return String(cls().classList.length);
+    }), 'ok:2');
+
+    // ── B. toggle / contains / item ──────────────────────────────────────────
+    eq('B1 classList.toggle adds when absent', safe(function () {
+        var c = cls();
+        return String(c.classList.toggle('c'));
+    }), 'ok:true');
+
+    eq('B2 classList.toggle removes when present', safe(function () {
+        var c = cls();
+        return String(c.classList.toggle('a'));
+    }), 'ok:false');
+
+    eq('B3 classList.contains answers presence', safe(function () {
+        var c = cls();
+        return [String(c.classList.contains('a')), String(c.classList.contains('z'))].join(',');
+    }), 'ok:true,false');
+
+    eq('B4 classList.item answers the i-th token', safe(function () {
+        var c = cls();
+        return c.classList.item(1);
+    }), 'ok:b');
+
+    eq('B5 classList.item past the end answers null', safe(function () {
+        return String(cls().classList.item(9));
+    }), 'ok:null');
+
+    // ── C. toString / value ──────────────────────────────────────────────────
+    eq('C1 classList.toString answers the class attribute', safe(function () {
+        var c = cls();
+        return c.classList.toString();
+    }), 'ok:a b');
+
+    eq('C2 classList.value mirrors the attribute', safe(function () {
+        var c = cls();
+        c.classList.add('z');
+        return String(c.classList.value.indexOf('z') >= 0);
+    }), 'ok:true');
+
+    // ── D. CSSStyleDeclaration ───────────────────────────────────────────────
+    eq('D1 style.getPropertyValue reads a set property', safe(function () {
+        var d = document.createElement('div');
+        d.style.color = 'red';
+        return d.style.getPropertyValue('color');
+    }), 'ok:red');
+
+    eq('D2 style.setProperty writes a property', safe(function () {
+        var d = document.createElement('div');
+        d.style.setProperty('color', 'blue');
+        return d.style.color;
+    }), 'ok:blue');
+
+    eq('D3 style.removeProperty clears a property', safe(function () {
+        var d = document.createElement('div');
+        d.style.color = 'red';
+        d.style.removeProperty('color');
+        return String(d.style.getPropertyValue('color'));
+    }), 'ok:');
+
+    eq('D4 style.getPropertyValue of an unset property answers empty', safe(function () {
+        return String(document.createElement('div').style.getPropertyValue('color'));
+    }), 'ok:');
+
+    eq('D5 style.length counts the declared properties', safe(function () {
+        var d = document.createElement('div');
+        d.style.color = 'red';
+        d.style.margin = '0';
+        return String(d.style.length >= 2);
+    }), 'ok:true');
+
+    eq('D6 style.getPropertyPriority answers the priority', safe(function () {
+        var d = document.createElement('div');
+        d.style.setProperty('color', 'red', 'important');
+        var css = d.style.cssText;
+        var gv = d.style.getPropertyValue('color');
+        var pp = d.style.getPropertyPriority('color');
+        var attr = d.getAttribute('style');
+        return [css, gv, pp, attr].join('|');
+    }), 'ok:color: red !important;|red|important|color: red !important;');
+
+    // ── E. cssText round-trip ────────────────────────────────────────────────
+    eq('E1 style.cssText carries the declarations', safe(function () {
+        var d = document.createElement('div');
+        d.style.color = 'red';
+        d.style.width = '10px';
+        return [String(d.style.cssText.indexOf('color') >= 0),
+            String(d.style.cssText.indexOf('10px') >= 0)].join(',');
+    }), 'ok:true,true');
+})();
+</script></body></html>
