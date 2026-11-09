@@ -1,0 +1,90 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. History ───────────────────────────────────────────────────────────
+    eq('A1 history answers a length', safe(function () {
+        return String(typeof history.length);
+    }), 'ok:number');
+
+    eq('A2 history.state starts null', safe(function () {
+        return String(history.state);
+    }), 'ok:null');
+
+    eq('A3 history.back/forward/go are functions', safe(function () {
+        return [typeof history.back, typeof history.forward, typeof history.go].join(',');
+    }), 'ok:function,function,function');
+
+    eq('A4 pushState writes the state', safe(function () {
+        history.pushState({ a: 1 }, '');
+        return String(history.state.a);
+    }), 'ok:1');
+
+    eq('A5 replaceState replaces the current entry', safe(function () {
+        history.replaceState({ b: 2 }, '');
+        return String(history.state.b);
+    }), 'ok:2');
+
+    eq('A6 scrollRestoration is a string', safe(function () {
+        var s = history.scrollRestoration;
+        return String(s === 'auto' || s === 'manual');
+    }), 'ok:true');
+
+    // ── B. DOMParser ─────────────────────────────────────────────────────────
+    eq('B1 parseFromString with text/html answers a Document', safe(function () {
+        var d = new DOMParser().parseFromString('<p id=x>hi</p>', 'text/html');
+        return [String(d instanceof Document), String(d.getElementById('x') !== null)].join(',');
+    }), 'ok:true,true');
+
+    eq('B2 parseFromString parses the element tree', safe(function () {
+        var d = new DOMParser().parseFromString('<div><span>inner</span></div>', 'text/html');
+        return d.querySelector('span').textContent;
+    }), 'ok:inner');
+
+    eq('B3 an unsupported content type is refused', thrown(function () {
+        new DOMParser().parseFromString('<p>x</p>', 'text/plain');
+    }), 'TypeError');
+
+    eq('B4 a malformed XML document reports a parse error element', safe(function () {
+        var d = new DOMParser().parseFromString('<a><b></a>', 'application/xml');
+        return String(d.querySelector('parsererror') !== null);
+    }), 'ok:true');
+
+    // ── C. XMLSerializer ─────────────────────────────────────────────────────
+    eq('C1 serializeToString serialises a parsed document', safe(function () {
+        var d = new DOMParser().parseFromString('<root><child>txt</child></root>', 'text/html');
+        var s = new XMLSerializer().serializeToString(d.documentElement);
+        // text/html parsing builds a full document, so documentElement is <html> and the
+        // serialisation carries the head/body wrapper the parser created.
+        return [String(s.indexOf('<html>') === 0), String(s.indexOf('<body><root>') > 0),
+            String(s.indexOf('txt') > 0)].join(',');
+    }), 'ok:true,true,true');
+
+    eq('C1b serializeToString of a deep element omits the wrapper', safe(function () {
+        var d = new DOMParser().parseFromString('<root><child>txt</child></root>', 'text/html');
+        var s = new XMLSerializer().serializeToString(d.querySelector('root'));
+        return String(s.indexOf('<html>') === 0);
+    }), 'ok:false');
+
+    eq('C2 serializeToString of a parsed element round-trips', safe(function () {
+        var d = new DOMParser().parseFromString('<b>bold</b>', 'text/html');
+        return new XMLSerializer().serializeToString(d.body.firstChild);
+    }), 'ok:<b>bold</b>');
+
+    eq('C3 XMLSerializer is a constructor', safe(function () {
+        return typeof XMLSerializer;
+    }), 'ok:function');
+})();
+</script></body></html>
