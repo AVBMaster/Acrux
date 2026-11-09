@@ -1,0 +1,31 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b476: border-radius + box-shadow
+s('br-0','border-radius:0',['border-radius']);
+s('br-1','border-radius:5px',['border-radius']);
+s('br-2','border-radius:5px 10px',['border-radius']);
+s('br-3','border-radius:5px 10px 15px',['border-radius']);
+s('br-4','border-radius:5px 10px 15px 20px',['border-radius']);
+s('br-pct','border-radius:50%',['border-radius']);
+s('br-slash','border-radius:10px / 20px',['border-radius']);
+s('br-individual','border-top-left-radius:10px',['border-top-left-radius']);
+s('br-inherit','border-radius:inherit',['border-radius']);
+s('bs-none','box-shadow:none',['box-shadow']);
+s('bs-simple','box-shadow:2px 2px',['box-shadow']);
+s('bs-blur','box-shadow:2px 2px 4px',['box-shadow']);
+s('bs-spread','box-shadow:2px 2px 4px 1px',['box-shadow']);
+s('bs-color','box-shadow:2px 2px red',['box-shadow']);
+s('bs-inset','box-shadow:inset 2px 2px',['box-shadow']);
+s('bs-multi','box-shadow:1px 1px red,2px 2px blue',['box-shadow']);
+s('bs-currentcolor','box-shadow:2px 2px currentColor',['box-shadow']);
+out.push('SUP border-radius:50% = '+(()=>{try{return CSS.supports('border-radius','50%')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP box-shadow:inset 2px 2px = '+(()=>{try{return CSS.supports('box-shadow','inset 2px 2px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP box-shadow:2px 2px 4px 1px = '+(()=>{try{return CSS.supports('box-shadow','2px 2px 4px 1px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP border-radius:10px / 20px = '+(()=>{try{return CSS.supports('border-radius','10px / 20px')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
