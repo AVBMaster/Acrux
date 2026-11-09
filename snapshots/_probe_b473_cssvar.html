@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// b473: CSS custom properties advanced
+function t(label,css,prop){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d);
+  out.push(label+' '+prop+'='+cs.getPropertyValue(prop)); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+function ct(label,css){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const v=getComputedStyle(d).color;
+  out.push(label+' color='+v); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+t('var-numeric','--n:42;width:var(--n)px',['width']);
+t('var-calc-mul','--n:10;width:calc(var(--n) * 3px)',['width']);
+t('var-calc-2var','--a:10px;--b:20px;width:calc(var(--a) + var(--b))',['width']);
+t('var-inline','width:var(--x)',['width']);
+t('var-fb-empty','width:var(--x,)',['width']);
+t('var-space-in-fb','--x:;width:var(--x, 50px)',['width']);
+ct('color-var-hex','--c:#ff0000;color:var(--c)');
+ct('color-var-rgb','--c:rgb(0,128,255);color:var(--c)');
+ct('color-var-mix','--a:red;--b:blue;color:color-mix(in srgb,var(--a),var(--b))');
+ct('color-var-fallback','color:var(--undefined, green)');
+ct('color-inherit-var','--c:inherit;color:var(--c)');
+t('var-in-calc-2','--w:100px;width:calc(var(--w) / 2)',['width']);
+t('var-in-calc-3','--w:100px;--h:50px;width:calc(var(--w) - var(--h))',['width']);
+t('var-on-pseudo','--w:50px;width:var(--w)',['width']);
+out.push('SUP --x: 10px = '+(()=>{try{return CSS.supports('--x','10px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP var(--x) = '+(()=>{try{return CSS.supports('width','var(--x)')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

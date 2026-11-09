@@ -1,0 +1,16 @@
+var-numeric width=0px
+var-calc-mul width=30px
+var-calc-2var width=30px
+var-inline width=0px
+var-fb-empty width=0px
+var-space-in-fb width=0px
+color-var-hex color=rgb(255, 0, 0)
+color-var-rgb color=rgb(0, 128, 255)
+color-var-mix color=color(srgb 0.5 0 0.5)
+color-var-fallback color=rgb(0, 128, 0)
+color-inherit-var color=rgb(0, 0, 0)
+var-in-calc-2 width=50px
+var-in-calc-3 width=50px
+var-on-pseudo width=50px
+SUP --x: 10px = Y
+SUP var(--x) = Y
