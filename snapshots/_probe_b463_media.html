@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function mq(label,q){ try{ out.push(label+' -> '+matchMedia(q).matches+' ('+q+')'); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b463: media queries + supports
+mq('mq-screen','screen');
+mq('mq-print','print');
+mq('mq-all','all');
+mq('mq-minw-0','(min-width: 0px)');
+mq('mq-minw-9999','(min-width: 9999px)');
+mq('mq-maxw-9999','(max-width: 9999px)');
+mq('mq-maxw-0','(max-width: 0px)');
+mq('mq-color','(color)');
+mq('mq-orient','(orientation: landscape)');
+mq('mq-hover','(hover: hover)');
+mq('mq-pointer','(pointer: fine)');
+mq('mq-prefers-color','(prefers-color-scheme: light)');
+mq('mq-prefers-reduced','(prefers-reduced-motion: no-preference)');
+mq('mq-resolution','(resolution: 96dpi)');
+mq('mq-aspect','(aspect-ratio: 16/9)');
+// @media in a style element
+try{ const st=document.createElement('style');
+  st.textContent='@media (min-width: 0px){#mqtest{width:100px}}';
+  document.head.appendChild(st);
+  const d=document.createElement('div'); d.id='mqtest'; document.body.appendChild(d);
+  const cs=getComputedStyle(d); out.push('mq-style-width '+cs.getPropertyValue('width'));
+  document.head.removeChild(st); d.remove();
+}catch(e){ out.push('mq-style-width ERR '+e.message); }
+out.push('SUP @media = '+(()=>{try{return CSS.supports('width','1px')&&typeof matchMedia==='function'?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

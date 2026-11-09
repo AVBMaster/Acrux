@@ -1,0 +1,17 @@
+mq-screen -> true (screen)
+mq-print -> false (print)
+mq-all -> true (all)
+mq-minw-0 -> true ((min-width: 0px))
+mq-minw-9999 -> false ((min-width: 9999px))
+mq-maxw-9999 -> true ((max-width: 9999px))
+mq-maxw-0 -> false ((max-width: 0px))
+mq-color -> true ((color))
+mq-orient -> true ((orientation: landscape))
+mq-hover -> true ((hover: hover))
+mq-pointer -> true ((pointer: fine))
+mq-prefers-color -> true ((prefers-color-scheme: light))
+mq-prefers-reduced -> true ((prefers-reduced-motion: no-preference))
+mq-resolution -> true ((resolution: 96dpi))
+mq-aspect -> false ((aspect-ratio: 16/9))
+mq-style-width 100px
+SUP @media = Y
