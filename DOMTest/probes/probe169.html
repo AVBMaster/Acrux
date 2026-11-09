@@ -1,0 +1,119 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var root = document.getElementById('root');
+    function mk() {
+        var d = document.createElement('div');
+        d.innerHTML = '<p id=p><b id=b>bold</b> text</p>';
+        root.appendChild(d);
+        return d;
+    }
+
+    // ── A. createRange basics ────────────────────────────────────────────────
+    eq('A1 document.createRange answers a Range', safe(function () {
+        return String(document.createRange() instanceof Range);
+    }), 'ok:true');
+
+    eq('A2 a collapsed range has equal boundaries', safe(function () {
+        var r = document.createRange();
+        r.setStart(mk().querySelector('#b'), 0);
+        r.setEnd(r.startContainer, 0);
+        return [String(r.collapsed), String(r.startOffset)].join(',');
+    }), 'ok:true,0');
+
+    eq('A3 a range selects its contents', safe(function () {
+        var r = document.createRange();
+        var b = mk().querySelector('#b');
+        r.selectNodeContents(b);
+        return r.toString();
+    }), 'ok:bold');
+
+    eq('A4 commonAncestorContainer answers the parent', safe(function () {
+        var r = document.createRange();
+        var b = mk().querySelector('#b');
+        r.selectNode(b);
+        return r.commonAncestorContainer.tagName;
+    }), 'ok:P');
+
+    // ── B. setStart / setEnd ─────────────────────────────────────────────────
+    eq('B1 setStart/setEnd select a text range', safe(function () {
+        var d = mk();
+        var t = d.querySelector('#b').firstChild;
+        var r = document.createRange();
+        r.setStart(t, 0);
+        r.setEnd(t, 4);
+        return r.toString();
+    }), 'ok:bold');
+
+    eq('B2 setStartAfter places the boundary after the node', safe(function () {
+        var r = document.createRange();
+        r.setStartAfter(mk().querySelector('#b'));
+        return String(r.startContainer.nodeType);
+    }), 'ok:1');
+
+    // ── C. extract / clone / surround ────────────────────────────────────────
+    eq('C1 extractContents removes and returns the contents', safe(function () {
+        var d = mk();
+        var b = d.querySelector('#b');
+        var r = document.createRange();
+        r.selectNodeContents(b);
+        var frag = r.extractContents();
+        return [String(frag.firstChild.textContent), b.textContent].join(',');
+    }), 'ok:bold,');
+
+    eq('C2 cloneContents copies without removing', safe(function () {
+        var d = mk();
+        var b = d.querySelector('#b');
+        var r = document.createRange();
+        r.selectNodeContents(b);
+        var frag = r.cloneContents();
+        return [String(frag.firstChild.textContent), b.textContent].join(',');
+    }), 'ok:bold,bold');
+
+    // ── D. Selection ─────────────────────────────────────────────────────────
+    eq('D1 getSelection answers a Selection', safe(function () {
+        return String(window.getSelection() instanceof Selection);
+    }), 'ok:true');
+
+    eq('D2 rangeCount starts at zero', safe(function () {
+        return String(window.getSelection().rangeCount);
+    }), 'ok:0');
+
+    eq('D3 addRange makes rangeCount one', safe(function () {
+        var s = window.getSelection();
+        var r = document.createRange();
+        r.selectNodeContents(mk().querySelector('#b'));
+        s.removeAllRanges();
+        s.addRange(r);
+        var count = String(s.rangeCount);
+        s.removeAllRanges();
+        return count;
+    }), 'ok:1');
+
+    eq('D4 removeAllRanges clears the selection', safe(function () {
+        var s = window.getSelection();
+        s.removeAllRanges();
+        return String(s.rangeCount);
+    }), 'ok:0');
+
+    // ── E. Selection toString ────────────────────────────────────────────────
+    eq('E1 a selected range answers its text via toString', safe(function () {
+        var s = window.getSelection();
+        var r = document.createRange();
+        r.selectNodeContents(mk().querySelector('#b'));
+        s.removeAllRanges();
+        s.addRange(r);
+        var t = String(s);
+        s.removeAllRanges();
+        return t;
+    }), 'ok:bold');
+})();
+</script></body></html>
