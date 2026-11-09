@@ -1,0 +1,34 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b477: scrollbar styling + writing-mode detailed + overflow
+s('scb-width','scrollbar-width:thin',['scrollbar-width']);
+s('scb-width-none','scrollbar-width:none',['scrollbar-width']);
+s('scb-width-auto','scrollbar-width:auto',['scrollbar-width']);
+s('scb-color','scrollbar-color:red blue',['scrollbar-color']);
+s('scb-color-auto','scrollbar-color:auto',['scrollbar-color']);
+s('scb-gutter','scrollbar-gutter:stable',['scrollbar-gutter']);
+s('scb-gutter-both','scrollbar-gutter:stable both-edges',['scrollbar-gutter']);
+s('scb-gutter-auto','scrollbar-gutter:auto',['scrollbar-gutter']);
+s('wm-horiz-tb','writing-mode:horizontal-tb',['writing-mode']);
+s('wm-vert-rl','writing-mode:vertical-rl',['writing-mode']);
+s('wm-vert-lr','writing-mode:vertical-lr',['writing-mode']);
+s('wm-sideways-rl','writing-mode:sideways-rl',['writing-mode']);
+s('text-orient-mixed','writing-mode:vertical-rl;text-orientation:mixed',['text-orientation']);
+s('text-orient-upright','writing-mode:vertical-rl;text-orientation:upright',['text-orientation']);
+s('text-orient-sideways','writing-mode:vertical-rl;text-orientation:sideways',['text-orientation']);
+s('text-combine','text-combine-upright:all',['text-combine-upright']);
+s('ov-x-auto','overflow-x:auto',['overflow-x']);
+s('ov-y-hidden','overflow-y:hidden',['overflow-y']);
+s('ov-x-y','overflow-x:auto;overflow-y:scroll',['overflow-x','overflow-y']);
+s('ov-inherit','overflow:inherit',['overflow']);
+out.push('SUP scrollbar-width:thin = '+(()=>{try{return CSS.supports('scrollbar-width','thin')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP scrollbar-color:red blue = '+(()=>{try{return CSS.supports('scrollbar-color','red blue')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP scrollbar-gutter:stable = '+(()=>{try{return CSS.supports('scrollbar-gutter','stable')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP writing-mode:vertical-rl = '+(()=>{try{return CSS.supports('writing-mode','vertical-rl')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

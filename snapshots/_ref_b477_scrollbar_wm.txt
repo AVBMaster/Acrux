@@ -1,0 +1,24 @@
+scb-width scrollbar-width=thin
+scb-width-none scrollbar-width=none
+scb-width-auto scrollbar-width=auto
+scb-color scrollbar-color=rgb(255, 0, 0) rgb(0, 0, 255)
+scb-color-auto scrollbar-color=auto
+scb-gutter scrollbar-gutter=stable
+scb-gutter-both scrollbar-gutter=stable both-edges
+scb-gutter-auto scrollbar-gutter=auto
+wm-horiz-tb writing-mode=horizontal-tb
+wm-vert-rl writing-mode=vertical-rl
+wm-vert-lr writing-mode=vertical-lr
+wm-sideways-rl writing-mode=sideways-rl
+text-orient-mixed text-orientation=mixed
+text-orient-upright text-orientation=upright
+text-orient-sideways text-orientation=sideways
+text-combine text-combine-upright=all
+ov-x-auto overflow-x=auto
+ov-y-hidden overflow-y=hidden
+ov-x-y overflow-x=auto | overflow-y=scroll
+ov-inherit overflow=visible
+SUP scrollbar-width:thin = Y
+SUP scrollbar-color:red blue = Y
+SUP scrollbar-gutter:stable = Y
+SUP writing-mode:vertical-rl = Y
