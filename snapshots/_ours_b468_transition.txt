@@ -1,0 +1,24 @@
+tr-none transition=none
+tr-all transition=all
+tr-width transition-property=width | transition-duration=0s
+tr-dur transition-property=width | transition-duration=2s
+tr-full transition-property=width | transition-duration=2s | transition-timing-function=ease-in-out | transition-delay=0.5s
+tr-multi transition-property=width, height | transition-duration=1s, 2s
+tr-timing-linear transition-timing-function=linear
+tr-timing-ease transition-timing-function=ease
+tr-timing-bezier transition-timing-function=cubic-bezier(0.25, 0.1, 0.25, 1)
+tr-timing-steps transition-timing-function=steps(5)
+tr-delay transition-delay=2s
+an-name animation-name=slide | animation-duration=2s
+an-name-only animation-name=slide
+an-none animation-name=none
+an-iter animation-iteration-count=infinite
+an-dir animation-direction=reverse
+an-fill animation-fill-mode=forwards
+an-play animation-play-state=paused
+an-timing animation-timing-function=cubic-bezier(0.25, 0.1, 0.25, 1)
+an-delay animation-delay=1s
+SUP transition:width 2s = Y
+SUP animation:slide 2s = Y
+SUP transition:width 1s cubic-bezier(0.25,0.1,0.25,1) = Y
+SUP animation-play-state:paused = Y
