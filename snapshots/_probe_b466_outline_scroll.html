@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b466: outline + counters + scroll
+s('ol-none','outline:none',['outline-style','outline-width']);
+s('ol-solid','outline:solid',['outline-style']);
+s('ol-2px','outline:2px',['outline-width']);
+s('ol-red','outline:red',['outline-color']);
+s('ol-full','outline:2px solid red',['outline-width','outline-style','outline-color']);
+s('ol-offset','outline-offset:5px',['outline-offset']);
+s('ol-offset-neg','outline-offset:-3px',['outline-offset']);
+s('ctr-reset','counter-reset:section',['counter-reset']);
+s('ctr-reset-n','counter-reset:section 5',['counter-reset']);
+s('ctr-incr','counter-increment:section',['counter-increment']);
+s('ctr-set','counter-set:section 2',['counter-set']);
+s('ctr-multi','counter-reset:a 1 b 2',['counter-reset']);
+s('scr-snap-type','scroll-snap-type:x mandatory',['scroll-snap-type']);
+s('scr-snap-align','scroll-snap-align:center',['scroll-snap-align']);
+s('scr-margin','scroll-margin:10px',['scroll-margin']);
+s('scr-padding','scroll-padding:10px',['scroll-padding']);
+s('scr-behavior','scroll-behavior:smooth',['scroll-behavior']);
+s('overscroll','overscroll-behavior:contain',['overscroll-behavior']);
+s('overscroll-x','overscroll-behavior-x:none',['overscroll-behavior-x']);
+out.push('SUP outline:2px solid red = '+(()=>{try{return CSS.supports('outline','2px solid red')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP outline-offset:5px = '+(()=>{try{return CSS.supports('outline-offset','5px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP scroll-snap-type:x mandatory = '+(()=>{try{return CSS.supports('scroll-snap-type','x mandatory')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP overscroll-behavior:contain = '+(()=>{try{return CSS.supports('overscroll-behavior','contain')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

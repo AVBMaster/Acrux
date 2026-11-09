@@ -1,0 +1,23 @@
+ol-none outline-style=none | outline-width=3px
+ol-solid outline-style=solid
+ol-2px outline-width=2px
+ol-red outline-color=rgb(255, 0, 0)
+ol-full outline-width=2px | outline-style=solid | outline-color=rgb(255, 0, 0)
+ol-offset outline-offset=5px
+ol-offset-neg outline-offset=-3px
+ctr-reset counter-reset=section 0
+ctr-reset-n counter-reset=section 5
+ctr-incr counter-increment=section 1
+ctr-set counter-set=section 2
+ctr-multi counter-reset=a 1 b 2
+scr-snap-type scroll-snap-type=x mandatory
+scr-snap-align scroll-snap-align=center
+scr-margin scroll-margin=10px
+scr-padding scroll-padding=10px
+scr-behavior scroll-behavior=smooth
+overscroll overscroll-behavior=contain
+overscroll-x overscroll-behavior-x=none
+SUP outline:2px solid red = Y
+SUP outline-offset:5px = Y
+SUP scroll-snap-type:x mandatory = Y
+SUP overscroll-behavior:contain = Y
