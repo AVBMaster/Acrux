@@ -1,0 +1,98 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function thrown(fn) {
+        try { fn(); return 'no-throw'; }
+        catch (e) { return String(e && e.name); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. construction and initial state ────────────────────────────────────
+    eq('A1 XHR is a constructor', safe(function () {
+        return typeof XMLHttpRequest;
+    }), 'ok:function');
+
+    eq('A2 readyState starts at 0', safe(function () {
+        return String(new XMLHttpRequest().readyState);
+    }), 'ok:0');
+
+    eq('A3 responseText starts empty', safe(function () {
+        return String(new XMLHttpRequest().responseText);
+    }), 'ok:');
+
+    eq('A4 status starts at zero', safe(function () {
+        return String(new XMLHttpRequest().status);
+    }), 'ok:0');
+
+    eq('A5 statusText starts empty', safe(function () {
+        return String(new XMLHttpRequest().statusText);
+    }), 'ok:');
+
+    // ── B. open ──────────────────────────────────────────────────────────────
+    eq('B1 open sets readyState to 1', safe(function () {
+        var x = new XMLHttpRequest();
+        x.open('GET', 'data:text/plain,x');
+        return String(x.readyState);
+    }), 'ok:1');
+
+    eq('B2 open is a function', safe(function () {
+        return typeof new XMLHttpRequest().open;
+    }), 'ok:function');
+
+    eq('B3 open with a relative url is accepted', safe(function () {
+        var x = new XMLHttpRequest();
+        x.open('GET', 'relative.txt');
+        return String(x.readyState);
+    }), 'ok:1');
+
+    // ── C. setRequestHeader before open is refused ───────────────────────────
+    eq('C1 setRequestHeader before open is refused', thrown(function () {
+        var x = new XMLHttpRequest();
+        x.setRequestHeader('X-A', '1');
+    }), 'InvalidStateError');
+
+    // ── D. overrideMimeType / withCredentials ────────────────────────────────
+    eq('D1 overrideMimeType is a function', safe(function () {
+        return typeof new XMLHttpRequest().overrideMimeType;
+    }), 'ok:function');
+
+    eq('D2 withCredentials reads and writes', safe(function () {
+        var x = new XMLHttpRequest();
+        x.withCredentials = true;
+        return String(x.withCredentials);
+    }), 'ok:true');
+
+    // ── E. responseType ──────────────────────────────────────────────────────
+    eq('E1 responseType defaults to empty', safe(function () {
+        return String(new XMLHttpRequest().responseType);
+    }), 'ok:');
+
+    eq('E2 responseType reads and writes', safe(function () {
+        var x = new XMLHttpRequest();
+        x.responseType = 'text';
+        return x.responseType;
+    }), 'ok:text');
+
+    // ── F. abort ─────────────────────────────────────────────────────────────
+    eq('F1 abort without a read is a no-throw', safe(function () {
+        new XMLHttpRequest().abort();
+        return 'ok';
+    }), 'ok:ok');
+
+    // ── G. getAllResponseHeaders before a read is empty ──────────────────────
+    eq('G1 getAllResponseHeaders before a read is empty', safe(function () {
+        return String(new XMLHttpRequest().getAllResponseHeaders());
+    }), 'ok:');
+
+    eq('G2 getResponseHeader before a read is null', safe(function () {
+        return String(new XMLHttpRequest().getResponseHeader('content-type'));
+    }), 'ok:null');
+})();
+</script></body></html>
