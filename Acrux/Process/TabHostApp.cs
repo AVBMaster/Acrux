@@ -427,6 +427,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
                 else
                     waitMs = Math.Clamp(due, 50, 500);
             }
+            if (_stats) Acrux.Core.PerfTrace.Trace($"loop pass wakes={_stWakes} cmds={_commands.Count} wantRender={wantRender} waitMs={waitMs} doc={_engine.Document != null} dl={_engine.DisplayList != null}");
             if (waitMs > 0) _cmdSignal.WaitOne(waitMs);
         }
         return 0;
@@ -434,6 +435,22 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
 
     /// <summary>Handle one command. Returns false when the host should exit.</summary>
     private bool Handle(in TabMessage msg)
+    {
+        var cmdT0 = Acrux.Core.PerfTrace.Now();
+        bool traced = msg.Type is TabMsg.Navigate or TabMsg.NavigateHtml or TabMsg.Wheel
+            or TabMsg.ScrollTo or TabMsg.Resize or TabMsg.SetActive or TabMsg.MouseDown or TabMsg.MouseUp;
+        if (traced) Acrux.Core.PerfTrace.Trace($"cmd.{msg.Type} start");
+        try
+        {
+            return HandleCore(msg);
+        }
+        finally
+        {
+            if (traced) Acrux.Core.PerfTrace.TraceMs($"cmd.{msg.Type} done", cmdT0);
+        }
+    }
+
+    private bool HandleCore(in TabMessage msg)
     {
         switch (msg.Type)
         {
@@ -485,7 +502,20 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             case TabMsg.KeyDown:
             {
                 using var r = new BinaryReader(new MemoryStream(msg.Payload));
-                _engine.HandleKey(r.ReadUInt16(), r.ReadUInt16(), r.ReadByte() != 0);
+                ushort charCode = r.ReadUInt16(), key = r.ReadUInt16();
+                bool repeat = r.ReadByte() != 0;
+                // The modifier tail is what lets the page answer Shift+Arrow with a
+                // selection and Ctrl+A with one; a host built before it simply sends no tail.
+                int modifiers = msg.Payload.Length >= 9 ? r.ReadInt32() : 0;
+                _engine.HandleKey(charCode, key, repeat, (Acrux.PageContract.ModifierKeys)modifiers);
+                break;
+            }
+            case TabMsg.KeyUp:
+            {
+                using var r = new BinaryReader(new MemoryStream(msg.Payload));
+                ushort charCode = r.ReadUInt16(), key = r.ReadUInt16();
+                int modifiers = msg.Payload.Length >= 8 ? r.ReadInt32() : 0;
+                _engine.HandleKeyUp(charCode, key, (Acrux.PageContract.ModifierKeys)modifiers);
                 break;
             }
             case TabMsg.Char:
@@ -622,6 +652,12 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
 
     public void InvalidateFrameBaseline() { _sentValid = false; _renderDirty = true; }
 
+    /// <summary>A load stage finished. Called from inside the engine's own LoadHtml on the
+    /// loop thread, so a call reaching here is itself proof the loop thread is alive and
+    /// making progress — exactly what the watchdog needs, and exactly what a wedged loop
+    /// cannot send.</summary>
+    public void ReportLoadProgress() => Beat();
+
     public void ReportDirtyTrace(string trace)
     {
         if (!_stats) return;
@@ -639,6 +675,11 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             long upT = _stats ? Stopwatch.GetTimestamp() : 0;
             _engine.UpdatePipeline();
             if (_stats) _stUpd += (Stopwatch.GetTimestamp() - upT) * 1000 / Stopwatch.Frequency;
+            // The first frames after a navigation run a full style+layout+animation pass that
+            // on a cold child takes seconds (measured updMs 1800-2900). Beat either side of
+            // it so that window reads as a child busy producing its first frame, not a wedged
+            // loop — a wedged loop never reaches this line.
+            Beat();
 
             if (_renderDirty)
             {
@@ -903,6 +944,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
             SelectOpen = _engine.HasOpenSelect,
         };
         ulong seq = ch.Publish(_rasterSlot, in meta, _rectScratch.AsSpan(0, rectCount));
+        Acrux.Core.PerfTrace.Trace($"host.publish seq={seq} mode={mode} band={bandScroll} dy={dyW} run={_bandRun} dl={dlSerial}/{_sentDlSerial} intact={baselineIntact}");
         _holdsLease = false;
 
         // Fold the diff baseline forward to the published frame. ScrollBlit shifted
@@ -955,6 +997,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
     /// </summary>
     private void RenegotiateFrameChannel(int wPx, int hPx)
     {
+        var renT0 = Acrux.Core.PerfTrace.Now();
         _frameGen++;
         _work?.Dispose();
         _work = null;
@@ -963,6 +1006,7 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
         _channel?.Dispose();
         var name = $"{_channelBaseName}_f{_frameGen}";
         _channel = FrameChannel.Create(name, wPx, hPx, MaxDamageRects);
+        Acrux.Core.PerfTrace.TraceMs($"host.Renegotiate {wPx}x{hPx} gen={_frameGen}", renT0);
         _shadow = null;
         _sentValid = false;
         _workDevY = 0f;

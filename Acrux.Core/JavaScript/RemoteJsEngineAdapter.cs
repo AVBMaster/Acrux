@@ -2335,6 +2335,16 @@ public class RemoteJsEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         // 远程引擎不支持重置，由主进程管理
     }
 
+    public void CaptureRealmSnapshot()
+    {
+        // 远程引擎的 realm 由宿主进程管理
+    }
+
+    public bool TryRestoreRealm()
+    {
+        return false;
+    }
+
     }
 
 /// <summary>

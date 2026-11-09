@@ -87,7 +87,12 @@ internal sealed class InProcessTabHost : IPageEngineSink, IDisposable
         _pendingWheelY = dy;
         Post(() => _engine.HandleWheel(dx, dy, x, y));
     }
-    public void Key(ushort ch, ushort key, bool repeat) => Post(() => _engine.HandleKey(ch, key, repeat));
+    public void Key(ushort ch, ushort key, bool repeat,
+        Acrux.PageContract.ModifierKeys modifiers = Acrux.PageContract.ModifierKeys.None) =>
+        Post(() => _engine.HandleKey(ch, key, repeat, modifiers));
+    public void KeyUp(ushort ch, ushort key,
+        Acrux.PageContract.ModifierKeys modifiers = Acrux.PageContract.ModifierKeys.None) =>
+        Post(() => _engine.HandleKeyUp(ch, key, modifiers));
     public void Char(ushort ch) => Post(() => _engine.HandleChar(ch));
     public void SelectAll() => Post(() => _engine.SelectAllText());
 
@@ -220,6 +225,10 @@ internal sealed class InProcessTabHost : IPageEngineSink, IDisposable
         _sentDlSerial = -1;
         _renderDirty = true;
     }
+
+    /// <summary>Load stages already run on the shell's own loop here; the watchdog only
+    /// watches separate page-host children, so there is nothing to beat.</summary>
+    public void ReportLoadProgress() { }
 
     public void Dispose()
     {

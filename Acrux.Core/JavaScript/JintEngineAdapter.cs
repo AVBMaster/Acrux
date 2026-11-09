@@ -1,4 +1,5 @@
 #if !USE_MULTIPLE_JS_ENGINE
+using Acornima.Ast;
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
@@ -153,12 +154,31 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
         }
     }
 
+    /// <summary>
+    /// Parsed bodies of the engine's own big scripts (the 1.2 MB DOM bootstrap above all
+    /// else), shared across engines in the process. Jint's Prepared script is the parsed
+    /// AST alone — evaluating it in an engine runs the program fresh against that engine's
+    /// realm, which is exactly what a repeated bootstrap needs — while parsing the same
+    /// text again costs over a second of the host loop per go. Only large sources are kept;
+    /// page scripts are many and one-shot, and caching those would only grow the heap.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Prepared<Script>>
+        SharedPreparedScripts = new();
+
     public void Execute(string code)
     {
         if (_disposed || string.IsNullOrEmpty(code)) return;
         try
         {
-            _engine.Execute(code);
+            if (code.Length >= 64 * 1024)
+            {
+                var prepared = SharedPreparedScripts.GetOrAdd(code, static s => Engine.PrepareScript(s));
+                _engine.Execute(prepared);
+            }
+            else
+            {
+                _engine.Execute(code);
+            }
         }
         catch (Exception ex)
         {
@@ -331,6 +351,42 @@ public class JintEngineAdapter : IJavaScriptEngineAdapter, IDisposable
             _engine.Execute("for (var k in this) { if (typeof this[k] != 'function') delete this[k]; }");
         }
         catch { }
+    }
+
+    private GlobalSnapshot? _realmSnapshot;
+
+    /// <summary>The post-bootstrap global surface, captured once so a navigation can return to
+    /// it by rewriting the global property tables instead of re-interpreting the 1.2 MB script.
+    /// The snapshot pins the bootstrap object graph (the prototype levels above all), which is
+    /// exactly the state every later document starts from.</summary>
+    public void CaptureRealmSnapshot()
+    {
+        if (_disposed) return;
+        try
+        {
+            _realmSnapshot = _engine.Advanced.CaptureGlobalSnapshot();
+        }
+        catch { _realmSnapshot = null; }
+    }
+
+    public bool TryRestoreRealm()
+    {
+        if (_disposed || _realmSnapshot == null) return false;
+        try
+        {
+            _engine.Advanced.RestoreGlobalSnapshot(_realmSnapshot);
+            // The snapshot reverts the global bindings, not the object graphs behind them: a page
+            // that wrote on Element.prototype or deleted one of its accessors left that mark on
+            // the very level object the restore hands back. The bootstrap tail captured every
+            // level's descriptors for exactly this repair; a refusal (a non-configurable property
+            // the page planted) answers 0 and the caller re-bootstraps the long way.
+            var repaired = _engine.Evaluate("typeof __acruxRepairRealm === 'function' ? __acruxRepairRealm() : 0");
+            return repaired.IsNumber() && repaired.AsNumber() == 1;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Dispose()

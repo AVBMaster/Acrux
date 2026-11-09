@@ -29,7 +29,14 @@ internal sealed class RemoteTabView : IDisposable
     public int DomCount, BoxCount;
     // Initial navigation deferred until the pipe connects.
     public string? PendingInitial;
+    /// <summary>Raw HTML for the initial navigation (view-source/ApplyHtml): Send drops
+    /// silently while the pipe is down, so a cold host must receive it from the pump.</summary>
+    public string? PendingInitialHtml;
     public bool InitialSent;
+    /// <summary>The host has not been told the window's viewport yet: a pool-adopted spare
+    /// still has the boot default, and a cold host gets its first frames at that size until
+    /// the next pump syncs it. Consumed once by PumpRemoteTabs.</summary>
+    public bool NeedsViewportSync;
     // Crash bookkeeping: the budget decides whether to relaunch, and a spent budget shows
     // the user a card instead of restarting the same crash forever. The policy instance is
     // carried over when a tab is relaunched — a fresh one would make the budget endless.

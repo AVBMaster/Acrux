@@ -1258,6 +1258,8 @@ int rc = InteractionScript.Run(new[] { "--interact",
         public void ReportWheelConsumed(bool consumed) { }
         public void RequestFrame() { }
         public void InvalidateFrameBaseline() { }
+
+        public void ReportLoadProgress() { }
         public void ReportDirtyTrace(string trace) { }
     }
 

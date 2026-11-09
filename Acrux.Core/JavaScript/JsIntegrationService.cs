@@ -97,7 +97,7 @@ namespace Acrux.Core.JavaScript;
             Console.WriteLine($"[JS Stack]\n{ex.JsStackTrace}");
     }
 
-    public void LoadDocument(DomDocument document)
+    public void LoadDocument(DomDocument document, bool realmRestored = false)
     {
         var prevEngine = JavaScriptEngine.Current;
         JavaScriptEngine.Current = _jsEngine;
@@ -113,13 +113,19 @@ namespace Acrux.Core.JavaScript;
             _timerQueue.ClearAll();
             _eventBridge.ClearListeners();
 
-            _facade.Reset();
-            _facade.Execute("var window = this; var self = this; var globalThis = this;");
-            SetupJsBridgeFunctions();
-            _prototypeSystem.Reset();
-            _prototypeSystem.RegisterBuiltinConstructors();
-            // The registration replaced the prototype objects every wrapper of the previous page
-            // points at, so nothing that was fixed before this line counts as fixed any more.
+            if (!realmRestored)
+            {
+                _facade.Reset();
+                _facade.Execute("var window = this; var self = this; var globalThis = this;");
+                SetupJsBridgeFunctions();
+                _prototypeSystem.Reset();
+                _prototypeSystem.RegisterBuiltinConstructors();
+            }
+            // A restored realm already carries the bootstrap's globals, bridge and prototype
+            // levels — the snapshot put them back and the repair undid the page's writes, so
+            // tearing them down here would only force the expensive re-registration again.
+            // Either way the wrappers of the previous page are gone, and nothing that was
+            // fixed before this line counts as fixed any more.
             _protoGeneration++;
 
             // The engine owns the document host: it makes one before calling in here and installs

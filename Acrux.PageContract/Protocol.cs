@@ -48,7 +48,8 @@ public enum TabMsg : byte
     SetActive = 8,        // [byte active]
     Close = 9,            // []
     ScrollTo = 10,        // [float x][float y]
-    KeyDown = 11,         // [uint16 charCode][uint16 key][byte repeat] (+v2 [int modifiers])
+    KeyDown = 11,         // [uint16 charCode][uint16 key][byte repeat][int modifiers]
+    KeyUp = 68,           // S->C [uint16 charCode][uint16 key][int modifiers]
     Char = 12,            // [uint16 charCode]
 
     // ---- page host -> shell ----

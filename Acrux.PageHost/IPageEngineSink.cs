@@ -46,6 +46,11 @@ public interface IPageEngineSink
     /// <summary>Something changed downstream of the display list: a frame is wanted.</summary>
     void RequestFrame();
 
+    /// <summary>A load stage finished (parse, styles, scripts, layout). The host beats its
+    /// watchdog here so a long first load reads as progress, not as a wedged loop — a page
+    /// whose styles take seconds is slow, not unresponsive.</summary>
+    void ReportLoadProgress();
+
     /// <summary>A new document replaced the old one: whatever pixel baseline the host
     /// diffs against no longer describes this page, so the next frame must ship whole.</summary>
     void InvalidateFrameBaseline();

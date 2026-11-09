@@ -52,6 +52,9 @@ internal static class FrameSnapshotCli
         while (!proc.IsConnected && sw.ElapsedMilliseconds < 8000) Thread.Sleep(20);
         if (!proc.IsConnected) return Fail("frameshot", "page host never connected");
 
+        // The settle budget belongs to the page, not to the child's cold start: on a loaded
+        // machine the connection alone can eat most of a window that started before it.
+        sw.Restart();
         proc.Resize(width, height);
         proc.Navigate(url);
 

@@ -208,7 +208,10 @@ public class JavaScriptEngine : IDisposable
 
         _adapter.SetGlobal("document", new DocumentHost(new Acrux.Core.Dom.Document()));
 
+        var jsPerfT = Acrux.Core.PerfTrace.Now();
         _adapter.Execute(GetSetupScript());
+        Acrux.Core.PerfTrace.TraceMs("js.SetupGlobals(setup-script)", jsPerfT);
+        _adapter.CaptureRealmSnapshot();
     }
 
     public void LoadDocument(DomDocument document)
@@ -234,7 +237,18 @@ public class JavaScriptEngine : IDisposable
                 remoteAdapter.DomStore.SetDocument(_documentHost);
             }
 #endif
-            _integrationService?.LoadDocument(document);
+            // A navigation back to the bootstrap surface is a table rewrite, not a second
+            // interpretation of the 1.2 MB script — when the last page left the definitions
+            // alone, the captured realm is restored and the prototype pollution repaired in
+            // place. Any refusal falls through to the full re-bootstrap below.
+            _realmRestored = false;
+            if (!JsEngineBridge.IsRemote(_adapter) && BootstrapIntact())
+            {
+                var realmPerfT = Acrux.Core.PerfTrace.Now();
+                _realmRestored = _adapter.TryRestoreRealm();
+                Acrux.Core.PerfTrace.TraceMs("js.TryRestoreRealm", realmPerfT);
+            }
+            _integrationService?.LoadDocument(document, realmRestored: _realmRestored);
             ReapplyGlobals();
             if (!JsEngineBridge.IsRemote(_adapter))
                 _adapter.SetGlobal("document", _documentHost);
@@ -246,6 +260,7 @@ public class JavaScriptEngine : IDisposable
     private StorageHost? _localStorageHost;
     private StorageHost? _sessionStorageHost;
     private CookieStore? _cookieStore;
+    private bool _realmRestored;
 
     /// <summary>HTML §8.4 with RFC 6265 §5.3: the cookie store belongs to the user agent and not to one
     /// document, so the engine keeps the one store and hands it to every page it runs — a cookie a page
@@ -290,7 +305,35 @@ public class JavaScriptEngine : IDisposable
         _adapter.SetGlobal("sessionStorage", StorageArea("sessionStorage"));
         _adapter.SetGlobal("console", new ConsoleHost { DevToolsConsole = new JsDevToolsConsole() });
 
-        _adapter.Execute(GetSetupScript());
+        // A restored realm already carries the bootstrap's definitions — the snapshot put every
+        // global back and the repair undid the page's prototype writes. Only a realm that was not
+        // restored needs the probe: it answers 1 while the definitions are untouched, and a page
+        // that broke them gets the full re-interpretation exactly as before.
+        if (!_realmRestored && !BootstrapIntact())
+        {
+            var rePerfT = Acrux.Core.PerfTrace.Now();
+            _adapter.Execute(GetSetupScript());
+            Acrux.Core.PerfTrace.TraceMs("js.ReapplyGlobals(setup-script)", rePerfT);
+            // The destructive reset replaced the objects the old snapshot points at (the
+            // __domProto map above all), so that snapshot can never probe intact again. Photograph
+            // the rebuilt surface here, while no page script has run, or every later navigation
+            // would pay the full re-interpretation forever.
+            _adapter.CaptureRealmSnapshot();
+        }
+    }
+
+    private bool BootstrapIntact()
+    {
+        try
+        {
+            var v = _adapter?.Evaluate("typeof __acruxBootstrapProbe === 'function' ? __acruxBootstrapProbe() : 0");
+            if (v != null && Convert.ToInt64(v) == 1) return true;
+            if (Acrux.Core.PerfTrace.Enabled)
+                Acrux.Core.PerfTrace.Trace("js.BootstrapIntact fail: " +
+                    _adapter?.Evaluate("typeof __acruxBootstrapProbe === 'function' ? String(window.__acruxProbeFail) : 'no-probe'"));
+            return false;
+        }
+        catch { return false; }
     }
 
     public void ClearState()
@@ -20388,8 +20431,111 @@ public class JavaScriptEngine : IDisposable
                     }
                 });
             })();
-        ";
+        " + BootstrapProbeScript;
     }
+
+    /// <summary>
+    /// The tail every bootstrap run appends. It captures the identity of what the bootstrap
+    /// put on the window — the timer helpers, atob/btoa, the very __domProto map object —
+    /// and defines __acruxBootstrapProbe, which answers 1 only while those are still the
+    /// functions and the map the bootstrap made. A page that replaced or deleted any of them
+    /// answers 0 (recording the first failure in __acruxProbeFail) and the next navigation
+    /// re-runs the whole bootstrap over it, exactly as before; a page that broke nothing
+    /// lets the navigation restore the captured realm instead of re-interpreting 1.2 MB,
+    /// which was costing seconds of the host loop on every navigation and made a tab feel
+    /// wedged when a new address was entered. The tail also photographs every prototype
+    /// level's own descriptors: the realm restore puts the level objects back but cannot
+    /// undo writes a page made inside them, so __acruxRepairRealm redefines the photograph
+    /// over each level (and refuses — answers 0 — when a level was replaced or a property
+    /// made non-configurable, which sends the navigation down the full re-bootstrap path).
+    /// Individual level objects inside the map are not identity-checked by the probe: the
+    /// bootstrap itself adds levels lazily as a page touches them. The callback-store
+    /// helpers are checked only by name because the (small) store script is re-armed per
+    /// document by design.
+    /// </summary>
+    private const string BootstrapProbeScript = @"
+
+            (function () {
+                try {
+                    var lv = window.__domProto || (window.__domProto = { });
+                    var timers = [setTimeout, setInterval, clearTimeout, clearInterval, atob, btoa];
+                    window.__acruxBootstrapProbe = function () {
+                        try {
+                            var f = function (why) { window.__acruxProbeFail = why; return 0; };
+                            if (window.__domProto !== lv) return f('map');
+                            if (setTimeout !== timers[0]) return f('setTimeout');
+                            if (setInterval !== timers[1]) return f('setInterval');
+                            if (clearTimeout !== timers[2]) return f('clearTimeout');
+                            if (clearInterval !== timers[3]) return f('clearInterval');
+                            if (atob !== timers[4]) return f('atob');
+                            if (btoa !== timers[5]) return f('btoa');
+                            if (typeof __g_store !== 'function' || typeof __g_invoke !== 'function')
+                                return f('cb-store');
+                            return 1;
+                        } catch (e) { return 0; }
+                    };
+                    window.__acruxBootstrapProbe();
+
+                    var snap = [];
+                    var names = Object.getOwnPropertyNames(lv);
+                    for (var i = 0; i < names.length; i++) {
+                        var level = lv[names[i]];
+                        if (!level || typeof level !== 'object') continue;
+                        var keys = Object.getOwnPropertyNames(level);
+                        var descs = [];
+                        for (var j = 0; j < keys.length; j++) {
+                            var d = Object.getOwnPropertyDescriptor(level, keys[j]);
+                            if (d) descs.push([keys[j], d]);
+                        }
+                        var syms = Object.getOwnPropertySymbols(level);
+                        var symDescs = [];
+                        for (var k = 0; k < syms.length; k++) {
+                            var sd = Object.getOwnPropertyDescriptor(level, syms[k]);
+                            if (sd) symDescs.push([syms[k], sd]);
+                        }
+                        snap.push([names[i], level, descs, symDescs]);
+                    }
+                    window.__acruxBootstrapProbe.__realmSnap = snap;
+
+                    window.__acruxRepairRealm = function () {
+                        try {
+                            var s = window.__acruxBootstrapProbe
+                                && window.__acruxBootstrapProbe.__realmSnap;
+                            var map = window.__domProto;
+                            if (!s || !map) return 0;
+                            var known = { };
+                            for (var i = 0; i < s.length; i++) known[s[i][0]] = 1;
+                            var mapKeys = Object.getOwnPropertyNames(map);
+                            for (var i = 0; i < mapKeys.length; i++) {
+                                if (!known[mapKeys[i]] && !delete map[mapKeys[i]]) return 0;
+                            }
+                            for (var i = 0; i < s.length; i++) {
+                                var level = s[i][1];
+                                if (map[s[i][0]] !== level) return 0;
+                                var descs = s[i][2], symDescs = s[i][3];
+                                var want = { };
+                                for (var j = 0; j < descs.length; j++) want[descs[j][0]] = 1;
+                                var own = Object.getOwnPropertyNames(level);
+                                for (var j = 0; j < own.length; j++) {
+                                    if (!want[own[j]] && !delete level[own[j]]) return 0;
+                                }
+                                for (var j = 0; j < descs.length; j++)
+                                    Object.defineProperty(level, descs[j][0], descs[j][1]);
+                                var wantSyms = [];
+                                for (var j = 0; j < symDescs.length; j++) wantSyms.push(symDescs[j][0]);
+                                var ownSyms = Object.getOwnPropertySymbols(level);
+                                for (var j = 0; j < ownSyms.length; j++) {
+                                    if (wantSyms.indexOf(ownSyms[j]) < 0 && !delete level[ownSyms[j]]) return 0;
+                                }
+                                for (var j = 0; j < symDescs.length; j++)
+                                    Object.defineProperty(level, symDescs[j][0], symDescs[j][1]);
+                            }
+                            return 1;
+                        } catch (e) { return 0; }
+                    };
+                } catch (e) { }
+            })();
+        ";
 
     private static string EscapeJsString(string s)
     {

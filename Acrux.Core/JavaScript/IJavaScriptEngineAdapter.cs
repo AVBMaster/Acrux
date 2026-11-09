@@ -27,6 +27,15 @@ public interface IJavaScriptEngineAdapter : IDisposable
     void ClearCallbacks();
     void Reset();
 
+    /// <summary>Captures the post-bootstrap global surface so a navigation can return to it
+    /// without re-interpreting the bootstrap. Adapters without a restorable realm do nothing.</summary>
+    void CaptureRealmSnapshot();
+
+    /// <summary>Returns the realm to the captured bootstrap surface and repairs the prototype
+    /// levels the page may have polluted. False when there is no snapshot or the repair could
+    /// not finish — the caller then takes the full re-bootstrap path.</summary>
+    bool TryRestoreRealm();
+
     bool SupportsHostObjects { get; }
     bool SupportsES6Proxy { get; }
     object? InnerEngine { get; }

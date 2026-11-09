@@ -85,6 +85,15 @@ public class NullJsEngineAdapter : IJavaScriptEngineAdapter, IDisposable
     {
     }
 
+    public void CaptureRealmSnapshot()
+    {
+    }
+
+    public bool TryRestoreRealm()
+    {
+        return false;
+    }
+
     public void Dispose()
     {
     }

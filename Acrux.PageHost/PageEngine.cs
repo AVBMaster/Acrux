@@ -413,6 +413,7 @@ public sealed class PageEngine : IDisposable
     {
         try
         {
+            var preT0 = Acrux.Core.PerfTrace.Now();
             _imageCache.Clear();
             _typefaceCache.Clear();
             PaintOpPool.Clear(); // recycle the previous page's pooled ops
@@ -420,9 +421,14 @@ public sealed class PageEngine : IDisposable
             // engine installed last into the shared seam (see RunPipeline's scope).
             _replacedResolver = Acrux.Rendering.PaintVisitor.BuildReplacedIntrinsicResolver(_imageCache, baseUrl);
             Acrux.Core.Layout.ReplacedIntrinsicSizes.Resolver = _replacedResolver;
+            Acrux.Core.PerfTrace.TraceMs("engine.LoadHtml.pre", preT0);
+            _sink.ReportLoadProgress();
 
+            var loadT0 = Acrux.Core.PerfTrace.Now();
             var load = _docManager.LoadHtmlAsync(html, baseUrl, _viewportW, _viewportH, _dpi)
                 .GetAwaiter().GetResult();
+            Acrux.Core.PerfTrace.TraceMs("engine.ParseStyleLayout", loadT0);
+            _sink.ReportLoadProgress();
 
             _document = load.Document;
             _baseUrl = baseUrl;
@@ -453,9 +459,16 @@ public sealed class PageEngine : IDisposable
             _selFocus = default;
             _clickCount = 0;
 
+            var jsT0 = Acrux.Core.PerfTrace.Now();
             _js.LoadDocument(load.Document);
+            Acrux.Core.PerfTrace.TraceMs("engine.JsLoadDocument", jsT0);
+            var scrT0 = Acrux.Core.PerfTrace.Now();
             RunPageScripts(load.Document, baseUrl);
+            Acrux.Core.PerfTrace.TraceMs("engine.RunPageScripts", scrT0);
+            var dclT0 = Acrux.Core.PerfTrace.Now();
             _js.IntegrationService?.FireDOMContentLoaded();
+            Acrux.Core.PerfTrace.TraceMs("engine.DOMContentLoaded", dclT0);
+            _sink.ReportLoadProgress();
 
             MarkLayout();
             _sink.InvalidateFrameBaseline();
@@ -1004,9 +1017,17 @@ public sealed class PageEngine : IDisposable
         caretH = box.ContentBox.Height > 0 ? box.ContentBox.Height : fontSize * 1.5f;
     }
 
-    public void HandleKey(ushort charCode, ushort key, bool repeat)
+    public void HandleKey(ushort charCode, ushort key, bool repeat,
+        Acrux.PageContract.ModifierKeys modifiers = Acrux.PageContract.ModifierKeys.None)
     {
         var k = (Acrux.Platform.Key)key;
+        bool shift = (modifiers & Acrux.PageContract.ModifierKeys.Shift) != 0;
+        bool ctrl = (modifiers & Acrux.PageContract.ModifierKeys.Control) != 0;
+
+        // The page hears every keydown, editing or not — a listener that calls
+        // preventDefault on Backspace is answered by the default action below only when it
+        // did not.
+        DispatchKey("keydown", (char)charCode, k, repeat, modifiers);
 
         if (_focused != null && TryEditable(out var value, out var readOnly))
         {
@@ -1038,15 +1059,13 @@ public sealed class PageEngine : IDisposable
                     }
                     break;
                 case Acrux.Platform.Key.Left:
-                    if (_caret > 0) _caret--;
-                    _selStart = -1; edited = false; break;
+                    MoveCaret(_caret - 1, shift, value.Length); edited = false; break;
                 case Acrux.Platform.Key.Right:
-                    if (_caret < value.Length) _caret++;
-                    _selStart = -1; edited = false; break;
+                    MoveCaret(_caret + 1, shift, value.Length); edited = false; break;
                 case Acrux.Platform.Key.Home:
-                    _caret = 0; _selStart = -1; break;
+                    MoveCaret(0, shift, value.Length); break;
                 case Acrux.Platform.Key.End:
-                    _caret = value.Length; _selStart = -1; break;
+                    MoveCaret(value.Length, shift, value.Length); break;
                 case Acrux.Platform.Key.Escape:
                 case Acrux.Platform.Key.Tab:
                     SetFocus(null);
@@ -1054,15 +1073,14 @@ public sealed class PageEngine : IDisposable
                 case Acrux.Platform.Key.Enter:
                     if (_focused.TagName == "TEXTAREA" && !readOnly)
                     {
-                        value = value[.._caret] + '\n' + value[_caret..];
-                        _caret++;
+                        ReplaceSelectionWith(ref value, "\n");
                         _focused.Value = value;
+                        edited = true;
                         MarkPaint();
                     }
                     else
                     {
                         var form = FindForm(_focused) as Acrux.Core.Dom.Html.HTMLFormElement;
-                        try { DispatchSimple(_focused, "keydown"); } catch { }
                         form?.Submit();
                     }
                     return;
@@ -1072,7 +1090,7 @@ public sealed class PageEngine : IDisposable
                 _focused.Value = value;
                 try { DispatchSimple(_focused, "input"); } catch { }
             }
-            if (edited || k is Acrux.Platform.Key.Left or Acrux.Platform.Key.Right
+            if (edited || ctrl || k is Acrux.Platform.Key.Left or Acrux.Platform.Key.Right
                 or Acrux.Platform.Key.Home or Acrux.Platform.Key.End)
             {
                 _showCursor = true;
@@ -1081,15 +1099,86 @@ public sealed class PageEngine : IDisposable
                 return;
             }
         }
+        else if (ctrl && k == Acrux.Platform.Key.A)
+        {
+            // Ctrl+A on a page without an editing focus selects its text.
+            SelectAllText();
+        }
+    }
 
-        // Non-editable: surface keydown to the page (games/listeners).
+    /// <summary>The release of a key already reported by <see cref="HandleKey"/>.</summary>
+    public void HandleKeyUp(ushort charCode, ushort key,
+        Acrux.PageContract.ModifierKeys modifiers = Acrux.PageContract.ModifierKeys.None)
+    {
+        DispatchKey("keyup", (char)charCode, (Acrux.Platform.Key)key, false, modifiers);
+    }
+
+    /// <summary>
+    /// A key event with the properties script actually reads. The shell prints the same
+    /// names through <see cref="Acrux.Platform.KeyNames"/>, so a page cannot tell which
+    /// process answered it.
+    /// </summary>
+    private void DispatchKey(string type, char charCode, Acrux.Platform.Key key, bool repeat,
+        Acrux.PageContract.ModifierKeys modifiers)
+    {
+        var target = _focused ?? _document?.Body;
+        if (target == null) return;
         try
         {
-            var target = _focused ?? _document?.Body;
-            if (target != null)
-                DispatchSimple(target, "keydown");
+            DispatchDomEvent(target, h => new ScriptEvent(type, h)
+            {
+                key = Acrux.Platform.KeyNames.JsKey(charCode, key),
+                code = Acrux.Platform.KeyNames.JsCode(key),
+                ctrlKey = (modifiers & Acrux.PageContract.ModifierKeys.Control) != 0,
+                shiftKey = (modifiers & Acrux.PageContract.ModifierKeys.Shift) != 0,
+                altKey = (modifiers & Acrux.PageContract.ModifierKeys.Alt) != 0,
+                metaKey = (modifiers & Acrux.PageContract.ModifierKeys.Meta) != 0,
+                repeat = repeat,
+                keyCode = (int)key,
+                which = (int)key,
+                bubbles = true,
+                cancelable = true
+            });
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Move the caret, extending the field's selection when Shift was held. Without the
+    /// anchor a shift-arrow press reads as a plain move and the page cannot select by
+    /// keyboard at all.
+    /// </summary>
+    private void MoveCaret(int target, bool shift, int maxLength)
+    {
+        target = Math.Clamp(target, 0, maxLength);
+        if (shift)
+        {
+            if (_selStart < 0) _selStart = _caret;
+            _caret = target;
+        }
+        else
+        {
+            _caret = target;
+            _selStart = -1;
+        }
+    }
+
+    /// <summary>Replace the pending selection (or insert at the caret) with text.</summary>
+    private void ReplaceSelectionWith(ref string value, string text)
+    {
+        if (_selStart >= 0 && _selStart != _caret)
+        {
+            int a = Math.Min(_selStart, _caret), b = Math.Max(_selStart, _caret);
+            value = value[..a] + text + value[b..];
+            _caret = a + text.Length;
+            _selStart = -1;
+        }
+        else
+        {
+            _caret = Math.Clamp(_caret, 0, value.Length);
+            value = value[.._caret] + text + value[_caret..];
+            _caret += text.Length;
+        }
     }
 
     public void HandleWheel(float dx, float dy, float x, float y)
@@ -1404,6 +1493,20 @@ public sealed class PageEngine : IDisposable
     public void SelectAllText()
     {
         if (_document == null) return;
+
+        // An editing focus owns Ctrl+A: the field's own text, the same answer the shell
+        // gives for an in-process page. Selecting the document behind someone's caret
+        // would make the next keystroke replace the page instead of the field.
+        if (_focused != null && TryEditable(out var fieldValue, out _))
+        {
+            _selStart = 0;
+            _caret = fieldValue.Length;
+            _showCursor = true;
+            _blinkTick = Environment.TickCount64;
+            MarkPaint();
+            return;
+        }
+
         TextNode? first = null, last = null;
         FindFirstLastTextNodes(_document.DocumentElement ?? _document.Body, ref first, ref last);
         if (first != null && last != null)
