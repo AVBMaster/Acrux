@@ -1,0 +1,123 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function pl(label, build, expected) {
+        build(function (v) {
+            setTimeout(function () {
+                window.__T(label, String(v) === String(expected),
+                    'got=[' + String(v) + '] want=[' + String(expected) + ']');
+            }, 30);
+        });
+    }
+
+    // ── A. the controller and its signal ─────────────────────────────────────
+    eq('A1 a fresh controller signal is not aborted', safe(function () {
+        return String(new AbortController().signal.aborted);
+    }), 'ok:false');
+
+    eq('A2 abort() sets aborted true', safe(function () {
+        var c = new AbortController();
+        c.abort();
+        return String(c.signal.aborted);
+    }), 'ok:true');
+
+    eq('A3 the default reason is an AbortError', safe(function () {
+        var c = new AbortController();
+        c.abort();
+        return c.signal.reason.name;
+    }), 'ok:AbortError');
+
+    eq('A4 abort(reason) carries the reason', safe(function () {
+        var c = new AbortController();
+        c.abort('because');
+        return String(c.signal.reason);
+    }), 'ok:because');
+
+    eq('A5 the controller hands back its own signal', safe(function () {
+        var c = new AbortController();
+        return String(c.signal === c.signal);
+    }), 'ok:true');
+
+    // ── B. throwIfAborted ────────────────────────────────────────────────────
+    eq('B1 throwIfAborted answers undefined when not aborted', safe(function () {
+        return String(new AbortController().signal.throwIfAborted());
+    }), 'ok:undefined');
+
+    eq('B2 throwIfAborted throws the reason once aborted', safe(function () {
+        var c = new AbortController();
+        c.abort('boom');
+        try { c.signal.throwIfAborted(); return 'no-throw'; }
+        catch (e) { return String(e); }
+    }), 'ok:boom');
+
+    // ── C. the abort event fires ─────────────────────────────────────────────
+    eq('C1 the abort event fires once aborted', safe(function () {
+        var c = new AbortController();
+        var heard = false;
+        c.signal.addEventListener('abort', function () { heard = true; });
+        c.abort();
+        return String(heard);
+    }), 'ok:true');
+
+    eq('C2 onabort fires', safe(function () {
+        var c = new AbortController();
+        var heard = false;
+        c.signal.onabort = function () { heard = true; };
+        c.abort();
+        return String(heard);
+    }), 'ok:true');
+
+    // ── D. AbortSignal.any composes signals ──────────────────────────────────
+    eq('D1 any() of un-aborted signals is not aborted', safe(function () {
+        var a = new AbortController().signal;
+        var b = new AbortController().signal;
+        return String(AbortSignal.any([a, b]).aborted);
+    }), 'ok:false');
+
+    eq('D2 any() aborts when a member aborts', safe(function () {
+        var a = new AbortController();
+        var b = new AbortController().signal;
+        var made = AbortSignal.any([a.signal, b]);
+        a.abort('picked');
+        return String(made.aborted);
+    }), 'ok:true');
+
+    eq('D3 any() carries the reason of the member that aborted', safe(function () {
+        var a = new AbortController();
+        var made = AbortSignal.any([a.signal]);
+        a.abort('the-reason');
+        return String(made.reason);
+    }), 'ok:the-reason');
+
+    eq('D4 any() of an already-aborted signal is aborted', safe(function () {
+        var a = new AbortController();
+        a.abort();
+        return String(AbortSignal.any([a.signal]).aborted);
+    }), 'ok:true');
+
+    // ── E. AbortSignal.timeout ───────────────────────────────────────────────
+    pl('E1 a timeout signal aborts after the delay', function (done) {
+        var s = AbortSignal.timeout(20);
+        s.addEventListener('abort', function () {
+            done(String(s.aborted) + ',' + s.reason.name);
+        });
+    }, 'true,TimeoutError');
+
+    // ── F. AbortSignal.abort ─────────────────────────────────────────────────
+    eq('F1 AbortSignal.abort answers an already-aborted signal', safe(function () {
+        return String(AbortSignal.abort().aborted);
+    }), 'ok:true');
+
+    eq('F2 AbortSignal.abort(reason) carries the reason', safe(function () {
+        return String(AbortSignal.abort('why').reason);
+    }), 'ok:why');
+})();
+</script></body></html>
