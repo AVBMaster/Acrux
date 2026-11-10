@@ -1,0 +1,28 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function rd(label,setup,prop){ try{
+  const d=document.createElement('div');
+  if(setup) d.setAttribute('style',setup);
+  document.body.appendChild(d);
+  out.push(label+' '+prop+'='+JSON.stringify(getComputedStyle(d)[prop]));
+  d.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+// color (initial = black)
+rd('c-empty-fb','--x:;color:var(--x,red)','color');
+rd('c-empty-nofb','--x:;color:var(--x)','color');
+rd('c-undef-fb','color:var(--nope,red)','color');
+rd('c-undef-nofb','color:var(--nope)','color');
+rd('c-good','--x:green;color:var(--x)','color');
+// margin-left length (initial = 0px)
+rd('ml-empty-fb','--x:;margin-left:var(--x,5px)','marginLeft');
+rd('ml-empty-nofb','--x:;margin-left:var(--x)','marginLeft');
+rd('ml-undef-fb','margin-left:var(--nope,5px)','marginLeft');
+rd('ml-good','--x:8px;margin-left:var(--x)','marginLeft');
+// width with calc (initial = auto = 0px on empty body)
+rd('w-calc-empty','--x:;width:calc(var(--x,10px) + 5px)','width');
+rd('w-calc-undef','width:calc(var(--nope,10px) + 5px)','width');
+rd('w-calc-good','--x:20px;width:calc(var(--x) + 5px)','width');
+rd('w-direct-empty','--x:;width:var(--x,50px)','width');
+rd('w-direct-good','--x:60px;width:var(--x)','width');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
