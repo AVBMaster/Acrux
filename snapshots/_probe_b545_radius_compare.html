@@ -1,0 +1,13 @@
+<!doctype html><html><head><style>
+.b1 { border-radius: 10px; }
+.b2 { border-top-left-radius: 20px; }
+</style></head><body>
+<div class="b1" id="b1"></div><div class="b2" id="b2"></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+for(const id of ['b1','b2']){ const cs=getComputedStyle(document.getElementById(id));
+  out.push(id+' border-radius='+JSON.stringify(cs.borderRadius)
+    +' tl='+JSON.stringify(cs.borderTopLeftRadius)); }
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

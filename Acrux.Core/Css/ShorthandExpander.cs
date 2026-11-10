@@ -41,6 +41,9 @@ public static class ShorthandExpander
             case "border-color": ExpandFourSides(result, "border", value, "color"); break;
             case "border-style": ExpandFourSides(result, "border", value, "style"); break;
             case "border-radius": ExpandBorderRadius(result, value); break;
+            // CSS Rounding 1 §3: corner-shape expands to its four physical corners like
+            // border-radius (the logical longhands are aliases the writing-mode resolves).
+            case "corner-shape": ExpandCornerShape(result, value); break;
             case "border-top": ExpandBorderSide(result, "border-top", value); break;
             case "border-right": ExpandBorderSide(result, "border-right", value); break;
             case "border-bottom": ExpandBorderSide(result, "border-bottom", value); break;
@@ -158,6 +161,8 @@ public static class ShorthandExpander
             "border-style" => new[] { "border-top-style", "border-right-style", "border-bottom-style", "border-left-style" },
             "border-color" => new[] { "border-top-color", "border-right-color", "border-bottom-color", "border-left-color" },
             "border-radius" => new[] { "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius" },
+            // CSS Rounding 1 §3: the four physical corner longhands the shorthand sets.
+            "corner-shape" => new[] { "corner-top-left-shape", "corner-top-right-shape", "corner-bottom-right-shape", "corner-bottom-left-shape" },
             "inset" => new[] { "top", "right", "bottom", "left" },
             "margin-block" => new[] { "margin-block-start", "margin-block-end" },
             "margin-inline" => new[] { "margin-inline-start", "margin-inline-end" },
@@ -223,7 +228,7 @@ public static class ShorthandExpander
     private static readonly string[] ShorthandNames =
     {
         "background", "background-position", "margin", "padding", "border", "border-width", "border-color",
-        "border-style", "border-radius", "border-top", "border-right", "border-bottom",
+        "border-style", "border-radius", "corner-shape", "border-top", "border-right", "border-bottom",
         "border-left", "font", "font-variant", "flex", "outline", "white-space", "text-wrap",
         "animation", "transition", "inset", "inset-block", "inset-inline",
         "margin-block", "margin-inline", "padding-block",
@@ -461,6 +466,25 @@ public static class ShorthandExpander
         result["border-top-right-radius"] = $"{hTopRight} {vTopRight}";
         result["border-bottom-right-radius"] = $"{hBottomRight} {vBottomRight}";
         result["border-bottom-left-radius"] = $"{hBottomLeft} {vBottomLeft}";
+    }
+
+    /// <summary>CSS Rounding 1 §3: the shape each corner takes from a 1-4 value list, in the same
+    /// order border-radius uses (top-left, top-right, bottom-right, bottom-left).</summary>
+    private static void ExpandCornerShape(Dictionary<string, string> result, string value)
+    {
+        var parts = SplitShorthand(value);
+        string topLeft, topRight, bottomRight, bottomLeft;
+        switch (parts.Count)
+        {
+            case 1: topLeft = topRight = bottomRight = bottomLeft = parts[0]; break;
+            case 2: topLeft = bottomRight = parts[0]; topRight = bottomLeft = parts[1]; break;
+            case 3: topLeft = parts[0]; topRight = bottomLeft = parts[1]; bottomRight = parts[2]; break;
+            default: topLeft = parts[0]; topRight = parts[1]; bottomRight = parts[2]; bottomLeft = parts[3]; break;
+        }
+        result["corner-top-left-shape"] = topLeft;
+        result["corner-top-right-shape"] = topRight;
+        result["corner-bottom-right-shape"] = bottomRight;
+        result["corner-bottom-left-shape"] = bottomLeft;
     }
 
     private static void ExpandFourSides(Dictionary<string, string> result, string prefix, string value, string? suffix = null)
@@ -1162,6 +1186,10 @@ public static class ShorthandExpander
         "border-radius" => new[] {
             "border-top-left-radius", "border-top-right-radius",
             "border-bottom-right-radius", "border-bottom-left-radius",
+        },
+        "corner-shape" => new[] {
+            "corner-top-left-shape", "corner-top-right-shape",
+            "corner-bottom-right-shape", "corner-bottom-left-shape",
         },
         "place-items" => new[] { "align-items", "justify-items" },
         "place-content" => new[] { "align-content", "justify-content" },

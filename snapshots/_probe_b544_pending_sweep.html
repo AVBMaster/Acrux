@@ -1,0 +1,31 @@
+<!doctype html><html><head><style>
+.o1 { object-view-box: inset(10px 20px 30px 40px); }
+.o2 { object-view-box: xywh(5px 6px 100px 50px); }
+.o3 { object-view-box: rect(1px, 2px, 3px, 4px); }
+.cs1 { corner-shape: bevel; }
+.cs2 { corner-shape: scoop superellipse(3); }
+.a1 { animation: a 2s linear; }
+@keyframes a { from { opacity: 0 } to { opacity: 1 } }
+.fs1 { font-size-adjust: from-font; }
+.fs2 { font-size-adjust: 0.5; }
+</style></head><body>
+<img class="o1" id="o1"><img class="o2" id="o2"><img class="o3" id="o3">
+<div class="cs1" id="cs1"></div><div class="cs2" id="cs2"></div>
+<div class="a1" id="a1"></div>
+<div class="fs1" id="fs1">x</div><div class="fs2" id="fs2">x</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+const ids=['o1','o2','o3','cs1','cs2','fs1','fs2'];
+for(const id of ids){ const el=document.getElementById(id);
+  const cs=getComputedStyle(el);
+  for(const p of ['object-view-box','corner-shape','corner-top-left-shape','corner-top-right-shape','font-size-adjust']){
+    const v=cs.getPropertyValue(p);
+    if(v!=='' && v!==undefined) out.push(id+' '+p+'='+JSON.stringify(v));
+  }
+}
+// linear() easing
+const a=document.getElementById('a1');
+out.push('a1 animation-timing-function='+JSON.stringify(getComputedStyle(a).animationTimingFunction));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

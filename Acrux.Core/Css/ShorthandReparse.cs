@@ -27,7 +27,7 @@ public static class ShorthandReparse
         "margin", "padding", "inset", "border-width", "border-style", "border-color",
         "margin-block", "margin-inline", "padding-block", "padding-inline",
         "inset-block", "inset-inline", "gap", "place-items", "place-content", "place-self",
-        "overflow", "border-radius", "outline", "list-style", "flex", "background-position",
+        "overflow", "border-radius", "corner-shape", "outline", "list-style", "flex", "background-position",
         "text-decoration", "text-emphasis", "white-space", "text-wrap", "container",
         "contain-intrinsic-size", "scroll-margin", "scroll-padding", "grid-area", "grid-row",
         "grid-column", "grid-template", "border", "border-image", "transition", "background",
@@ -182,6 +182,7 @@ public static class ShorthandReparse
                 or "scroll-margin" or "scroll-padding"
                 => CollapseFourSides(values),
             "border-radius" => BorderRadiusText(values),
+            "corner-shape" => CollapseFourSides(values),
             "margin-block" or "margin-inline" or "padding-block" or "padding-inline"
                 or "inset-block" or "inset-inline" or "gap" or "place-items" or "place-content"
                 or "place-self" or "overflow" or "contain-intrinsic-size"

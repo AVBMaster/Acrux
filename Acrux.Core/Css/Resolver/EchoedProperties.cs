@@ -249,8 +249,9 @@ public static class EchoedProperties
             // 'round square square round' needs all four (all measured). 'uncurved' and 'none' are
             // words this engine does not take and a fifth shape is no value (measured). The
             // longhands say one corner and take exactly one shape.
-            new() { Name = "corner-shape", Initial = "round",
-                Normalize = NormalizeCornerShape, ComputedText = CornerShapeComputed },
+            // The 'corner-shape' shorthand is not in this table: like border-radius its computed
+            // value is synthesised from its four longhands by the value serializer, so answering it
+            // here would return the initial 'round' and never see the longhands it expanded to.
             new() { Name = "corner-top-left-shape", Initial = "round",
                 Normalize = NormalizeOneCornerShape, ComputedText = CornerShapeComputed },
             new() { Name = "corner-top-right-shape", Initial = "round",
@@ -751,7 +752,7 @@ public static class EchoedProperties
     /// circle, 0 the bevel, an infinite exponent the square and its negative the notch, and the
     /// engine's own word for the exponent 2 the reference engine prints is 'squircle' (all
     /// measured); any other exponent is printed as the function that says it.</summary>
-    private static string CornerShapeComputedWord(string shape)
+    internal static string CornerShapeComputedWord(string shape)
     {
         if (!shape.StartsWith("superellipse(", StringComparison.Ordinal)) return shape;
         var inner = shape["superellipse(".Length..^1];
@@ -769,11 +770,11 @@ public static class EchoedProperties
         };
     }
 
-    /// <summary>The computed value of a corner shape: the same shapes the page wrote, with the
-    /// exponents that name a known shape said by their own word (measured: 'corner-shape:
-    /// superellipse(2)' computes 'squircle', 'superellipse(1)' computes 'round' and
-    /// 'superellipse(-infinity)' computes 'notch'), and the four corners collapsed again afterwards,
-    /// because the mapping can make two shapes that were written apart turn out to be one.</summary>
+    /// <summary>The computed value of a corner shape said by its own word: an exponent that names
+    /// a known shape is said by that word (measured: 'superellipse(2)' → 'squircle',
+    /// 'superellipse(1)' → 'round'), then the four corners collapse to the shortest form. The
+    /// shorthand itself has no ComputedText: its computed value is the four longhands' shapes
+    /// folded back, which the value serializer synthesises (as it does for border-radius).</summary>
     private static string CornerShapeComputed(string canonical,
         Acrux.Core.Dom.ComputedStyle? style)
     {

@@ -1916,6 +1916,7 @@ public static class ComputedValueSerializer
             case "border-inline": return Pair(BorderSideText(style, "border-inline-start"),
                                               BorderSideText(style, "border-inline-end"));
             case "border-radius": return BorderRadiusText(style);
+            case "corner-shape": return CornerShapeText(style);
             case "outline":
                 // Measured order: the colour, the style, the width.
                 return $"{Longhand(style, "outline-color")} {Longhand(style, "outline-style")} "
@@ -2120,6 +2121,29 @@ public static class ComputedValueSerializer
         // The two ellipses share one spelling when they are the same shape (CSS Backgrounds 3
         // §5.3, measured: '10px 20% / 30px 5%' and a plain '0px').
         return horizontal == vertical ? horizontal : $"{horizontal} / {vertical}";
+    }
+
+    /// <summary>The computed 'corner-shape' synthesised from its four corners: the shape each
+    /// physical corner carries, with the exponents that name a known shape said by their own word,
+    /// collapsed to the shortest form that still says all four (CSS Rounding 1 §3).</summary>
+    /// <summary>The computed 'corner-shape' synthesised from its four longhands, collapsed to the
+    /// shortest form that says all four (CSS Rounding 1 §3: TL TR BR BL, eliding a trailing corner
+    /// onto the one opposite it — BL from TR, then BR from TL, then TR — exactly as border-radius's
+    /// four radii elide). The longhands are echo-only (no <c>ValueOf</c> case), so they are read
+    /// through <see cref="ComputedStyle.GetEchoed"/> rather than <see cref="Longhand"/>, which
+    /// would return the empty string.</summary>
+    private static string CornerShapeText(ComputedStyle style)
+    {
+        string Corner(string name) => Acrux.Core.Css.Resolver.EchoedProperties.CornerShapeComputedWord(
+            style.GetEchoed(name) ?? "round");
+        var tl = Corner("corner-top-left-shape");
+        var tr = Corner("corner-top-right-shape");
+        var br = Corner("corner-bottom-right-shape");
+        var bl = Corner("corner-bottom-left-shape");
+        if (tl == tr && tr == br && br == bl) return tl;
+        if (br == tl && bl == tr) return $"{tl} {tr}";
+        if (bl == tr) return $"{tl} {tr} {br}";
+        return $"{tl} {tr} {br} {bl}";
     }
 
     private static string ColumnsText(ComputedStyle style)

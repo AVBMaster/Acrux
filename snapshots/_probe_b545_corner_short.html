@@ -1,0 +1,21 @@
+<!doctype html><html><head><style>
+.cs1 { corner-shape: bevel; }
+.cs2 { corner-shape: scoop superellipse(3); }
+.r1 { border-radius: 10px; }
+</style></head><body>
+<div class="cs1" id="cs1"></div>
+<div class="cs2" id="cs2"></div>
+<div class="r1" id="r1"></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'=['+getComputedStyle(e).getPropertyValue(p)+']'); }
+g('cs1','corner-shape');
+g('cs1','corner-top-left-shape');
+g('cs2','corner-shape');
+g('cs2','corner-top-left-shape');
+g('r1','border-radius');
+g('r1','border-top-left-radius');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
