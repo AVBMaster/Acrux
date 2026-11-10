@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function rd(label,setup){ try{
+  const d=document.createElement('div');
+  if(setup) d.setAttribute('style',setup);
+  document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  // read back all custom props via a known consumer
+  out.push(label+' --x='+JSON.stringify(cs.getPropertyValue('--x'))+' color='+JSON.stringify(cs.color)+' width='+JSON.stringify(cs.width));
+  d.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+// custom property registration via @property
+out.push('SUP @property = '+CSS.supports('selector(:x)')?'skip':'n/a');
+// var() fallback paths
+rd('var-fb','--x:blue;color:var(--x)');
+rd('var-fb-miss','color:var(--nope,red)');
+rd('var-nested','--a:var(--b);--b:green;color:var(--a)');
+rd('var-calc','--w:10px;width:calc(var(--w)+5px)');
+rd('var-undefined','color:var(--undefined)');
+rd('var-fallback-nested','color:var(--a,var(--b,blue))');
+rd('var-empty','--x:;color:var(--x,red)');
+rd('var-ws','--x: blue ;color:var(--x)');
+rd('var-inherit','--x:red;color:var(--x)');
+// custom property on parent
+const p=document.createElement('div'); p.setAttribute('style','--c:purple');
+document.body.appendChild(p);
+const ch=document.createElement('div'); ch.style.cssText='color:var(--c)';
+p.appendChild(ch);
+out.push('var-inherit-child color='+JSON.stringify(getComputedStyle(ch).color));
+p.remove();
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

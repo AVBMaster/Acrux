@@ -1,0 +1,11 @@
+skip
+var-fb --x="blue" color="rgb(0, 0, 255)" width="784px"
+var-fb-miss --x="" color="rgb(255, 0, 0)" width="784px"
+var-nested --x="" color="rgb(0, 128, 0)" width="784px"
+var-calc --x="" color="rgb(0, 0, 0)" width="784px"
+var-undefined --x="" color="rgb(0, 0, 0)" width="784px"
+var-fallback-nested --x="" color="rgb(0, 0, 255)" width="784px"
+var-empty --x="" color="rgb(255, 0, 0)" width="784px"
+var-ws --x="blue" color="rgb(0, 0, 255)" width="784px"
+var-inherit --x="red" color="rgb(255, 0, 0)" width="784px"
+var-inherit-child color="rgb(128, 0, 128)"
