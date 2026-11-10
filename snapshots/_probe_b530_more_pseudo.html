@@ -1,0 +1,33 @@
+<!doctype html><html><body>
+<div id="root"><p id="only">only</p></div>
+<div id="multi"><p id="p1">a</p><p id="p2">b</p></div>
+<a id="href" href="http://x">link</a>
+<a id="nohref">nolink</a>
+<details id="det" open><summary id="sum">s</summary><div id="body">b</div></details>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const n=document.querySelectorAll(sel).length;
+  const ids=[...document.querySelectorAll(sel)].map(e=>e.id).filter(Boolean).join(',');
+  out.push(label+' n='+n+' ids='+ids); }catch(e){ out.push(label+' ERR '+e.message); } }
+m('only-child','p:only-child');
+m('only-of-type','p:only-of-type');
+m('first-child','p:first-child');
+m('last-child','p:last-child');
+m('nth-child-2','p:nth-child(2)');
+m('nth-child-odd','p:nth-child(odd)');
+m('nth-last-child-1','p:nth-last-child(1)');
+m('nth-of-type-1','p:nth-of-type(1)');
+m('href-link','a[href]');
+m('no-href','a:not([href])');
+m('details-open','details[open]');
+m('det-open','details:has(> summary)');
+m('root','*:root');
+m('root-html','html:root');
+m('scope-all',':scope');
+m('dir-ltr',':dir(ltr)');
+m('dir-rtl',':dir(rtl)');
+m('target','#rec:target');
+m('any-link','a:any-link');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

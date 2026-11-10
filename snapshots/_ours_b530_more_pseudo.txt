@@ -1,0 +1,6 @@
+root n=1 ids=
+root-html n=1 ids=
+dir-ltr ERR Failed to execute 'querySelectorAll' on 'Document': ':dir(ltr)' is not a valid selector.
+dir-rtl ERR Failed to execute 'querySelectorAll' on 'Document': ':dir(rtl)' is not a valid selector.
+target n=0 ids=
+any-link n=1 ids=href
