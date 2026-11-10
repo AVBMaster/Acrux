@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b486: font control properties
+s('fk-none','font-kerning:none',['font-kerning']);
+s('fk-normal','font-kerning:normal',['font-kerning']);
+s('fk-auto','font-kerning:auto',['font-kerning']);
+s('fos-none','font-optical-sizing:none',['font-optical-sizing']);
+s('fos-auto','font-optical-sizing:auto',['font-optical-sizing']);
+s('fvs-normal','font-variation-settings:normal',['font-variation-settings']);
+s('fvs-wght','font-variation-settings:"wght" 700',['font-variation-settings']);
+s('fvs-two','font-variation-settings:"wdth" 50,"wght" 900',['font-variation-settings']);
+s('fvs-tag','font-variation-settings:"XHGT" 0.5',['font-variation-settings']);
+s('fs-none','font-synthesis:none',['font-synthesis']);
+s('fs-weight','font-synthesis:weight',['font-synthesis']);
+s('fs-style','font-synthesis:style',['font-synthesis']);
+s('fs-small-caps','font-synthesis:small-caps',['font-synthesis']);
+s('fs-w-s','font-synthesis:weight style',['font-synthesis']);
+s('fs-w-sc','font-synthesis:weight small-caps',['font-synthesis']);
+s('fs-s-sc','font-synthesis:style small-caps',['font-synthesis']);
+s('fs-position','font-synthesis:position',['font-synthesis']);
+s('fs-all','font-synthesis:weight style small-caps position',['font-synthesis']);
+s('tr-auto','text-rendering:auto',['text-rendering']);
+s('tr-speed','text-rendering:optimizeSpeed',['text-rendering']);
+s('tr-leg','text-rendering:optimizeLegibility',['text-rendering']);
+s('tr-geo','text-rendering:geometricPrecision',['text-rendering']);
+out.push('SUP font-kerning:none = '+(()=>{try{return CSS.supports('font-kerning','none')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-synthesis:weight style = '+(()=>{try{return CSS.supports('font-synthesis','weight style')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP text-rendering:geometricPrecision = '+(()=>{try{return CSS.supports('text-rendering','geometricPrecision')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
