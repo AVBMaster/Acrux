@@ -1,0 +1,7 @@
+req-empty valid=true invalid=false inRange=true outRange=false
+req-full valid=true invalid=false inRange=true outRange=false
+noReq valid=true invalid=false inRange=true outRange=false
+num-min valid=true invalid=false inRange=true outRange=false
+num-ok valid=true invalid=false inRange=true outRange=false
+email-bad valid=true invalid=false inRange=true outRange=false
+email-ok valid=true invalid=false inRange=true outRange=false

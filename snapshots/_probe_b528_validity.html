@@ -1,0 +1,17 @@
+<!doctype html><html><body>
+<input id="req-empty" required>
+<input id="req-full" required value="x">
+<input id="noReq" value="y">
+<input id="num-min" type="number" min="5" value="1">
+<input id="num-ok" type="number" min="5" value="10">
+<input id="email-bad" type="email" value="notanemail">
+<input id="email-ok" type="email" value="a@b.com">
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const e=document.getElementById(label);
+  out.push(label+' valid='+e.matches(':valid')+' invalid='+e.matches(':invalid')+' inRange='+e.matches(':in-range')+' outRange='+e.matches(':out-of-range')); }
+  catch(err){ out.push(label+' ERR '+err.message); } }
+['req-empty','req-full','noReq','num-min','num-ok','email-bad','email-ok'].forEach(m);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
