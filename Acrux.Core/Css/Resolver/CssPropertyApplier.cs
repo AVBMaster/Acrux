@@ -310,10 +310,10 @@ public static class CssPropertyApplier
             case "margin-bottom": style.MarginBottom = Length.Parse(value); break;
             case "margin-left": style.MarginLeft = Length.Parse(value); break;
             case "margin-right": style.MarginRight = Length.Parse(value); break;
-            case "margin-block": ParseShorthand2(value, out var mbt, out var mbb); style.MarginTop = mbt; style.MarginBottom = mbb; break;
+            case "margin-block": ParseShorthand2(value, out var mbt, out var mbb); SetMarginSide(style, BlockStartSide(style), mbt); SetMarginSide(style, BlockEndSide(style), mbb); break;
             case "margin-inline": ParseShorthand2(value, out var mil, out var mir); SetMarginSide(style, InlineStartSide(style), mil); SetMarginSide(style, InlineEndSide(style), mir); break;
-            case "margin-block-start": style.MarginTop = Length.Parse(value); break;
-            case "margin-block-end": style.MarginBottom = Length.Parse(value); break;
+            case "margin-block-start": SetMarginSide(style, BlockStartSide(style), Length.Parse(value)); break;
+            case "margin-block-end": SetMarginSide(style, BlockEndSide(style), Length.Parse(value)); break;
             case "margin-inline-start": SetMarginSide(style, InlineStartSide(style), Length.Parse(value)); break;
             case "margin-inline-end": SetMarginSide(style, InlineEndSide(style), Length.Parse(value)); break;
             case "padding":
@@ -324,10 +324,10 @@ public static class CssPropertyApplier
             case "padding-bottom": style.PaddingBottom = Length.Parse(value); break;
             case "padding-left": style.PaddingLeft = Length.Parse(value); break;
             case "padding-right": style.PaddingRight = Length.Parse(value); break;
-            case "padding-block": ParseShorthand2(value, out var pbt, out var pbb); style.PaddingTop = pbt; style.PaddingBottom = pbb; break;
+            case "padding-block": ParseShorthand2(value, out var pbt, out var pbb); SetPaddingSide(style, BlockStartSide(style), pbt); SetPaddingSide(style, BlockEndSide(style), pbb); break;
             case "padding-inline": ParseShorthand2(value, out var pil, out var pir); SetPaddingSide(style, InlineStartSide(style), pil); SetPaddingSide(style, InlineEndSide(style), pir); break;
-            case "padding-block-start": style.PaddingTop = Length.Parse(value); break;
-            case "padding-block-end": style.PaddingBottom = Length.Parse(value); break;
+            case "padding-block-start": SetPaddingSide(style, BlockStartSide(style), Length.Parse(value)); break;
+            case "padding-block-end": SetPaddingSide(style, BlockEndSide(style), Length.Parse(value)); break;
             case "padding-inline-start": SetPaddingSide(style, InlineStartSide(style), Length.Parse(value)); break;
             case "padding-inline-end": SetPaddingSide(style, InlineEndSide(style), Length.Parse(value)); break;
             case "color": style.Color = ColorParser.Parse(value, style); MarkCurrentColor(style, CurrentColorSlot.OwnColor, value); break;
@@ -876,10 +876,10 @@ public static class CssPropertyApplier
             case "left": style.Left = Length.Parse(value); break;
             case "right": style.Right = Length.Parse(value); break;
             case "inset": ParseInsetShorthand(value, style); break;
-            case "inset-block": ParseShorthand2(value, out var ibt, out var ibb); style.Top = ibt; style.Bottom = ibb; break;
+            case "inset-block": ParseShorthand2(value, out var ibt, out var ibb); ApplyBlockInset(style, ibt, ibb); break;
             case "inset-inline": ParseShorthand2(value, out var iis, out var iie); ApplyInlineInset(style, iis, iie); break;
-            case "inset-block-start": style.Top = Length.Parse(value); break;
-            case "inset-block-end": style.Bottom = Length.Parse(value); break;
+            case "inset-block-start": ApplyBlockInset(style, Length.Parse(value), null); break;
+            case "inset-block-end": ApplyBlockInset(style, null, Length.Parse(value)); break;
             case "inset-inline-start": ApplyInlineInset(style, Length.Parse(value), null); break;
             case "inset-inline-end": ApplyInlineInset(style, null, Length.Parse(value)); break;
             case "list-style-type": style.ListStyleType = ParseListStyleType(value, style); break;
@@ -4075,6 +4075,15 @@ public static class CssPropertyApplier
         return style.Direction == "rtl" ? "left" : "right";
     }
 
+    // The block axis is perpendicular to the inline axis: top/bottom in a horizontal writing
+    // mode, left/right in a vertical one — vertical-rl puts block-start on the right, vertical-lr
+    // on the left (CSS Writing Modes 4 §2).
+    private static string BlockStartSide(ComputedStyle style) =>
+        IsVerticalWriting(style) ? (style.WritingMode == WritingModeType.VerticalLr ? "left" : "right") : "top";
+
+    private static string BlockEndSide(ComputedStyle style) =>
+        IsVerticalWriting(style) ? (style.WritingMode == WritingModeType.VerticalLr ? "right" : "left") : "bottom";
+
     /// <summary>Set one margin side by physical name.</summary>
     private static void SetMarginSide(ComputedStyle style, string side, Length value)
     {
@@ -4160,6 +4169,14 @@ public static class CssPropertyApplier
     /// physical left/right properties. With 'direction: rtl' the start and end
     /// edges flip (CSS Logical 1 §4.3). A null argument means "not specified".
     /// </summary>
+    private static void ApplyBlockInset(ComputedStyle style, Length start, Length end)
+    {
+        var bs = BlockStartSide(style);
+        var be = BlockEndSide(style);
+        if (bs == "left") { style.Left = start; style.Right = end; }
+        else { style.Right = start; style.Left = end; }
+    }
+
     private static void ApplyInlineInset(ComputedStyle style, Length? start, Length? end)
     {
         bool rtl = style.Direction == "rtl";
