@@ -1,0 +1,28 @@
+<!doctype html><html><body>
+<style>
+  img { display: block; margin: 10px 0; }
+  .crop1 { object-view-box: inset(25% 25% 25% 25%); }
+  .crop2 { object-view-box: inset(10px 20px 10px 20px); }
+  .crop3 { object-view-box: none; }
+</style>
+<p>original:</p>
+<img src="ovb_test.png" width="200" height="150">
+<p>inset 25%:</p>
+<img class="crop1" src="ovb_test.png" width="200" height="150">
+<p>inset 10px 20px:</p>
+<img class="crop2" src="ovb_test.png" width="200" height="150">
+<p>none (same as original):</p>
+<img class="crop3" src="ovb_test.png" width="200" height="150">
+<pre id="rec"></pre>
+<script>
+const imgs = document.querySelectorAll('img');
+const out = [];
+imgs.forEach((img, i) => {
+  const cs = getComputedStyle(img);
+  out.push('img'+i+' viewbox='+JSON.stringify(cs.objectViewBox)
+    + ' naturalW='+img.naturalWidth+' naturalH='+img.naturalHeight
+    + ' displayW='+img.width+' displayH='+img.height);
+});
+document.getElementById('rec').textContent = out.join('\n');
+</script>
+</body></html>

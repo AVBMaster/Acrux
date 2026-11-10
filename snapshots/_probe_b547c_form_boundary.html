@@ -1,0 +1,14 @@
+<!doctype html><html><body>
+<fieldset disabled id="fs-outer">
+  <form id="f-inner">
+    <input id="i-nested" value="x">
+  </form>
+</fieldset>
+<pre id="rec"></pre>
+<script>
+const i=document.getElementById('i-nested');
+document.getElementById('rec').textContent=
+  'i-nested disabled='+i.disabled+
+  ' matches:disabled='+i.matches(':disabled')+
+  ' matches:enabled='+i.matches(':enabled');
+</script></body></html>

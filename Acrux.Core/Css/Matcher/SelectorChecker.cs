@@ -258,8 +258,8 @@ public class SelectorChecker
             CssPseudoType.Focus => element.IsFocused,
             CssPseudoType.FocusVisible => element.IsFocused,
             CssPseudoType.FocusWithin => IsFocusWithin(element),
-            CssPseudoType.Enabled => !element.HasAttribute("disabled") && IsFormLike(element),
-            CssPseudoType.Disabled => element.HasAttribute("disabled"),
+            CssPseudoType.Enabled => IsFormLike(element) && !IsActuallyDisabled(element),
+            CssPseudoType.Disabled => IsActuallyDisabled(element),
             CssPseudoType.Checked => element.HasAttribute("checked") || element.HasAttribute("selected"),
             CssPseudoType.Required => element.HasAttribute("required"),
             CssPseudoType.Optional => !element.HasAttribute("required") && IsFormLike(element),
@@ -358,6 +358,32 @@ public class SelectorChecker
         "INPUT" or "TEXTAREA" or "SELECT" or "BUTTON" or "OPTION" or "OPTGROUP" => true,
         _ => false
     };
+
+    /// <summary>HTML §4.10.4: whether the control is 'actually disabled' — it sets its own
+    /// `disabled` attribute, or a `<fieldset disabled>` is an ancestor. The fieldset cascade is
+    /// not bounded by a `<form>` (measured: an input inside a form inside a disabled fieldset is
+    /// still ':disabled', though its own 'disabled' property answers false), and a `<optgroup
+    /// disabled>` disables its options. An unrelated `disabled` attribute on a div or legend
+    /// disables nothing (measured: those inputs stay ':enabled').</summary>
+    private static bool IsActuallyDisabled(Element element)
+    {
+        if (element.HasAttribute("disabled")) return true;
+        // An option is disabled by an enclosing disabled optgroup as well as by a fieldset.
+        if (element.TagName == "OPTION")
+        {
+            var parent = element.ParentElement;
+            if (parent is not null && parent.TagName.Equals("OPTGROUP", StringComparison.OrdinalIgnoreCase)
+                && parent.HasAttribute("disabled"))
+                return true;
+        }
+        for (var ancestor = element.ParentElement; ancestor is not null; ancestor = ancestor.ParentElement)
+        {
+            if (ancestor.TagName.Equals("FIELDSET", StringComparison.OrdinalIgnoreCase)
+                && ancestor.HasAttribute("disabled"))
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>Whether a control is editable, which is what ':read-write' tests (HTML §6.5).
     /// Only a text-entry input — or a textarea — that is neither disabled nor readonly counts;

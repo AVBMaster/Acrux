@@ -1,0 +1,29 @@
+<!doctype html><html><head><style>
+.c1 { counter-reset: item 3; }
+.c2 { counter-set: other 7; }
+.c3 { counter-increment: inc 2; }
+.ol1 { counter-reset: sec 2; }
+.ol1 li::before { content: counter(sec) ". "; counter-increment: sec; }
+</style></head><body>
+<div class="c1" id="c1"></div>
+<div class="c2" id="c2"></div>
+<div class="c3" id="c3"></div>
+<ol class="ol1" id="ol1"><li>a</li><li>b</li><li>c</li></ol>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  const v=getComputedStyle(e).getPropertyValue(p);
+  out.push(id+' '+p+'='+JSON.stringify(v)); }
+g('c1','counter-reset');
+g('c2','counter-set');
+g('c3','counter-increment');
+// does counter-set exist as a property at all
+out.push('supports counter-set='+CSS.supports('counter-set','other 7'));
+out.push('supports counter-reset='+CSS.supports('counter-reset','item 3'));
+// ::before content with counters
+const li=document.querySelector('#ol1 li');
+const cs=getComputedStyle(li,'::before');
+out.push('li::before content='+JSON.stringify(cs.content));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

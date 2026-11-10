@@ -1,0 +1,24 @@
+<!doctype html><html><body>
+<fieldset id="fs-open">
+  <input id="i-in-open-fs" value="x">
+</fieldset>
+<fieldset disabled id="fs-dis">
+  <input id="i-in-dis-fs" value="y">
+  <select id="sel-in-dis"><option id="opt-in-dis">a</option></select>
+</fieldset>
+<select id="sel-top"><optgroup id="og" disabled><option id="opt-in-og">b</option></optgroup></select>
+<textarea id="ta" readonly>z</textarea>
+<input type="text" id="i-ro" readonly value="r">
+<button id="btn-dis" disabled>go</button>
+<output id="out1">o</output>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const e=document.getElementById(label);
+  out.push(label+' '+sel+'='+e.matches(sel)); }
+  catch(err){ out.push(label+' '+sel+' ERR '+err.message); } }
+['i-in-open-fs','i-in-dis-fs','sel-in-dis','opt-in-dis','opt-in-og','og','ta','i-ro','btn-dis','out1'].forEach(id=>{
+  m(id,':enabled'); m(id,':disabled');
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

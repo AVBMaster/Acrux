@@ -1,0 +1,20 @@
+<!doctype html><html><body>
+<form id="f1">
+  <fieldset disabled id="fs-a"><input id="i-in-fs-a" value="a"></fieldset>
+</form>
+<fieldset disabled id="fs-b">
+  <form id="f2"><input id="i-in-fs-b-form" value="b"></form>
+</fieldset>
+<div disabled id="div-dis"><input id="i-in-div" value="c"></div>
+<legend disabled id="lg-dis"><input id="i-in-lg" value="d"></legend>
+<button id="btn-ok">ok</button>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(id,sel){ const e=document.getElementById(id);
+  out.push(id+' '+sel+'='+e.matches(sel)); }
+['i-in-fs-a','i-in-fs-b-form','i-in-div','i-in-lg','btn-ok'].forEach(id=>{
+  m(id,':enabled'); m(id,':disabled');
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
