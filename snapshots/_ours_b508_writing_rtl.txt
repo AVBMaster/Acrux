@@ -1,0 +1,20 @@
+wm-h-tb writing-mode=horizontal-tb
+wm-v-rl writing-mode=vertical-rl
+wm-v-lr writing-mode=vertical-lr
+wm-sideways writing-mode=horizontal-tb
+dir-ltr direction=ltr
+dir-rtl direction=rtl
+to-mixed text-orientation=mixed
+to-upright text-orientation=upright
+to-sideways text-orientation=sideways
+ubo-normal unicode-bidi=normal
+ubo-embed unicode-bidi=embed
+ubo-override unicode-bidi=bidi-override
+ubo-isolate unicode-bidi=isolate
+ubo-isolate-override unicode-bidi=isolate-override
+ubo-plaintext unicode-bidi=plaintext
+mi-vert margin-top=0px | margin-bottom=0px
+pi-vert padding-top=0px | padding-bottom=0px
+mw-vert max-width=100px | max-height=none
+ta-start-rtl text-align=start
+ta-end-rtl text-align=end
