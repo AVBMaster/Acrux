@@ -1,0 +1,16 @@
+ti-2em text-indent=32px
+ti-10px text-indent=10px
+ti-neg text-indent=-10px
+ti-pct text-indent=10%
+ti-hanging text-indent=10px hanging
+ti-each text-indent=10px each-line
+tal-start text-align-last=start
+tal-right text-align-last=right
+tj-auto text-justify=auto
+tj-interword text-justify=inter-word
+tab-8 tab-size=8
+tab-4 tab-size=4
+tab-32px tab-size=32px
+ws-2px word-spacing=2px
+ws-normal word-spacing=0px
+ws-1em word-spacing=16px

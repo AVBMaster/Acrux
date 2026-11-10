@@ -1,0 +1,25 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+s('ti-2em','text-indent:2em',['text-indent']);
+s('ti-10px','text-indent:10px',['text-indent']);
+s('ti-neg','text-indent:-10px',['text-indent']);
+s('ti-pct','text-indent:10%',['text-indent']);
+s('ti-hanging','text-indent:10px hanging',['text-indent']);
+s('ti-each','text-indent:10px each-line',['text-indent']);
+s('tal-start','text-align-last:start',['text-align-last']);
+s('tal-right','text-align-last:right',['text-align-last']);
+s('tj-auto','text-justify:auto',['text-justify']);
+s('tj-interword','text-justify:inter-word',['text-justify']);
+s('tab-8','tab-size:8',['tab-size']);
+s('tab-4','tab-size:4',['tab-size']);
+s('tab-32px','tab-size:32px',['tab-size']);
+s('ws-2px','word-spacing:2px',['word-spacing']);
+s('ws-normal','word-spacing:normal',['word-spacing']);
+s('ws-1em','word-spacing:1em',['word-spacing']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
