@@ -1,0 +1,5 @@
+flex-grow-share: a=100 b=200 (expect ~100/200)
+flex-shrink: c=100 d=100 (expect 75/75, shrunk from 150 each into 200)
+flex-grow-1-2: e=133.33 f=266.67 (expect ~133/267 of 400)
+aspect-ratio w=100 h=50 (expect 50)
+grid 1fr/2fr: 100 200 (expect 100/200)

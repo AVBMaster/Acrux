@@ -1,0 +1,32 @@
+<!doctype html><html><body>
+<div id="box" style="display:flex;width:300px">
+  <div id="a" style="flex:1 1 100px;background:red">A</div>
+  <div id="b" style="flex:1 1 200px;background:blue">B</div>
+</div>
+<div id="box2" style="display:flex;width:200px">
+  <div id="c" style="flex:0 1 150px;background:green">C</div>
+  <div id="d" style="flex:0 1 150px;background:yellow">D</div>
+</div>
+<div id="box3" style="display:flex;width:400px">
+  <div id="e" style="flex:1;background:purple">E</div>
+  <div id="f" style="flex:2;background:orange">F</div>
+</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function w(id){ const r=document.getElementById(id).getBoundingClientRect(); return id+'='+Math.round(r.width*100)/100; }
+out.push('flex-grow-share: '+w('a')+' '+w('b')+' (expect ~100/200)');
+out.push('flex-shrink: '+w('c')+' '+w('d')+' (expect 75/75, shrunk from 150 each into 200)');
+out.push('flex-grow-1-2: '+w('e')+' '+w('f')+' (expect ~133/267 of 400)');
+// aspect-ratio actual size
+const ar=document.createElement('div'); ar.style.cssText='width:100px;aspect-ratio:2/1;background:cyan';
+document.body.appendChild(ar);
+out.push('aspect-ratio w=100 h='+Math.round(ar.getBoundingClientRect().height*100)/100+' (expect 50)');
+// grid actual track sizes
+const g=document.createElement('div'); g.style.cssText='display:grid;width:300px;grid-template-columns:1fr 2fr';
+const g1=document.createElement('div'); const g2=document.createElement('div');
+g.appendChild(g1); g.appendChild(g2); document.body.appendChild(g);
+out.push('grid 1fr/2fr: '+Math.round(g1.getBoundingClientRect().width*100)/100+' '+Math.round(g2.getBoundingClientRect().width*100)/100+' (expect 100/200)');
+g.remove();
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
