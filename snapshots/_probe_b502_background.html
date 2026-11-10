@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// background layers
+s('bg-color','background-color:red',['background-color']);
+s('bg-color-trans','background-color:transparent',['background-color']);
+s('bg-image-none','background-image:none',['background-image']);
+s('bg-image-url','background-image:url(x.png)',['background-image']);
+s('bg-image-grad','background-image:linear-gradient(red,blue)',['background-image']);
+s('bg-repeat','background-repeat:no-repeat',['background-repeat']);
+s('bg-repeat-xy','background-repeat:repeat-x',['background-repeat']);
+s('bg-repeat-2','background-repeat:no-repeat,repeat',['background-repeat']);
+s('bg-position','background-position:center top',['background-position']);
+s('bg-position-px','background-position:10px 20px',['background-position']);
+s('bg-position-pct','background-position:50% 50%',['background-position']);
+s('bg-size','background-size:cover',['background-size']);
+s('bg-size-contain','background-size:contain',['background-size']);
+s('bg-size-px','background-size:100px 50px',['background-size']);
+s('bg-attachment','background-attachment:fixed',['background-attachment']);
+s('bg-clip','background-clip:border-box',['background-clip']);
+s('bg-clip-text','background-clip:text',['background-clip']);
+s('bg-origin','background-origin:content-box',['background-origin']);
+s('bg-2layers','background-image:url(a.png),url(b.png);background-repeat:no-repeat,repeat-y',['background-repeat']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
