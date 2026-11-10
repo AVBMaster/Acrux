@@ -13,8 +13,8 @@ ubo-override unicode-bidi=bidi-override
 ubo-isolate unicode-bidi=isolate
 ubo-isolate-override unicode-bidi=isolate-override
 ubo-plaintext unicode-bidi=plaintext
-mi-vert margin-top=0px | margin-bottom=0px
-pi-vert padding-top=0px | padding-bottom=0px
+mi-vert margin-top=10px | margin-bottom=10px
+pi-vert padding-top=8px | padding-bottom=8px
 mw-vert max-width=100px | max-height=none
 ta-start-rtl text-align=start
 ta-end-rtl text-align=end

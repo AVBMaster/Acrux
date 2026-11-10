@@ -4056,8 +4056,24 @@ public static class CssPropertyApplier
     private static int LogicalCorner(ComputedStyle style, int ltrCorner, int rtlCorner) =>
         style.Direction == "rtl" ? rtlCorner : ltrCorner;
 
-    private static string InlineStartSide(ComputedStyle style) => style.Direction == "rtl" ? "right" : "left";
-    private static string InlineEndSide(ComputedStyle style) => style.Direction == "rtl" ? "left" : "right";
+    // The inline axis runs along the reading direction: left/right in a horizontal writing
+    // mode, top/bottom in a vertical one (CSS Writing Modes 4 §2, measured: 'writing-mode:
+    // vertical-rl; margin-inline: 10px' sets margin-top/bottom to 10px, where a direction-only
+    // read left them at 0px). The block axis is the perpendicular one.
+    private static bool IsVerticalWriting(ComputedStyle style) =>
+        style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr;
+
+    private static string InlineStartSide(ComputedStyle style)
+    {
+        if (IsVerticalWriting(style)) return "top";
+        return style.Direction == "rtl" ? "right" : "left";
+    }
+
+    private static string InlineEndSide(ComputedStyle style)
+    {
+        if (IsVerticalWriting(style)) return "bottom";
+        return style.Direction == "rtl" ? "left" : "right";
+    }
 
     /// <summary>Set one margin side by physical name.</summary>
     private static void SetMarginSide(ComputedStyle style, string side, Length value)
