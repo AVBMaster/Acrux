@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b485: font-variant detailed
+s('fv-normal','font-variant:normal',['font-variant']);
+s('fv-small-caps','font-variant:small-caps',['font-variant']);
+s('fv-all-small','font-variant:all-small-caps',['font-variant']);
+s('fv-petite','font-variant:petite-caps',['font-variant']);
+s('fv-all-petite','font-variant:all-petite-caps',['font-variant']);
+s('fv-unicase','font-variant:unicase',['font-variant']);
+s('fv-titling','font-variant:titling-caps',['font-variant']);
+s('fv-oldstyle','font-variant:oldstyle-nums',['font-variant']);
+s('fv-lining','font-variant:lining-nums',['font-variant']);
+s('fv-tabular','font-variant:tabular-nums',['font-variant']);
+s('fv-proportional','font-variant:proportional-nums',['font-variant']);
+s('fv-fs','font-variant:common-ligatures',['font-variant']);
+s('fv-fs-none','font-variant:no-common-ligatures',['font-variant']);
+s('fv-fs-disc','font-variant:discretionary-ligatures',['font-variant']);
+s('fv-fs-hist','font-variant:historical-ligatures',['font-variant']);
+s('fv-east-asian','font-variant:east-asian',['font-variant']);
+s('fv-fullwidth','font-variant:full-width',['font-variant']);
+s('fv-proportional-width','font-variant:proportional-width',['font-variant']);
+s('fv-slash-zero','font-variant:slashed-zero',['font-variant']);
+s('ffs-normal','font-feature-settings:normal',['font-feature-settings']);
+s('ffs-on','font-feature-settings:"liga" 1',['font-feature-settings']);
+s('ffs-off','font-feature-settings:"liga" 0',['font-feature-settings']);
+out.push('SUP font-variant:small-caps = '+(()=>{try{return CSS.supports('font-variant','small-caps')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-variant:all-small-caps = '+(()=>{try{return CSS.supports('font-variant','all-small-caps')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-variant:oldstyle-nums = '+(()=>{try{return CSS.supports('font-variant','oldstyle-nums')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP font-feature-settings:normal = '+(()=>{try{return CSS.supports('font-feature-settings','normal')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
