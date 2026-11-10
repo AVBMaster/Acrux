@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+function s(label,css,prop){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); out.push(label+' '+prop+'='+JSON.stringify(getComputedStyle(d)[prop])); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// legacy color forms
+s('hex3','color:#f00','color');
+s('hex6','color:#ff0000','color');
+s('hex8','color:#ff000080','color');
+s('rgb','color:rgb(255,0,0)','color');
+s('rgba','color:rgba(255,0,0,0.5)','color');
+s('hsl','color:hsl(0,100%,50%)','color');
+s('hsla','color:hsla(0,100%,50%,0.5)','color');
+// modern color functions
+s('rgb-modern','color:rgb(255 0 0)','color');
+s('rgb-modern-alpha','color:rgb(255 0 0 / 0.5)','color');
+s('hsl-modern','color:hsl(0 100% 50%)','color');
+s('lab','color:lab(50% 40 59.5)','color');
+s('lch','color:lch(50% 70 40)','color');
+s('oklab','color:oklab(50% 0.1 -0.1)','color');
+s('oklch','color:oklch(50% 0.1 200)','color');
+s('color-fn','color:color(srgb 1 0 0)','color');
+s('color-mix','color:color-mix(in srgb,red,blue)','color');
+// named + system
+s('named','color:rebeccapurple','color');
+s('transparent','color:transparent','color');
+s('currentcolor','color:currentcolor','color');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
