@@ -1,0 +1,41 @@
+<!doctype html><html><head><style>
+  /* nesting */
+  .n1 { color: red; & > span { color: blue; } }
+  /* :has sibling */
+  .h:has(+ .h2) { background: yellow; }
+  /* scroll-driven */
+  .sd { animation-timeline: scroll(); }
+  /* color-mix */
+  .cm { color: color-mix(in srgb, red 50%, blue); }
+  /* :is specific */
+  .isp :is(section, article) { color: green; }
+  /* text-wrap */
+  .tw { text-wrap: balance; }
+  /* field-sizing */
+  .fs { field-sizing: content; }
+  /* @property */
+  @property --myprop { syntax: '<length>'; inherits: false; initial-value: 0px; }
+  .up { --myprop: 5px; }
+</style></head><body>
+<div class="n1" id="n1">n1<span id="n1s">span</span></div>
+<div class="h" id="h">h</div><div class="h2" id="h2">h2</div>
+<div class="cm" id="cm">cm</div>
+<div class="tw" id="tw">tw</div>
+<div class="fs" id="fs">fs</div>
+<div class="up" id="up">up</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('n1','color');
+g('n1s','color');
+g('h','background-color');
+g('cm','color');
+g('tw','text-wrap');
+g('fs','field-sizing');
+out.push('supports @property='+!!CSS.registerProperty);
+out.push('supports nesting='+CSS.supports('color','red'));
+try { out.push('color-mix='+getComputedStyle(document.getElementById('cm')).color); } catch(e) { out.push('color-mix ERR'); }
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

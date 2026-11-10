@@ -1,0 +1,15 @@
+<!doctype html><html><head><style>
+  .h:has(+ .h2) { background: yellow; }
+  .h3:has(~ .h4) { background: cyan; }
+</style></head><body>
+<div class="h" id="h">h</div><div class="h2" id="h2">h2</div>
+<div class="h3" id="h3">h3</div><div class="h4" id="h4">h4</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,sel){ const e=document.getElementById(id);
+  out.push(id+' '+sel+'='+e.matches(sel)+' bg='+getComputedStyle(e).backgroundColor); }
+g('h',':has(+ .h2)');
+g('h3',':has(~ .h4)');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
