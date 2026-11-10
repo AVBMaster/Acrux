@@ -1,0 +1,37 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b484: position properties detailed
+s('pos-static','position:static',['position']);
+s('pos-relative','position:relative',['position']);
+s('pos-absolute','position:absolute',['position']);
+s('pos-fixed','position:fixed',['position']);
+s('pos-sticky','position:sticky',['position']);
+s('top-px','position:absolute;top:10px',['top']);
+s('top-auto','position:absolute;top:auto',['top']);
+s('top-pct','position:absolute;top:50%',['top']);
+s('top-neg','position:absolute;top:-10px',['top']);
+s('left-px','position:absolute;left:20px',['left']);
+s('right-px','position:absolute;right:30px',['right']);
+s('bottom-px','position:absolute;bottom:40px',['bottom']);
+s('inset-all','position:absolute;inset:10px 20px 30px 40px',['top','right','bottom','left']);
+s('z-auto','position:relative;z-index:auto',['z-index']);
+s('z-pos','position:relative;z-index:10',['z-index']);
+s('z-neg','position:relative;z-index:-1',['z-index']);
+s('z-big','position:relative;z-index:9999',['z-index']);
+s('opacity-1','opacity:1',['opacity']);
+s('opacity-0','opacity:0',['opacity']);
+s('opacity-5','opacity:0.5',['opacity']);
+s('vis-vis','visibility:visible',['visibility']);
+s('vis-hid','visibility:hidden',['visibility']);
+s('vis-collapse','visibility:collapse',['visibility']);
+out.push('SUP position:sticky = '+(()=>{try{return CSS.supports('position','sticky')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP z-index:9999 = '+(()=>{try{return CSS.supports('z-index','9999')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP opacity:0.5 = '+(()=>{try{return CSS.supports('opacity','0.5')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP visibility:collapse = '+(()=>{try{return CSS.supports('visibility','collapse')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
