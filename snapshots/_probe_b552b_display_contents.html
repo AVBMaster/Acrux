@@ -1,0 +1,19 @@
+<!doctype html><html><head><style>
+  .parent { background: #eee; padding: 4px; border: 2px solid #888; }
+  .contents { display: contents; background: #4ac; }
+  .child { background: #c48; color: white; }
+</style></head><body>
+<div class="parent" id="p1">
+  <div class="contents" id="c1"><span class="child" id="k1">child-in-contents</span></div>
+  <div class="contents" id="c2"><span class="child" id="k2">child2</span></div>
+</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function r(id){ const e=document.getElementById(id); const b=e.getBoundingClientRect();
+  out.push(id+' rect='+Math.round(b.width)+'x'+Math.round(b.height)
+    +' @'+Math.round(b.left)+','+Math.round(b.top)
+    +' display='+getComputedStyle(e).display); }
+r('p1'); r('c1'); r('c2'); r('k1');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

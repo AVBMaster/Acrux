@@ -1,0 +1,27 @@
+<!doctype html><html><head><style>
+  .cqi { container-type: inline-size; width: 200px; }
+  .cq { container-type: size; width: 100px; height: 50px; }
+  @container (min-width: 150px) { .mark1 { background: lime; } }
+  .gap1 { gap: 10px; }
+  .rgap { row-gap: 8px; column-gap: 12px; }
+  .ar { aspect-ratio: 16 / 9; }
+  .obj { object-fit: cover; }
+</style></head><body>
+<div class="cqi" id="cqi"><div class="mark1" id="mark1">mark1</div></div>
+<div class="gap1" id="gap1">gap</div>
+<div class="ar" id="ar" style="width:160px">ar</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('cqi','container-type');
+g('cqi','container-name');
+g('gap1','gap');
+g('gap1','row-gap');
+g('gap1','column-gap');
+g('ar','aspect-ratio');
+out.push('supports container='+CSS.supports('container-type','inline-size'));
+out.push('supports aspect-ratio='+CSS.supports('aspect-ratio','16/9'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

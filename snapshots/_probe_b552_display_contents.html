@@ -1,0 +1,24 @@
+<!doctype html><html><head><style>
+  .contents { display: contents; }
+  .flow-root { display: flow-root; }
+  .parent { background: #eee; padding: 4px; }
+  .child { background: #4ac; color: white; padding: 4px; margin: 2px; }
+  .fr { display: flow-root; background: #f4f; padding: 8px; }
+</style></head><body>
+<div class="parent" id="p1">
+  <span class="contents" id="c1">contents</span>
+  <span class="contents" id="c2">span2</span>
+</div>
+<div class="fr" id="fr1"><span id="fr-child">flow-root text</span></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function d(id){ const e=document.getElementById(id);
+  const cs=getComputedStyle(e);
+  out.push(id+' display='+JSON.stringify(cs.display)
+    +' offsetWidth='+e.offsetWidth+' offsetHeight='+e.offsetHeight); }
+d('p1'); d('c1'); d('c2'); d('fr1');
+// :has with display:contents children
+out.push('p1 has-child='+document.getElementById('p1').matches(':has(*)'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

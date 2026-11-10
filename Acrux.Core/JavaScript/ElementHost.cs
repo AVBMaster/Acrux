@@ -872,6 +872,12 @@ public partial class ElementHost : IDomPrototypeHost
     /// script that measures text see an empty page.</summary>
     private (float left, float top, float width, float height) LayoutRect()
     {
+        // 'display: contents' generates no box of its own, and unlike an inline element it has no
+        // fragments either — its children are laid out as if they were the parent's own. The
+        // reference engine answers an empty rectangle at the origin for it (measured), not the
+        // union of the children it no longer wraps.
+        if (_element.ComputedStyle?.Display == DisplayType.Contents)
+            return (0, 0, 0, 0);
         var box = _element.LayoutBox;
         if (box != null)
             return (box.BorderBox.Left, box.BorderBox.Top, box.BorderBox.Width, box.BorderBox.Height);
