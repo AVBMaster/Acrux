@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b493: scroll / overscroll / scroll-snap
+s('sg-auto','scrollbar-gutter:auto',['scrollbar-gutter']);
+s('sg-stable','scrollbar-gutter:stable',['scrollbar-gutter']);
+s('sg-both','scrollbar-gutter:stable both-edges',['scrollbar-gutter']);
+s('ob-auto','overscroll-behavior:auto',['overscroll-behavior']);
+s('ob-contain','overscroll-behavior:contain',['overscroll-behavior']);
+s('ob-none','overscroll-behavior:none',['overscroll-behavior']);
+s('obx-contain','overscroll-behavior-x:contain',['overscroll-behavior-x']);
+s('oby-none','overscroll-behavior-y:none',['overscroll-behavior-y']);
+s('sn-none','scroll-snap-type:none',['scroll-snap-type']);
+s('sn-x','scroll-snap-type:x mandatory',['scroll-snap-type']);
+s('sn-y','scroll-snap-type:y proximity',['scroll-snap-type']);
+s('sn-both','scroll-snap-type:both mandatory',['scroll-snap-type']);
+s('sn-x-prox','scroll-snap-type:x proximity',['scroll-snap-type']);
+s('ssa-none','scroll-snap-align:none',['scroll-snap-align']);
+s('ssa-start','scroll-snap-align:start',['scroll-snap-align']);
+s('ssa-end','scroll-snap-align:end',['scroll-snap-align']);
+s('ssa-center','scroll-snap-align:center',['scroll-snap-align']);
+s('ssa-both','scroll-snap-align:both',['scroll-snap-align']);
+s('ssa-start-end','scroll-snap-align:start end',['scroll-snap-align']);
+s('ssc-none','scroll-snap-stop:none',['scroll-snap-stop']);
+s('ssc-normal','scroll-snap-stop:normal',['scroll-snap-stop']);
+s('ssc-always','scroll-snap-stop:always',['scroll-snap-stop']);
+s('sp-x','scroll-padding:10px',['scroll-padding']);
+s('spm-top','scroll-padding-top:10px',['scroll-padding-top']);
+s('ssm-inline','scroll-margin-inline:5px',['scroll-margin-inline']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
