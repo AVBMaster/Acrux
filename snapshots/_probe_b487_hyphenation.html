@@ -1,0 +1,40 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b487: hyphenation / line-break / text-spacing
+s('hy-manual','hyphens:manual',['hyphens']);
+s('hy-auto','hyphens:auto',['hyphens']);
+s('hy-none','hyphens:none',['hyphens']);
+s('lb-auto','line-break:auto',['line-break']);
+s('lb-loose','line-break:loose',['line-break']);
+s('lb-normal','line-break:normal',['line-break']);
+s('lb-strict','line-break:strict',['line-break']);
+s('lb-anywhere','line-break:anywhere',['line-break']);
+s('wb-normal','word-break:normal',['word-break']);
+s('wb-break-all','word-break:break-all',['word-break']);
+s('wb-keep-all','word-break:keep-all',['word-break']);
+s('ow-normal','overflow-wrap:normal',['overflow-wrap']);
+s('ow-break-word','overflow-wrap:break-word',['overflow-wrap']);
+s('ow-anywhere','overflow-wrap:anywhere',['overflow-wrap']);
+s('fss-none','font-size-adjust:none',['font-size-adjust']);
+s('fss-num','font-size-adjust:0.5',['font-size-adjust']);
+s('fss-from-font','font-size-adjust:from-font',['font-size-adjust']);
+s('fss-ex-height','font-size-adjust:ex-height 0.5',['font-size-adjust']);
+s('tas-normal','text-autospace:normal',['text-autospace']);
+s('tas-none','text-autospace:none',['text-autospace']);
+s('tst-normal','text-spacing-trim:normal',['text-spacing-trim']);
+s('tst-space-all','text-spacing-trim:space-all',['text-spacing-trim']);
+s('tst-space-first','text-spacing-trim:space-first',['text-spacing-trim']);
+s('tst-trim-all','text-spacing-trim:trim-all',['text-spacing-trim']);
+s('tst-trim-adjacent','text-spacing-trim:trim-adjacent',['text-spacing-trim']);
+s('hp-none','hanging-punctuation:none',['hanging-punctuation']);
+s('hp-first','hanging-punctuation:first',['hanging-punctuation']);
+s('hp-last','hanging-punctuation:last',['hanging-punctuation']);
+s('hp-allow-end','hanging-punctuation:allow-end',['hanging-punctuation']);
+s('hp-first-last','hanging-punctuation:first last',['hanging-punctuation']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
