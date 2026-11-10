@@ -1,0 +1,39 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// text properties
+s('ws-normal','white-space:normal',['white-space']);
+s('ws-pre','white-space:pre',['white-space']);
+s('ws-nowrap','white-space:nowrap',['white-space']);
+s('ws-prewrap','white-space:pre-wrap',['white-space']);
+s('ws-break','white-space:break-spaces',['white-space']);
+s('wb-normal','word-break:normal',['word-break']);
+s('wb-breakall','word-break:break-all',['word-break']);
+s('wb-keepall','word-break:keep-all',['word-break']);
+s('ow-normal','overflow-wrap:normal',['overflow-wrap']);
+s('ow-anywhere','overflow-wrap:anywhere',['overflow-wrap']);
+s('ow-breakword','overflow-wrap:break-word',['overflow-wrap']);
+s('tt-none','text-transform:none',['text-transform']);
+s('tt-upper','text-transform:uppercase',['text-transform']);
+s('tt-cap','text-transform:capitalize',['text-transform']);
+s('ls-2px','letter-spacing:2px',['letter-spacing']);
+s('ls-normal','letter-spacing:normal',['letter-spacing']);
+s('ls-em','letter-spacing:0.1em',['letter-spacing']);
+s('ti-2em','text-indent:2em',['text-indent']);
+s('ti-10px','text-indent:10px',['text-indent']);
+s('ta-justify','text-align:justify',['text-align']);
+s('ta-left','text-align:left',['text-align']);
+s('ta-center','text-align:center',['text-align']);
+s('ta-right','text-align:right',['text-align']);
+s('lh-normal','line-height:normal',['line-height']);
+s('lh-num','line-height:1.5',['line-height']);
+s('lh-px','line-height:20px',['line-height']);
+s('lh-pct','line-height:150%',['line-height']);
+s('wo-normal','word-spacing:normal',['word-spacing']);
+s('wo-5px','word-spacing:5px',['word-spacing']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
