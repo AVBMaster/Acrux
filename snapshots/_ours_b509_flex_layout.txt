@@ -1,0 +1,24 @@
+SUP container-type = true
+SUP container-name = true
+SUP @container = true
+fl-grow-only flex-grow=2 | flex-shrink=1 | flex-basis=auto
+fl-shrink0 flex-grow=0 | flex-shrink=0 | flex-basis=auto
+fl-basis-min flex-basis=min-content
+fl-basis-max flex-basis=max-content
+fl-basis-auto flex-basis=auto
+fl-basis-0 flex-basis=0px
+fl-basis-0px flex-basis=0px
+fl-basis-pct flex-basis=50%
+order-def order=0
+order-5 order=5
+order-neg order=-3
+fwrap-nowrap flex-wrap=nowrap
+fwrap-wrap flex-wrap=wrap
+fwrap-rev flex-wrap=wrap-reverse
+fdir-row flex-direction=row
+fdir-col flex-direction=column
+fdir-row-rev flex-direction=row-reverse
+fdir-col-rev flex-direction=column-reverse
+fflow-1 flex-direction=row | flex-wrap=nowrap
+fflow-2 flex-direction=column | flex-wrap=wrap
+fflow-rev flex-direction=row-reverse | flex-wrap=wrap-reverse

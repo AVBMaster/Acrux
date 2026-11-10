@@ -1,0 +1,40 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// flex layout actual computed widths after layout
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// container queries / @container support
+out.push('SUP container-type = '+CSS.supports('container-type','inline-size'));
+out.push('SUP container-name = '+CSS.supports('container-name','x'));
+out.push('SUP @container = '+CSS.supports('selector(:container(x))'));
+// flex shorthand edge cases
+s('fl-grow-only','flex-grow:2',['flex-grow','flex-shrink','flex-basis']);
+s('fl-shrink0','flex-shrink:0',['flex-grow','flex-shrink','flex-basis']);
+s('fl-basis-min','flex-basis:min-content',['flex-basis']);
+s('fl-basis-max','flex-basis:max-content',['flex-basis']);
+s('fl-basis-auto','flex-basis:auto',['flex-basis']);
+s('fl-basis-0','flex-basis:0',['flex-basis']);
+s('fl-basis-0px','flex-basis:0px',['flex-basis']);
+s('fl-basis-pct','flex-basis:50%',['flex-basis']);
+// order
+s('order-def','order:0',['order']);
+s('order-5','order:5',['order']);
+s('order-neg','order:-3',['order']);
+// flex-wrap
+s('fwrap-nowrap','flex-wrap:nowrap',['flex-wrap']);
+s('fwrap-wrap','flex-wrap:wrap',['flex-wrap']);
+s('fwrap-rev','flex-wrap:wrap-reverse',['flex-wrap']);
+// flex-direction
+s('fdir-row','flex-direction:row',['flex-direction']);
+s('fdir-col','flex-direction:column',['flex-direction']);
+s('fdir-row-rev','flex-direction:row-reverse',['flex-direction']);
+s('fdir-col-rev','flex-direction:column-reverse',['flex-direction']);
+// flex-flow shorthand
+s('fflow-1','flex-flow:row',['flex-direction','flex-wrap']);
+s('fflow-2','flex-flow:column wrap',['flex-direction','flex-wrap']);
+s('fflow-rev','flex-flow:row-reverse wrap-reverse',['flex-direction','flex-wrap']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
