@@ -1,0 +1,22 @@
+op-1 opacity=1
+op-05 opacity=0.5
+op-0 opacity=0
+tr-none transform=none
+tr-translate transform=matrix(1, 0, 0, 1, 10, 20)
+tr-rotate transform=matrix(0.707107, 0.707107, -0.707107, 0.707107, 0, 0)
+tr-scale transform=matrix(2, 0, 0, 2, 0, 0)
+tr-skew transform=matrix(1, 0, 0.176327, 1, 0, 0)
+tr-matrix transform=matrix(1, 0, 0, 1, 10, 20)
+tr-multi transform=matrix(1.41421, 1.41421, -1.41421, 1.41421, 10, 0)
+tr-origin transform-origin=392px 0px
+tr-origin-px transform-origin=10px 20px
+tr-n transition-property=none | transition-duration=0s
+tr-all transition-property=all | transition-duration=0.3s | transition-timing-function=ease
+tr-color transition-property=color | transition-duration=0.2s | transition-timing-function=linear
+tr-multi transition-property=color, background | transition-duration=0.2s, 0.3s
+tr-delay transition-property=color | transition-duration=0.2s | transition-delay=0.1s
+fl-none filter=none
+fl-blur filter=blur(5px)
+fl-bright filter=brightness(0.5)
+fl-multi filter=blur(2px) brightness(0.8)
+fl-drop filter=drop-shadow(rgb(0, 0, 0) 2px 2px 2px)

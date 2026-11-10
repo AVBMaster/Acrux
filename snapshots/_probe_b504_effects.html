@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// opacity
+s('op-1','opacity:1',['opacity']);
+s('op-05','opacity:0.5',['opacity']);
+s('op-0','opacity:0',['opacity']);
+// transform
+s('tr-none','transform:none',['transform']);
+s('tr-translate','transform:translate(10px,20px)',['transform']);
+s('tr-rotate','transform:rotate(45deg)',['transform']);
+s('tr-scale','transform:scale(2)',['transform']);
+s('tr-skew','transform:skew(10deg)',['transform']);
+s('tr-matrix','transform:matrix(1,0,0,1,10,20)',['transform']);
+s('tr-multi','transform:translate(10px) rotate(45deg) scale(2)',['transform']);
+s('tr-origin','transform-origin:50% 50%',['transform-origin']);
+s('tr-origin-px','transform-origin:10px 20px',['transform-origin']);
+// transition
+s('tr-n','transition:none',['transition-property','transition-duration']);
+s('tr-all','transition:all 0.3s ease',['transition-property','transition-duration','transition-timing-function']);
+s('tr-color','transition:color 0.2s linear',['transition-property','transition-duration','transition-timing-function']);
+s('tr-multi','transition:color 0.2s,background 0.3s',['transition-property','transition-duration']);
+s('tr-delay','transition:color 0.2s ease 0.1s',['transition-property','transition-duration','transition-delay']);
+// filter
+s('fl-none','filter:none',['filter']);
+s('fl-blur','filter:blur(5px)',['filter']);
+s('fl-bright','filter:brightness(0.5)',['filter']);
+s('fl-multi','filter:blur(2px) brightness(0.8)',['filter']);
+s('fl-drop','filter:drop-shadow(2px 2px 2px black)',['filter']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
