@@ -1,0 +1,22 @@
+<!doctype html><html><body>
+<ol id="ol1"><li id="li1">one</li><li id="li2">two</li></ol>
+<ul id="ul1" style="list-style-type:square"><li id="uli1">x</li></ul>
+<div id="ctr" style="counter-reset:sec 3"><div id="ctr2" style="counter-increment:sec">y</div></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function s(label,id,prop){ try{ out.push(label+' '+prop+'='+JSON.stringify(getComputedStyle(document.getElementById(id))[prop])); }catch(e){ out.push(label+' ERR '+e.message); } }
+s('ol-li1','li1','listStyleType');
+s('ol-li1-pos','li1','listStylePosition');
+s('ul-square','uli1','listStyleType');
+s('ctr-reset','ctr','counterReset');
+s('ctr-inc','ctr2','counterIncrement');
+// list-style shorthand
+const l=document.createElement('li'); l.style.cssText='list-style:square inside';
+document.body.appendChild(l);
+out.push('ls-shorthand type='+JSON.stringify(l.style.listStyleType)+' pos='+JSON.stringify(l.style.listStylePosition));
+l.remove();
+// ::marker
+try{ const cs=getComputedStyle(document.getElementById('li1'),'::marker'); out.push('marker content='+JSON.stringify(cs.content)); }catch(e){ out.push('marker ERR '+e.message); }
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

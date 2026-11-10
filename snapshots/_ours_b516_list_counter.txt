@@ -1,0 +1,11 @@
+one
+two
+x
+y
+ol-li1 listStyleType="decimal"
+ol-li1-pos listStylePosition="outside"
+ul-square listStyleType="square"
+ctr-reset counterReset="sec 3"
+ctr-inc counterIncrement="sec 1"
+ls-shorthand type="square" pos="inside"
+marker content="normal"
