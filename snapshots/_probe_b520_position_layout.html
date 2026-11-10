@@ -1,0 +1,20 @@
+<!doctype html><html><body>
+<div id="rel" style="position:relative;width:100px;height:50px;top:10px;left:20px;background:red">rel</div>
+<div id="abs" style="position:absolute;top:5px;left:5px;width:60px;height:30px;background:blue">abs</div>
+<div id="float" style="float:left;width:40px;height:40px;background:green">fl</div>
+<div id="after-float" style="width:80px;height:20px;background:yellow">after</div>
+<div id="z1" style="position:absolute;z-index:10;top:100px;background:cyan;width:30px;height:30px">z10</div>
+<div id="z2" style="position:absolute;z-index:auto;top:100px;left:10px;background:magenta;width:30px;height:30px">zauto</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function r(id){ const b=document.getElementById(id).getBoundingClientRect();
+  return id+': x='+Math.round(b.x*100)/100+' y='+Math.round(b.y*100)/100+' w='+Math.round(b.width*100)/100+' h='+Math.round(b.height*100)/100; }
+out.push(r('rel'));
+out.push(r('abs'));
+out.push(r('float'));
+out.push(r('after-float'));
+out.push(r('z1'));
+out.push(r('z2'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
