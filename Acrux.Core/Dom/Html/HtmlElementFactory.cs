@@ -218,4 +218,10 @@ public static class HtmlElementFactory
             return ctor(lower);
         return new HTMLUnknownElement(null, lower);
     }
+
+    /// <summary>HTML §4.13.2: ':defined' matches a known HTML element. A tag the parser built as an
+    /// HTMLUnknownElement (measured: a <code>&lt;unknown-el&gt;</code>) does not match it — the
+    /// reference only answers true for tags that name a real interface.</summary>
+    public static bool IsKnown(string tagName)
+        => _constructors.ContainsKey(tagName.ToLowerInvariant());
 }

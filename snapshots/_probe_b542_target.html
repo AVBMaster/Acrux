@@ -1,0 +1,18 @@
+<!doctype html><html><body>
+<section id="sec1"><h2 id="h1">one</h2></section>
+<div id="empty"></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const e=document.getElementById(label);
+  out.push(label+' '+sel+'='+e.matches(sel)); }
+  catch(err){ out.push(label+' '+sel+' ERR '+err.message); } }
+m('sec1',':target');
+m('h1',':target');
+m('empty',':target');
+// :has with relative selector
+m('sec1',':has(h2)');
+m('sec1',':has(> h2)');
+m('empty',':has(*)');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

@@ -1,0 +1,25 @@
+<!doctype html><html><body>
+<form>
+<input type="radio" name="g" id="d-radio-def" checked>
+<input type="radio" name="g" id="d-radio">
+<input type="checkbox" id="d-cb-def" checked>
+<input type="checkbox" id="d-cb">
+<input id="d-input-def" value="x">
+<select id="d-select"><option id="d-opt-def" selected>a</option><option id="d-opt">b</option></select>
+<button id="d-button">go</button>
+<textarea id="d-ta">t</textarea>
+</form>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const e=document.getElementById(label);
+  out.push(label+' '+sel+'='+e.matches(sel)); }
+  catch(err){ out.push(label+' '+sel+' ERR '+err.message); } }
+['d-radio-def','d-radio','d-cb-def','d-cb','d-input-def','d-select','d-opt-def','d-opt','d-button','d-ta'].forEach(id=>{
+  m(id,':default');
+  m(id,':checked');
+  m(id,':enabled');
+  m(id,':disabled');
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

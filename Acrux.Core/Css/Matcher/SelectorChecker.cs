@@ -1,5 +1,6 @@
 using System.Globalization;
 using Acrux.Core.Dom;
+using Acrux.Core.Dom.Html;
 
 namespace Acrux.Core.Css.Matcher;
 
@@ -262,14 +263,14 @@ public class SelectorChecker
             CssPseudoType.Checked => element.HasAttribute("checked") || element.HasAttribute("selected"),
             CssPseudoType.Required => element.HasAttribute("required"),
             CssPseudoType.Optional => !element.HasAttribute("required") && IsFormLike(element),
-            CssPseudoType.Valid => true,
-            CssPseudoType.Invalid => false,
-            CssPseudoType.InRange => true,
-            CssPseudoType.OutOfRange => false,
+            CssPseudoType.Valid => IsValidControl(element),
+            CssPseudoType.Invalid => IsInvalidControl(element),
+            CssPseudoType.InRange => IsInRange(element),
+            CssPseudoType.OutOfRange => IsOutOfRange(element),
             CssPseudoType.UserValid => true,
             CssPseudoType.UserInvalid => false,
-            CssPseudoType.Default => element.HasAttribute("checked") || element.HasAttribute("selected"),
-            CssPseudoType.Indeterminate => false,
+            CssPseudoType.Default => IsDefaultControl(element),
+            CssPseudoType.Indeterminate => IsIndeterminate(element),
             CssPseudoType.PlaceholderShown => element.HasAttribute("placeholder") && string.IsNullOrEmpty(element.Value),
             CssPseudoType.ReadOnly => !IsReadWriteControl(element),
             CssPseudoType.ReadWrite => IsReadWriteControl(element),
@@ -280,7 +281,7 @@ public class SelectorChecker
             CssPseudoType.Scope => ReferenceEquals(element, QueryScope),
             CssPseudoType.Lang => MatchLang(selector.Argument, element),
             CssPseudoType.Dir => MatchDir(selector.Argument, element),
-            CssPseudoType.Defined => true,
+            CssPseudoType.Defined => IsDefined(element),
             CssPseudoType.Target => false,
             CssPseudoType.Modal => element.IsModal,
             CssPseudoType.PopoverOpen => element.IsPopoverShowing,
@@ -373,6 +374,114 @@ public class SelectorChecker
             or "date" or "month" or "week" or "time" or "datetime-local" or "range";
     }
 
+    /// <summary>HTML §4.10.4: whether this control takes part in constraint validation at all —
+    /// a submittable control that is neither disabled nor read-only. The four :valid/:invalid/
+    /// :in-range/:out-of-range pseudos only apply to such controls (measured: a disabled required
+    /// field answers :valid because it is barred from validation).</summary>
+    private static bool WillValidate(Element element)
+    {
+        if (!element.TagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase) &&
+            !element.TagName.Equals("TEXTAREA", StringComparison.OrdinalIgnoreCase) &&
+            !element.TagName.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (element.HasAttribute("disabled") || element.HasAttribute("readonly")) return false;
+        if (element.HasAttribute("formnovalidate")) return false;
+        var inputType = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        // A hidden input never validates (HTML §4.10.4).
+        return inputType != "hidden";
+    }
+
+    /// <summary>Whether this INPUT/TEXTAREA/SELECT has a constraint that fires right now. Returns
+    /// the two answers the range pseudos need in one pass.</summary>
+    private static (bool valueMissing, bool badInput, bool typeMismatch, bool patternMismatch,
+        bool rangeUnderflow, bool rangeOverflow) ComputeFlags(Element element)
+    {
+        bool valueMissing = false, badInput = false, typeMismatch = false,
+             patternMismatch = false, rangeUnderflow = false, rangeOverflow = false;
+
+        var text = element.Value ?? "";
+        var tagName = element.TagName;
+        var inputType = tagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase)
+            ? (element.GetAttribute("type") ?? "text").ToLowerInvariant()
+            : tagName.Equals("TEXTAREA", StringComparison.OrdinalIgnoreCase) ? "textarea" : "select";
+
+        // valueMissing: a required field with no value.
+        valueMissing = element.HasAttribute("required") && text.Length == 0;
+
+        if (inputType == "number" || inputType == "range")
+        {
+            if (text.Length > 0 && !double.TryParse(text, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out _))
+                badInput = true;
+
+            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+            {
+                if (double.TryParse(element.GetAttribute("min"), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var min) && number < min)
+                    rangeUnderflow = true;
+                if (double.TryParse(element.GetAttribute("max"), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var max) && number > max)
+                    rangeOverflow = true;
+            }
+        }
+
+        if (inputType == "email" && text.Length > 0 && !text.Contains('@'))
+            typeMismatch = true;
+        if (inputType == "url" && text.Length > 0 && !Uri.IsWellFormedUriString(text, UriKind.Absolute))
+            typeMismatch = true;
+
+        var pattern = element.GetAttribute("pattern");
+        if (!string.IsNullOrEmpty(pattern) && text.Length > 0 && inputType != "number"
+            && inputType != "range" && inputType != "email" && inputType != "url")
+        {
+            try
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(text, "^(?:" + pattern + ")\\z"))
+                    patternMismatch = true;
+            }
+            catch { /* un-compilable pattern is not checked, matching the reference */ }
+        }
+
+        return (valueMissing, badInput, typeMismatch, patternMismatch, rangeUnderflow, rangeOverflow);
+    }
+
+    /// <summary>HTML §4.10.4: the control is valid when no constraint flag fires.</summary>
+    private static bool IsValidControl(Element element)
+    {
+        if (!WillValidate(element)) return true;
+        var f = ComputeFlags(element);
+        return !(f.valueMissing || f.badInput || f.typeMismatch || f.patternMismatch
+            || f.rangeUnderflow || f.rangeOverflow);
+    }
+
+    private static bool IsInvalidControl(Element element)
+    {
+        if (!WillValidate(element)) return false;
+        var f = ComputeFlags(element);
+        return f.valueMissing || f.badInput || f.typeMismatch || f.patternMismatch
+            || f.rangeUnderflow || f.rangeOverflow;
+    }
+
+    /// <summary>HTML §4.10.4: the control has a range and its value is inside it — only
+    /// number/range inputs can be :in-range or :out-of-range.</summary>
+    private static bool IsInRange(Element element)
+    {
+        if (!WillValidate(element)) return false;
+        var inputType = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        if (inputType != "number" && inputType != "range") return false;
+        var f = ComputeFlags(element);
+        return !f.rangeUnderflow && !f.rangeOverflow;
+    }
+
+    private static bool IsOutOfRange(Element element)
+    {
+        if (!WillValidate(element)) return false;
+        var inputType = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        if (inputType != "number" && inputType != "range") return false;
+        var f = ComputeFlags(element);
+        return f.rangeUnderflow || f.rangeOverflow;
+    }
+
     /// <summary>The element a running query is anchored to, for ':scope'. The matcher is re-entered
     /// by nested lists (':is()', ':has()'), so a query that sets it hands the previous anchor back
     /// when it finishes.</summary>
@@ -420,6 +529,105 @@ public class SelectorChecker
             if (!string.IsNullOrEmpty(dir)) { direction = dir.ToLowerInvariant(); break; }
         }
         return direction == wanted;
+    }
+
+    /// <summary>HTML §4.13.6: ':indeterminate' matches a progress bar (an unspecified one always),
+    /// and a radio in a group whose radios none of is checked. A checkbox that is not checked is not
+    /// indeterminate (measured: '<input type=checkbox>' is false, a radio in an all-unchecked group
+    /// is true).</summary>
+    private static bool IsIndeterminate(Element element)
+    {
+        if (element is HTMLProgressElement) return true;
+        if (element is not HTMLInputElement input) return false;
+        var inputType = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        if (inputType == "radio")
+        {
+            // HTML §4.10.4: the radio is indeterminate when no radio in its group carries a checked
+            // state — walk its siblings for the first radio with the same name (the checked attribute
+            // is the state the radio carries while nothing else has set it).
+            if (input.Checked) return false;
+            var name = element.GetAttribute("name");
+            var parent = element.ParentElement;
+            if (parent == null) return false;
+            if (HasCheckedRadioInGroup(parent, name)) return false;
+            return true;
+        }
+        return input.Indeterminate;
+    }
+
+    /// <summary>Whether any radio in the subtree under |parent| is checked in this group
+    /// (HTML §4.10.4). The checked state is the element's own checked flag OR the checked
+    /// content attribute — the attribute is the initial state the parser did not promote to
+    /// the property (measured: a radio with checked in its markup is not :indeterminate).</summary>
+    private static bool HasCheckedRadioInGroup(Element parent, string? name)
+    {
+        foreach (var child in parent.Children)
+        {
+            if (child is HTMLInputElement input
+                && input.GetAttribute("type").Equals("radio", StringComparison.OrdinalIgnoreCase)
+                && input.GetAttribute("name") == name
+                && (input.Checked || input.HasAttribute("checked")))
+                return true;
+            if (child is Element childElement && HasCheckedRadioInGroup(childElement, name))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>HTML §4.13.2: ':defined' only matches an element whose tag names a real interface.
+    /// A tag the parser built as an HTMLUnknownElement is not defined (measured).</summary>
+    private static bool IsDefined(Element element)
+        => element is not HTMLUnknownElement && HtmlElementFactory.IsKnown(element.TagName);
+
+    /// <summary>HTML §4.13.7: ':default' matches a checkbox/radio with the checked content
+    /// attribute, a selected option, or a submit button — one that is the default button of its
+    /// form (HTML §4.10.22.2: the first submit control in tree order). Measured: a typeless or
+    /// type=submit button matches ':default' without any attribute.</summary>
+    private static bool IsDefaultControl(Element element)
+    {
+        if (element.HasAttribute("checked") || element.HasAttribute("selected")) return true;
+        if (!IsSubmitControl(element)) return false;
+        // The form default button is the first submit control in tree order among the form's
+        // listed controls (HTML §4.10.22.2). The reference roots that walk at the button's
+        // owning form when it has one, otherwise the element is not the default (measured).
+        var root = FindOwningForm(element);
+        if (root == null) return false;
+        return FirstSubmitIn(root) == element;
+    }
+
+    /// <summary>The nearest ancestor 'form' element, which is what scopes a submit button's
+    /// default-ness (the button has no form property of its own here).</summary>
+    private static Element? FindOwningForm(Element element)
+    {
+        for (var parent = element.ParentElement; parent != null; parent = parent.ParentElement)
+            if (parent.TagName.Equals("FORM", StringComparison.OrdinalIgnoreCase)) return parent;
+        return null;
+    }
+
+    /// <summary>The first submit control in the subtree under |root|, in tree order, or null when
+    /// the subtree holds none (HTML §4.10.22.2: the default button is the first one).</summary>
+    private static Element? FirstSubmitIn(Element root)
+    {
+        foreach (var child in root.Children)
+        {
+            if (child is not Element childElement) continue;
+            if (IsSubmitControl(childElement)) return childElement;
+            var found = FirstSubmitIn(childElement);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static bool IsSubmitControl(Element element)
+    {
+        if (element.TagName.Equals("BUTTON", StringComparison.OrdinalIgnoreCase))
+        {
+            var type = (element.GetAttribute("type") ?? "submit").ToLowerInvariant();
+            return type == "submit";
+        }
+        if (element.TagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase))
+            return (element.GetAttribute("type") ?? "text").ToLowerInvariant() == "submit";
+        return false;
     }
 
     /// <summary>The language declared for the element, following HTML: the nearest 'lang' attribute

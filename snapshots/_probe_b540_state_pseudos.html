@@ -1,0 +1,31 @@
+<!doctype html><html><body>
+<div id="a-defined"></div>
+<unknown-el id="a-unknown"></unknown-el>
+<progress id="a-progress"></progress>
+<input type="checkbox" id="a-cb-unchecked">
+<input type="radio" name="grp1" id="a-radio-none-checked">
+<input type="radio" name="grp2" id="a-radio-one" checked>
+<input type="radio" name="grp2" id="a-radio-two">
+<input type="text" id="a-ph-empty" placeholder="type here">
+<input type="text" id="a-ph-full" placeholder="type here" value="hi">
+<input type="text" id="a-noPh" value="z">
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const e=document.getElementById(label);
+  out.push(label+' '+sel+'='+e.matches(sel)); }
+  catch(err){ out.push(label+' '+sel+' ERR '+err.message); } }
+m('a-defined',':defined');
+m('a-unknown',':defined');
+m('a-progress',':indeterminate');
+m('a-cb-unchecked',':indeterminate');
+m('a-radio-none-checked',':indeterminate');
+m('a-radio-one',':indeterminate');
+m('a-radio-two',':indeterminate');
+m('a-ph-empty',':placeholder-shown');
+m('a-ph-full',':placeholder-shown');
+m('a-noPh',':placeholder-shown');
+m('a-ph-empty',':user-valid');
+m('a-ph-empty',':user-invalid');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

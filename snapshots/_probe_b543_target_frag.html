@@ -1,0 +1,8 @@
+<!doctype html><html><body>
+<section id="sec1"><p id="p1">one</p></section>
+<pre id="rec"></pre>
+<script>
+// ':target' matches the element whose id equals the URL fragment. Load the fragment from the
+// hash the harness sets, so both engines see the same 'current target'.
+document.getElementById('rec').textContent = 'hash='+location.hash;
+</script></body></html>
