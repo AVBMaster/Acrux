@@ -1,0 +1,38 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// display
+s('d-block','display:block',['display']);
+s('d-inline','display:inline',['display']);
+s('d-inline-block','display:inline-block',['display']);
+s('d-flex','display:flex',['display']);
+s('d-inline-flex','display:inline-flex',['display']);
+s('d-grid','display:grid',['display']);
+s('d-inline-grid','display:inline-grid',['display']);
+s('d-none','display:none',['display']);
+s('d-contents','display:contents',['display']);
+s('d-flow-root','display:flow-root',['display']);
+s('d-table','display:table',['display']);
+s('d-table-cell','display:table-cell',['display']);
+s('d-list-item','display:list-item',['display']);
+// box model
+s('w-auto','width:auto',['width']);
+s('w-100px','width:100px',['width']);
+s('w-pct','width:50%',['width']);
+s('w-max-content','width:max-content',['width']);
+s('w-min-content','width:min-content',['width']);
+s('w-fit-content','width:fit-content',['width']);
+s('w-min','width:min(100px,50px)',['width']);
+s('h-auto','height:auto',['height']);
+s('h-50px','height:50px',['height']);
+s('maxw-none','max-width:none',['max-width']);
+s('maxw-200','max-width:200px',['max-width']);
+s('minh-50','min-height:50px',['min-height']);
+s('box-border','box-sizing:border-box',['box-sizing']);
+s('box-content','box-sizing:content-box',['box-sizing']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
