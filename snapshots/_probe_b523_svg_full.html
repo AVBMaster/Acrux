@@ -1,0 +1,27 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+const ns='http://www.w3.org/2000/svg';
+function sv(label,attrs,css){ try{
+  const el=document.createElementNS(ns,attrs.tag||'rect');
+  for(const k in attrs) if(k!=='tag') el.setAttribute(k,attrs[k]);
+  if(css) el.style.cssText=css;
+  document.body.appendChild(el);
+  const cs=getComputedStyle(el);
+  out.push(label+' fill='+cs.fill+' stroke='+cs.stroke+' sw='+cs.strokeWidth+' fo='+cs.fillOpacity);
+  el.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+sv('fill-red-attr',{fill:'red'});
+sv('stroke-blue-attr',{stroke:'blue'});
+sv('sw-3-attr',{'stroke-width':'3'});
+sv('sw-3px-attr',{'stroke-width':'3px'});
+sv('fill-green-sw2',{fill:'green','stroke-width':'2'});
+sv('fill-opacity',{fill:'red','fill-opacity':'0.5'});
+sv('fill-rule',{fill:'red','fill-rule':'evenodd'});
+sv('css-rule-wins',{fill:'red'},'fill:blue');
+sv('attr-and-style',{fill:'red'},'stroke:green');
+// CSS rule targeting
+const st=document.createElement('style'); st.textContent='rect.r{fill:red;stroke:blue;stroke-width:3px}'; document.head.appendChild(st);
+sv('css-rule',{class:'r',fill:'green'});
+st.remove();
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

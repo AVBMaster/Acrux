@@ -306,6 +306,32 @@ public class StyleResolver
         {
             state.MatchedRules.Add(new MatchedRuleEntry { Properties = props, Priority = priority });
         }
+
+        // SVG presentation attributes are CSS declarations in their own right (SVG 2 §6.4):
+        // 'fill="red"' is 'fill: red' at UA-origin presentational-hint priority, so it sets the
+        // computed value a script reads and loses to any author rule. This engine has no SVG
+        // geometry/paint layout, but the computed surface still has to answer them — a CSS rule
+        // or setProperty('fill',…) already reaches it, and the attribute was the one channel that
+        // did not (measured: fill="red" computed black). Parsing the attributes through the same
+        // declaration-block parser the style attribute uses keeps the value reading identical.
+        if (element.NamespaceUri == "http://www.w3.org/2000/svg")
+        {
+            var svgProps = new CssPropertyValueSet();
+            foreach (var attr in element.Attributes)
+            {
+                var name = attr.Key;
+                var value = attr.Value;
+                if (EchoedProperties.Find(name) == null) continue;
+                var block = CssParserImpl.ParseDeclarationBlock(
+                    $"{name}:{value}", CssParserContext.Default());
+                foreach (var p in block.Properties)
+                    svgProps.SetLonghandProperty(p);
+            }
+            if (svgProps.PropertyCount > 0)
+            {
+                state.MatchedRules.Add(new MatchedRuleEntry { Properties = svgProps, Priority = priority });
+            }
+        }
     }
 
     /// <summary>HTML presentational width/height attributes are a non-negative
