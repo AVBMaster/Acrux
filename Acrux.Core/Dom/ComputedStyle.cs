@@ -2154,7 +2154,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
     public static ComputedStyle CreateDefault() => new();
 }
 
-public enum DisplayType { Block, Inline, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, ListItem, Table, TableRow, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableCell, TableCaption, TableColumnGroup, TableColumn, Ruby, Contents, None }
+public enum DisplayType { Block, Inline, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, ListItem, Table, TableRow, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableCell, TableCaption, TableColumnGroup, TableColumn, Ruby, RubyText, Contents, None }
 public enum PositionType { Static, Relative, Absolute, Fixed, Sticky }
 public enum FloatType { None, Left, Right, InlineStart, InlineEnd }
 public enum ClearType { None, Left, Right, Both, InlineStart, InlineEnd }

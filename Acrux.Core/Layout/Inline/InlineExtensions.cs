@@ -9,7 +9,7 @@ public static class InlineLayoutObjectExtensions
     public static bool IsOriginalDisplayInlineType(this LayoutObject layoutObject)
     {
         var display = layoutObject.StyleRef().Display;
-        return display is DisplayType.Inline or DisplayType.InlineBlock or DisplayType.Ruby;
+        return display is DisplayType.Inline or DisplayType.InlineBlock or DisplayType.Ruby or DisplayType.RubyText;
     }
 
     public static bool IsBR(this LayoutObject layoutObject) =>

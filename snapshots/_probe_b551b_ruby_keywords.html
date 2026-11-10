@@ -1,0 +1,17 @@
+<!doctype html><html><head><style>
+.a { display: ruby-text; }
+.b { display: ruby-base; }
+.c { display: ruby-text-container; }
+.d { display: ruby-base-container; }
+</style></head><body>
+<div class="a" id="a">a</div><div class="b" id="b">b</div>
+<div class="c" id="c">c</div><div class="d" id="d">d</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+['a','b','c','d'].forEach(id=>{
+  const e=document.getElementById(id);
+  out.push(id+' display='+JSON.stringify(getComputedStyle(e).display));
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

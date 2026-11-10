@@ -1295,7 +1295,8 @@ public class BlockLayoutAlgorithm : LayoutAlgorithm
             if (s.Position is PositionType.Absolute or PositionType.Fixed) return false;
             if (s.Float != FloatType.None) return false;
             return s.Display is DisplayType.Inline or DisplayType.InlineBlock
-                or DisplayType.InlineFlex or DisplayType.InlineGrid or DisplayType.Ruby;
+                or DisplayType.InlineFlex or DisplayType.InlineGrid or DisplayType.Ruby
+                or DisplayType.RubyText;
         }
         static bool IsBlockLevel(Node n)
         {
@@ -3735,7 +3736,7 @@ internal static class BlockLayoutAlgorithmNodeExtensions
                     hasInflowBlockChild = true;
                 continue;
             }
-            if (s.Display is DisplayType.Inline or DisplayType.InlineBlock or DisplayType.InlineFlex or DisplayType.InlineGrid or DisplayType.Ruby || s.Display == DisplayType.Inline)
+            if (s.Display is DisplayType.Inline or DisplayType.InlineBlock or DisplayType.InlineFlex or DisplayType.InlineGrid or DisplayType.Ruby or DisplayType.RubyText || s.Display == DisplayType.Inline)
             {
                 hasInlineChild = true;
                 continue;

@@ -1766,12 +1766,23 @@ public static class CssPropertyApplier
             };
         // A legacy keyword this engine lays out under another of the enum's members: 'inline-table'
         // is a table box here, but the reference engine answers the word the page wrote (measured).
+        // 'ruby-base' and the two container keywords are the opposite: the engine lays them out as
+        // block boxes AND answers 'block' (measured), so they keep the enum's word, not their own.
         var single = SplitDisplayTokens(value);
         return single.Length == 1
             && DisplayKeywords.TryGetValue(single[0], out var type)
-            && !type.ToCssString().Equals(single[0], StringComparison.OrdinalIgnoreCase)
+            && DisplayKeepsAuthoredWord.Contains(single[0].ToLowerInvariant())
                 ? single[0].ToLowerInvariant() : null;
     }
+
+    /// <summary>Single-keyword display values the reference engine echoes back verbatim even though
+    /// this engine lays them out under a different enum member (measured: 'inline-table' answers
+    /// 'inline-table' though it is a table box here). The ruby keywords that lay out as block are
+    /// deliberately absent — the reference answers 'block' for those, not their own spelling.</summary>
+    private static readonly HashSet<string> DisplayKeepsAuthoredWord = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "inline-table",
+    };
 
     /// <summary>
     /// The 'display' grammar (CSS Display 3 §3). A single legacy keyword is still accepted;
@@ -1978,6 +1989,17 @@ public static class CssPropertyApplier
             ["table-column"] = DisplayType.TableColumn,
             ["flow-root"] = DisplayType.Block,
             ["ruby"] = DisplayType.Ruby,
+            // CSS Display 3 §3.1: the ruby annotation keywords. Only 'ruby-text' keeps its own
+            // name on the computed surface (measured: <rt> computes 'ruby-text'); 'ruby-base' and
+            // the two container keywords are laid out as block boxes, which is the computed value
+            // the reference engine reports for them.
+            ["ruby-text"] = DisplayType.RubyText,
+            // 'ruby-base' and the two container keywords lay out as block boxes and the reference
+            // engine answers 'block' for them (measured), so they map straight to Block rather than
+            // keeping a spelling of their own.
+            ["ruby-base"] = DisplayType.Block,
+            ["ruby-text-container"] = DisplayType.Block,
+            ["ruby-base-container"] = DisplayType.Block,
             ["none"] = DisplayType.None,
             ["contents"] = DisplayType.Contents,
         };

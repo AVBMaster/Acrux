@@ -1,0 +1,23 @@
+<!doctype html><html><head><style>
+  ruby { display: ruby; }
+  .rb { display: ruby; }
+  .t { display: inline-block; }
+  .it { display: table; }
+  .lit { display: inline-table; }
+</style></head><body>
+<ruby id="r"><span id="rb">漢</span><rt id="rt">kan</rt></ruby>
+<div class="it" id="it">it</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function d(id){ const e=document.getElementById(id);
+  out.push(id+' display='+JSON.stringify(getComputedStyle(e).display)); }
+d('r'); d('rb'); d('rt'); d('it');
+// does display:ruby compute?
+const probe=document.createElement('div');
+probe.style.display='ruby';
+document.body.appendChild(probe);
+out.push('ruby via style='+JSON.stringify(getComputedStyle(probe).display));
+out.push('supports ruby='+CSS.supports('display','ruby'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

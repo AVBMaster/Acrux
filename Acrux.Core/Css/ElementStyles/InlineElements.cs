@@ -152,7 +152,7 @@ public static class InlineElements
                 break;
 
             case "rt":
-                style.Display = DisplayType.Inline;
+                style.Display = DisplayType.RubyText;
                 style.FontSize = 12;
                 style.VerticalAlign = VerticalAlignType.TextTop;
                 break;
