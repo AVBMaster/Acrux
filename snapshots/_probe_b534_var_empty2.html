@@ -1,0 +1,28 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+function rd(label,setup,prop){ try{
+  const d=document.createElement('div');
+  if(setup) d.setAttribute('style',setup);
+  document.body.appendChild(d);
+  // also read the echo (specified) vs computed
+  const cs=getComputedStyle(d);
+  out.push(label+' computed='+JSON.stringify(cs[prop]));
+  d.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+// The key distinction: empty var value -> property INVALID -> initial/inherited
+rd('color-empty-fb','--x:;color:var(--x,red)','color');
+rd('color-empty-nofb','--x:;color:var(--x)','color');
+rd('color-undef-fb','color:var(--nope,red)','color');
+rd('color-undef-nofb','color:var(--nope)','color');
+rd('color-good','--x:green;color:var(--x)','color');
+rd('color-both-undef','color:var(--a,var(--b,red))','color');
+rd('color-both-undef-nofb','color:var(--a,var(--b))','color');
+// inherited colour under a green parent, with empty var
+const p=document.createElement('div'); p.style.cssText='color:green';
+document.body.appendChild(p);
+const c=document.createElement('div'); c.setAttribute('style','--x:;color:var(--x,red)');
+p.appendChild(c);
+out.push('color-inherit-empty computed='+JSON.stringify(getComputedStyle(c).color)+' (Edge=green, inherited)');
+p.remove();
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
