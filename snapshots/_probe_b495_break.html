@@ -1,0 +1,29 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b495: fragmentation / break
+s('bb-auto','break-before:auto',['break-before']);
+s('bb-page','break-before:page',['break-before']);
+s('bb-avoid','break-before:avoid',['break-before']);
+s('bb-column','break-before:column',['break-before']);
+s('bb-region','break-before:region',['break-before']);
+s('bb-avoidp','break-before:avoid-page',['break-before']);
+s('ba-auto','break-after:auto',['break-after']);
+s('ba-page','break-after:page',['break-after']);
+s('bi-auto','break-inside:auto',['break-inside']);
+s('bi-avoid','break-inside:avoid',['break-inside']);
+s('bi-avoidc','break-inside:avoid-column',['break-inside']);
+s('pb-before','page-break-before:always',['page-break-before','break-before']);
+s('pb-after','page-break-after:always',['page-break-after','break-after']);
+s('pb-inside','page-break-inside:avoid',['page-break-inside','break-inside']);
+s('box-frag','box-decoration-break:slice',['box-decoration-break']);
+s('box-clone','box-decoration-break:clone',['box-decoration-break']);
+s('widows-2','widows:2',['widows']);
+s('orphans-3','orphans:3',['orphans']);
+s('widows-inh','widows:inherit',['widows']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

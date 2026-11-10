@@ -1,0 +1,19 @@
+bb-auto break-before=auto
+bb-page break-before=page
+bb-avoid break-before=avoid
+bb-column break-before=column
+bb-region break-before=auto
+bb-avoidp break-before=avoid-page
+ba-auto break-after=auto
+ba-page break-after=page
+bi-auto break-inside=auto
+bi-avoid break-inside=avoid
+bi-avoidc break-inside=avoid-column
+pb-before page-break-before=always | break-before=page
+pb-after page-break-after=always | break-after=page
+pb-inside page-break-inside=avoid | break-inside=avoid
+box-frag box-decoration-break=slice
+box-clone box-decoration-break=clone
+widows-2 widows=2
+orphans-3 orphans=3
+widows-inh widows=2
