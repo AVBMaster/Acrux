@@ -1,0 +1,10 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+const qs=['(color)','(color: 0)','(color: 8)','(monochrome)','(monochrome: 0)','(color-index)','(color-index: 0)','(grid)','(grid: 0)','(scan)'];
+for(const q of qs){
+  let r;
+  try{ r = String(matchMedia(q).matches); }catch(e){ r = 'ERR:'+e.message; }
+  out.push(q+' = '+r);
+}
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

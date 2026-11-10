@@ -1,0 +1,10 @@
+(color) = true
+(color: 0) = false
+(color: 8) = true
+(monochrome) = false
+(monochrome: 0) = true
+(color-index) = false
+(color-index: 0) = true
+(grid) = false
+(grid: 0) = true
+(scan) = false

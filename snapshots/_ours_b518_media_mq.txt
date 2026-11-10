@@ -1,0 +1,19 @@
+mq-width "(width >= 0px)" matches=true
+mq-color "(color)" matches=true
+mq-pointer "(pointer)" matches=true
+mq-hover "(hover)" matches=true
+mq-prefers-color "(prefers-color-scheme)" matches=true
+mq-prefers-reduced "(prefers-reduced-motion)" matches=false
+mq-resolution "(resolution)" matches=true
+mq-aspect "(aspect-ratio)" matches=true
+mq-orientation "(orientation)" matches=true
+mq-display-mode "(display-mode)" matches=true
+sp-grid supports=true
+sp-container supports=true
+sp-has supports=true
+sp-nesting supports=true
+sp-subgrid supports=true
+sp-color-mix supports=true
+sp-oklch supports=true
+sp-text-wrap supports=true
+sp-field-sizing supports=true
