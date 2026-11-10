@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b496: newer layout features
+s('op-none','offset-path:none',['offset-path']);
+s('op-path','offset-path:path("M0,0 L10,10")',['offset-path']);
+s('op-circle','offset-path:circle(50%)',['offset-path']);
+s('opd-0','offset-distance:0px',['offset-distance']);
+s('opd-50','offset-distance:50%',['offset-distance']);
+s('opa-auto','offset-anchor:auto',['offset-anchor']);
+s('oppos-auto','offset-position:auto',['offset-position']);
+s('opr-0','offset-rotate:auto',['offset-rotate']);
+s('anp-none','animation-play-state:running',['animation-play-state']);
+s('anp-paused','animation-play-state:paused',['animation-play-state']);
+s('anf-none','animation-fill-mode:none',['animation-fill-mode']);
+s('anf-both','animation-fill-mode:both',['animation-fill-mode']);
+s('anf-forw','animation-fill-mode:forwards',['animation-fill-mode']);
+s('anc-inf','animation-iteration-count:infinite',['animation-iteration-count']);
+s('anc-3','animation-iteration-count:3',['animation-iteration-count']);
+s('and-0','animation-direction:normal',['animation-direction']);
+s('and-alt','animation-direction:alternate-reverse',['animation-direction']);
+s('antf-lin','animation-timing-function:linear',['animation-timing-function']);
+s('antf-steps','animation-timing-function:steps(3,end)',['animation-timing-function']);
+s('antl-none','animation-timeline:none',['animation-timeline']);
+s('anr-none','animation-range:none',['animation-range']);
+s('viewtl','view-timeline:none',['view-timeline']);
+s('scrtln','scroll-timeline:none',['scroll-timeline']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
