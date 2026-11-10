@@ -439,7 +439,13 @@ public static class CssFunctionEvaluator
             var substituted = ResolveVar(name[2..], context);
             // An empty value substitutes to nothing, which leaves the property with no value to
             // parse — the same failure, and the same answer ('--x: ;' with 'opacity: var(--x)').
-            bool answered = substituted != null && substituted.Trim().Length > 0;
+            // Crucially a DEFINED-but-empty --x is not answered either, and it does NOT fall back
+            // to the fallback word: the whole declaration is invalid at computed-value time and is
+            // dropped, so the property takes its inherited value or its initial (CSS Variables 1
+            // §3, measured: '--x:;color:var(--x,red)' is black not red, and under a green parent
+            // it is green — inherited). So return true whether or not a fallback is present.
+            if (substituted != null && substituted.Trim().Length == 0) return true;
+            bool answered = substituted != null;
             if (!answered && comma < 0) return true;
             // Only the branch that is taken is a problem: 'var(--x, var(--y))' with --x defined never
             // reads --y, so an undefined --y in the fallback says nothing here (measured).

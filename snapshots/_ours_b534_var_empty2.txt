@@ -1,8 +1,8 @@
-color-empty-fb computed="rgb(255, 0, 0)"
+color-empty-fb computed="rgb(0, 0, 0)"
 color-empty-nofb computed="rgb(0, 0, 0)"
 color-undef-fb computed="rgb(255, 0, 0)"
 color-undef-nofb computed="rgb(0, 0, 0)"
 color-good computed="rgb(0, 128, 0)"
 color-both-undef computed="rgb(255, 0, 0)"
 color-both-undef-nofb computed="rgb(0, 0, 0)"
-color-inherit-empty computed="rgb(255, 0, 0)" (Edge=green, inherited)
+color-inherit-empty computed="rgb(0, 128, 0)" (Edge=green, inherited)
