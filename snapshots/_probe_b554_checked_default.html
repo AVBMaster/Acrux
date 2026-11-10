@@ -1,0 +1,21 @@
+<!doctype html><html><body>
+<input type="checkbox" id="cb" checked>
+<input type="radio" name="g" id="rd1" checked>
+<input type="radio" name="g" id="rd2">
+<select id="sel"><option id="o1">a</option><option id="o2" selected>b</option></select>
+<input type="text" id="txt" value="v" disabled>
+<input type="number" id="num" min="5" max="10" value="3">
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(id,sel){ const e=document.getElementById(id);
+  out.push(id+' '+sel+'='+e.matches(sel)); }
+m('cb',':checked'); m('cb',':default');
+m('rd1',':checked'); m('rd1',':default');
+m('rd2',':checked'); m('rd2',':default');
+m('o2',':checked'); m('o2',':default');
+m('txt',':disabled'); m('txt',':read-only');
+m('num',':invalid'); m('num',':out-of-range');
+m('num',':valid'); m('num',':in-range');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

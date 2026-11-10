@@ -1,0 +1,28 @@
+<!doctype html><html><head><style>
+  .a { transition: background-color 0.3s; }
+  .b { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .c { transform: translate(10px, 20px) rotate(45deg); }
+  .d { filter: blur(2px) brightness(0.8); }
+  .e { backdrop-filter: blur(4px); }
+  .f { clip-path: circle(50%); }
+  .g { mask-image: linear-gradient(black, transparent); }
+</style></head><body>
+<div class="a" id="a">a</div><div class="b" id="b">b</div>
+<div class="c" id="c">c</div><div class="d" id="d">d</div>
+<div class="e" id="e">e</div><div class="f" id="f">f</div>
+<div class="g" id="g">g</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,props){ const e=document.getElementById(id); const cs=getComputedStyle(e);
+  props.forEach(p=>out.push(id+' '+p+'='+JSON.stringify(cs.getPropertyValue(p)))); }
+g('a',['transition-property','transition-duration']);
+g('b',['animation-name','animation-duration','animation-iteration-count']);
+g('c',['transform']);
+g('d',['filter']);
+g('e',['backdrop-filter']);
+g('f',['clip-path']);
+g('g',['mask-image']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
