@@ -1,0 +1,25 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+const ns='http://www.w3.org/2000/svg';
+function push(s){ out.push(s); }
+try{
+  const r=document.createElementNS(ns,'rect');
+  r.setAttribute('width','10'); r.setAttribute('fill','red');
+  document.body.appendChild(r);
+  push('append ok, getAttribute(fill)='+JSON.stringify(r.getAttribute('fill')));
+}catch(e){ push('append ERR '+e.message); }
+try{
+  const r=document.createElementNS(ns,'rect');
+  r.setAttribute('fill','red');
+  document.body.appendChild(r);
+  const cs=getComputedStyle(r);
+  push('getComputedStyle fill='+JSON.stringify(cs.fill));
+}catch(e){ push('getComputedStyle ERR '+e.message); }
+try{
+  const r=document.createElementNS(ns,'rect');
+  document.body.appendChild(r);
+  r.style.setProperty('fill','purple');
+  push('setProperty fill='+JSON.stringify(getComputedStyle(r).fill));
+}catch(e){ push('setProperty ERR '+e.message); }
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

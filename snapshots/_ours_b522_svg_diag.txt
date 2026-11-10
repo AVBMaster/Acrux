@@ -1,0 +1,3 @@
+append ok, getAttribute(fill)="red"
+getComputedStyle fill="rgb(0, 0, 0)"
+setProperty fill="rgb(128, 0, 128)"
