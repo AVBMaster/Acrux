@@ -271,8 +271,8 @@ public class SelectorChecker
             CssPseudoType.Default => element.HasAttribute("checked") || element.HasAttribute("selected"),
             CssPseudoType.Indeterminate => false,
             CssPseudoType.PlaceholderShown => element.HasAttribute("placeholder") && string.IsNullOrEmpty(element.Value),
-            CssPseudoType.ReadOnly => element.HasAttribute("readonly"),
-            CssPseudoType.ReadWrite => !element.HasAttribute("readonly") && IsFormLike(element),
+            CssPseudoType.ReadOnly => !IsReadWriteControl(element),
+            CssPseudoType.ReadWrite => IsReadWriteControl(element),
             // ':scope' is the element a query is anchored to, not a property of the element it is
             // tried against: 'box.querySelectorAll(":scope > p")' asks about box's children while
             // 'box.querySelectorAll(":scope")' finds nothing, because the anchor is never one of its
@@ -356,6 +356,21 @@ public class SelectorChecker
         "INPUT" or "TEXTAREA" or "SELECT" or "BUTTON" or "OPTION" or "OPTGROUP" => true,
         _ => false
     };
+
+    /// <summary>Whether a control is editable, which is what ':read-write' tests (HTML §6.5).
+    /// Only a text-entry input — or a textarea — that is neither disabled nor readonly counts;
+    /// a checkbox, radio, button or select is always read-only, and so is a disabled control
+    /// (measured: a text input with readonly is :read-only, a disabled text input is :read-only,
+    /// and a checkbox is :read-only regardless).</summary>
+    private static bool IsReadWriteControl(Element element)
+    {
+        if (element.HasAttribute("disabled") || element.HasAttribute("readonly")) return false;
+        if (element.TagName.Equals("TEXTAREA", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!element.TagName.Equals("INPUT", StringComparison.OrdinalIgnoreCase)) return false;
+        var type = (element.GetAttribute("type") ?? "text").ToLowerInvariant();
+        return type is "text" or "search" or "url" or "tel" or "email" or "password" or "number"
+            or "date" or "month" or "week" or "time" or "datetime-local" or "range";
+    }
 
     /// <summary>The element a running query is anchored to, for ':scope'. The matcher is re-entered
     /// by nested lists (':is()', ':has()'), so a query that sets it hands the previous anchor back
