@@ -1,0 +1,19 @@
+<!doctype html><html><body><pre id="rec"></pre><script>
+const out=[];
+function s(label,css,prop){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); out.push(label+' '+prop+'='+JSON.stringify(getComputedStyle(d)[prop])); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+s('calc-nested','width:calc(calc(10px + 5px) * 2)','width');
+s('calc-nested2','width:calc(2 * calc(10px + 5px))','width');
+s('min-max-nested','width:min(100px,max(50px,80px))','width');
+s('clamp-nested','width:clamp(10px,min(50px,80px),200px)','width');
+s('calc-div','width:calc(100px / 4)','width');
+s('calc-mul','width:calc(4 * 25px)','width');
+s('calc-pct','width:calc(50% - 10px)','width');
+s('calc-neg','width:calc(0px - 20px)','width');
+s('min-mixed','width:min(10em,100px)','width');
+s('clamp-full','font-size:clamp(12px,1rem,24px)','fontSize');
+s('calc-var','--a:20px;width:calc(var(--a) * 2)','width');
+s('rotate-calc','transform:rotate(calc(45deg * 2))','transform');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
