@@ -2028,6 +2028,13 @@ public static class CssValueText
         if (words.Count == 0) return null;
         if (words.Count == 1 && words[0].Equals("none", StringComparison.OrdinalIgnoreCase))
             return "none";
+        // A CSS-wide keyword is not a counter name: 'inherit' is all-letter and so passes
+        // IsCounterNameToken, but appending the implicit '0' turns 'counter-reset: inherit'
+        // into 'inherit 0' and the keyword never reaches the cascade's CSS-wide-keyword
+        // handler (measured: the reference engine computes 'none' for inherit/initial/unset
+        // on counter-reset, not 'inherit 0'). Leave the bare keyword for that handler.
+        if (words.Count == 1 && Resolver.CssPropertyTraits.IsCssWideKeyword(words[0]))
+            return words[0];
         var parts = new List<string>();
         for (int i = 0; i < words.Count; i++)
         {

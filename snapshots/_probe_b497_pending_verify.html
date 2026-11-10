@@ -1,0 +1,22 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// Verify the session's earlier fixes are live
+s('cr-inherit','counter-reset:inherit',['counter-reset']);
+s('cr-initial','counter-reset:initial',['counter-reset']);
+s('cr-unset','counter-reset:unset',['counter-reset']);
+s('cr-none','counter-reset:none',['counter-reset']);
+s('cr-abc','counter-reset:a 2 b 3',['counter-reset']);
+s('oi-ltr','writing-mode:horizontal-tb;overflow-inline:hidden',['overflow-inline','overflow-x']);
+s('oi-vert','writing-mode:vertical-rl;overflow-inline:hidden',['overflow-inline','overflow-x']);
+s('ob-vert','writing-mode:vertical-rl;overflow-block:scroll',['overflow-block','overflow-y']);
+s('app-base','appearance:base-select',['appearance']);
+s('rotate360','transform:rotate(360deg)',['transform']);
+s('gtr-sub','display:grid;grid-template-rows:subgrid',['grid-template-rows']);
+s('relcol','color:rgb(from #ff0000 calc(r*0.5) g b)',['color']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

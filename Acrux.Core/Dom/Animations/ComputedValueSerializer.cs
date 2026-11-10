@@ -646,7 +646,21 @@ public static class ComputedValueSerializer
             case "direction": return style.Direction;
             case "unicode-bidi": return style.UnicodeBidi;
             case "user-select": return style.UserSelect ?? "auto";
-            case "counter-reset": return string.IsNullOrEmpty(style.CounterReset) ? "none" : style.CounterReset;
+            // 'counter-reset' does not inherit (CSS Counter Styles 3 §2.2): all three CSS-wide
+            // keywords resolve to the initial 'none' — 'inherit' to the parent's computed value
+            // which is 'none' unless the parent explicitly reset one, 'initial' and 'unset' to
+            // the property's own initial. Without this guard the keyword is stored raw and
+            // echoes 'inherit 0' / 'initial 0' / 'unset 0' (measured against the reference engine
+            // which computes 'none' for all three).
+            case "counter-reset":
+                var cr = style.CounterReset;
+                if (string.IsNullOrEmpty(cr)) return "none";
+                var crTrim = cr.Trim();
+                if (crTrim.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                    || crTrim.Equals("initial", StringComparison.OrdinalIgnoreCase)
+                    || crTrim.Equals("unset", StringComparison.OrdinalIgnoreCase))
+                    return "none";
+                return cr;
             case "counter-increment": return string.IsNullOrEmpty(style.CounterIncrement) ? "none" : style.CounterIncrement;
             case "quotes": return style.Quotes;
             case "mask-image": return Css.ImageValueCanonicalizer.Canonicalize(

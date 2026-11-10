@@ -1,0 +1,22 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css){ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d);
+  out.push(label+' cr='+JSON.stringify(cs.counterReset)+' ci='+JSON.stringify(cs.counterIncrement)+' cs='+JSON.stringify(cs.counterSet)); d.remove(); }
+s('cr-inherit','counter-reset:inherit');
+s('cr-initial','counter-reset:initial');
+s('cr-unset','counter-reset:unset');
+s('cr-none','counter-reset:none');
+s('cr-abc','counter-reset:a 2 b 3');
+s('ci-inherit','counter-increment:inherit');
+s('ci-initial','counter-increment:initial');
+s('ci-unset','counter-increment:unset');
+s('ci-none','counter-increment:none');
+s('ci-abc','counter-increment:a 2');
+s('cs-inherit','counter-set:inherit');
+s('cs-initial','counter-set:initial');
+s('cs-unset','counter-set:unset');
+s('cs-none','counter-set:none');
+s('cs-abc','counter-set:a 2');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
