@@ -1,0 +1,13 @@
+linecap stroke-linecap=round
+linejoin stroke-linejoin=bevel
+fillrule fill-rule=evenodd
+cliprule clip-rule=evenodd
+dasharray stroke-dasharray=5px, 3px
+dashoffset stroke-dashoffset=2px
+miterlimit stroke-miterlimit=8
+fillopacity fill-opacity=0.3
+strokeopacity stroke-opacity=0.7
+dominantbaseline dominant-baseline=middle
+markerstart marker-start=url("#m")
+stopcolor stop-color=rgb(255, 0, 0)
+floodcolor flood-color=rgb(0, 0, 255)
