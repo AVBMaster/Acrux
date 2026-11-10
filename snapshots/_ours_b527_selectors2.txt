@@ -1,0 +1,6 @@
+readonly n=1 ids=i3
+readwrite n=3 ids=i1,i2,i4
+in-range n=4 ids=i1,i2,i3,i4
+out-of-range n=0 ids=
+valid n=4 ids=i1,i2,i3,i4
+invalid n=0 ids=

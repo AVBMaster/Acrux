@@ -1,0 +1,32 @@
+<!doctype html><html><body>
+<form id="f"><input id="i1" required><input id="i2" disabled><input id="i3" readonly><input id="i4" type="checkbox" checked></form>
+<a id="a1" href="http://x">link</a>
+<div id="d1" lang="en"><span id="s1">x</span></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(label,sel){ try{ const n=document.querySelectorAll(sel).length;
+  const ids=[...document.querySelectorAll(sel)].map(e=>e.id).filter(Boolean).join(',');
+  out.push(label+' n='+n+' ids='+ids); }catch(e){ out.push(label+' ERR '+e.message); } }
+m('required','input:required');
+m('optional','input:optional');
+m('disabled','input:disabled');
+m('enabled','input:enabled');
+m('readonly','input:read-only');
+m('readwrite','input:read-write');
+m('checked','input:checked');
+m('default','input:default');
+m('in-range','input:in-range');
+m('out-of-range','input:out-of-range');
+m('valid','input:valid');
+m('invalid','input:invalid');
+m('link','a:link');
+m('lang-en','div:lang(en)');
+m('lang-sel','div:lang(en) span');
+m('nth-last-child','form input:nth-last-child(1)');
+m('first-of-type','form input:first-of-type');
+m('last-of-type','form input:last-of-type');
+m('only-child','div > span:only-child');
+m('empty-form','form:empty');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
