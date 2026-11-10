@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b492: UI / misc properties not yet swept
+s('ac-auto','accent-color:auto',['accent-color']);
+s('ac-red','accent-color:red',['accent-color']);
+s('cc-auto','caret-color:auto',['caret-color']);
+s('cc-cur','caret-color:currentColor',['caret-color']);
+s('cshape-bar','caret-shape:bar',['caret-shape']);
+s('cshape-block','caret-shape:block',['caret-shape']);
+s('cshape-under','caret-shape:underscore',['caret-shape']);
+s('ib-block','image-orientation:from-image',['image-orientation']);
+s('ib-none','image-orientation:none',['image-orientation']);
+s('ib-flip','image-orientation:flip',['image-orientation']);
+s('ib-90','image-orientation:90deg',['image-orientation']);
+s('ib-flip90','image-orientation:flip 90deg',['image-orientation']);
+s('pe-none','pointer-events:none',['pointer-events']);
+s('pe-auto','pointer-events:auto',['pointer-events']);
+s('pe-visnone','pointer-events:visibleNone',['pointer-events']);
+s('rs-none','resize:none',['resize']);
+s('rs-both','resize:both',['resize']);
+s('rs-horiz','resize:horizontal',['resize']);
+s('rs-vert','resize:vertical',['resize']);
+s('ua-text','user-select:text',['user-select']);
+s('ua-none','user-select:none',['user-select']);
+s('ua-all','user-select:all',['user-select']);
+s('ua-auto','user-select:auto',['user-select']);
+s('sc-auto','scroll-behavior:auto',['scroll-behavior']);
+s('sc-smooth','scroll-behavior:smooth',['scroll-behavior']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
