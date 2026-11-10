@@ -1,0 +1,31 @@
+pos-static position=static
+pos-rel position=relative
+pos-abs position=absolute
+pos-fixed position=fixed
+pos-sticky position=sticky
+top-10 top=10px
+top-auto top=auto
+top-pct top=10%
+right-20 right=20px
+bottom-30 bottom=30px
+left-40 left=40px
+z-auto z-index=auto
+z-10 z-index=10
+z-neg z-index=-5
+fl-none float=none
+fl-left float=left
+fl-right float=right
+fl-inline-start float=inline-start
+fl-inline-end float=inline-end
+cl-none clear=none
+cl-left clear=left
+cl-right clear=right
+cl-both clear=both
+ov-visible overflow-x=visible | overflow-y=visible
+ov-hidden overflow-x=hidden | overflow-y=hidden
+ov-scroll overflow-x=scroll | overflow-y=scroll
+ov-auto overflow-x=auto | overflow-y=auto
+ov-x-hidden overflow-x=hidden
+ov-y-auto overflow-y=auto
+ovx-visible overflow-x=visible
+ovy-clip overflow-y=clip
