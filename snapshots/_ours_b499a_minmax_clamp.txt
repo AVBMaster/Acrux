@@ -1,0 +1,10 @@
+min-px width=100px
+max-px width=150px
+clamp-px width=80px
+min-pct width=200px
+clamp-em font-size=19.2px
+min-margin margin-top=5px
+max-neg margin-top=0px
+min-calc width=784px
+clamp-calc font-size=16px
+min-mixed width=10px

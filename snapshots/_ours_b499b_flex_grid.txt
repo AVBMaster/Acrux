@@ -1,0 +1,14 @@
+flex-none flex-grow=0 | flex-shrink=0 | flex-basis=auto
+flex-auto flex-grow=1 | flex-shrink=1 | flex-basis=auto
+flex-1 flex-grow=1 | flex-shrink=1 | flex-basis=0%
+flex-2-3 flex-grow=2 | flex-shrink=3 | flex-basis=0%
+flex-0-0-100 flex-grow=0 | flex-shrink=0 | flex-basis=100px
+flex-basis-minmax flex-grow=1 | flex-shrink=1 | flex-basis=min-content
+grid-none grid-template-rows=none | grid-template-columns=none
+grid-auto-flow grid-auto-flow=column
+grid-auto-rows grid-auto-rows=100px
+grid-auto-cols grid-auto-columns=min-content
+grid-area grid-template-areas="a b"
+grid-row-gap row-gap=10px | column-gap=normal
+grid-place align-items=center | justify-items=center
+grid-place-self align-self=stretch | justify-self=stretch

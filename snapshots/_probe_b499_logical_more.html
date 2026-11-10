@@ -1,0 +1,23 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+s('mi-all','margin-inline:auto',['margin-inline-start','margin-inline-end']);
+s('mi-10px','margin-inline:10px',['margin-inline-start','margin-inline-end']);
+s('pi-5','padding-inline:5px',['padding-inline-start','padding-inline-end']);
+s('bs-solid','border-start:1px solid red',['border-top-width','border-top-style']);
+s('is-10','inset-inline:10px',['left','right']);
+s('is-ltr','direction:ltr;inset-inline:10px',['left','right']);
+s('is-rtl','direction:rtl;inset-inline:10px',['left','right']);
+s('bsi-start','border-block-start:2px solid blue',['border-top-width','border-top-color']);
+s('pe-block','padding-block:8px',['padding-top','padding-bottom']);
+s('me-block','margin-block:4px',['margin-top','margin-bottom']);
+s('ie-block','inset-block:6px',['top','bottom']);
+s('ts-start','text-align:start',['text-align']);
+s('ts-end','text-align:end',['text-align']);
+s('float-inline','float:inline-start',['float','css-float']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

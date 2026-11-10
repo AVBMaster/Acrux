@@ -1,0 +1,20 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// min/max/clamp in width/height/font-size/margin
+s('min-px','width:min(200px,100px)',['width']);
+s('max-px','width:max(50px,150px)',['width']);
+s('clamp-px','width:clamp(50px,10vw,200px)',['width']);
+s('min-pct','width:min(50%,200px)',['width']);
+s('clamp-em','font-size:clamp(10px,1.2em,20px)',['font-size']);
+s('min-margin','margin-top:min(10px,5px)',['margin-top']);
+s('max-neg','margin-top:max(-5px,0px)',['margin-top']);
+s('min-calc','width:min(calc(10px+5px),50px)',['width']);
+s('clamp-calc','font-size:clamp(10px,calc(1em+2px),30px)',['font-size']);
+s('min-mixed','width:min(10px,10%,10em)',['width']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

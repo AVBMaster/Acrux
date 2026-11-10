@@ -1,0 +1,14 @@
+mi-all margin-inline-start=0px | margin-inline-end=0px
+mi-10px margin-inline-start=10px | margin-inline-end=10px
+pi-5 padding-inline-start=5px | padding-inline-end=5px
+bs-solid border-top-width=0px | border-top-style=none
+is-10 left=10px | right=10px
+is-ltr left=10px | right=10px
+is-rtl left=10px | right=10px
+bsi-start border-top-width=2px | border-top-color=rgb(0, 0, 255)
+pe-block padding-top=8px | padding-bottom=8px
+me-block margin-top=4px | margin-bottom=4px
+ie-block top=6px | bottom=6px
+ts-start text-align=start
+ts-end text-align=end
+float-inline float=inline-start | css-float=
