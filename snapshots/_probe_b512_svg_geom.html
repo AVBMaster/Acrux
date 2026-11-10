@@ -1,0 +1,42 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+// SVG geometry & presentation via CSSOM
+function sv(label,attrs,css){ try{
+  const ns='http://www.w3.org/2000/svg';
+  const el=document.createElementNS(ns,attrs.tag||'rect');
+  for(const k in attrs) if(k!=='tag') el.setAttribute(k,attrs[k]);
+  if(css) el.style.cssText=css;
+  document.body.appendChild(el);
+  const cs=getComputedStyle(el);
+  out.push(label+' fill='+cs.fill+' stroke='+cs.stroke+' sw='+cs.strokeWidth);
+  el.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+sv('rect-plain',{tag:'rect',width:'10',height:'10'},{fill:'red'});
+sv('rect-fillblue',{tag:'rect',width:'10'},{fill:'blue',stroke:'green','stroke-width':'2'});
+sv('rect-strokew','tag'===0?{}:{tag:'rect'},{fill:'none','stroke-width':'3px'});
+// SVG-specific presentation attrs
+function sa(label,tag,attr,val){ try{
+  const ns='http://www.w3.org/2000/svg';
+  const el=document.createElementNS(ns,tag); el.setAttribute(attr,val);
+  document.body.appendChild(el);
+  const cs=getComputedStyle(el);
+  out.push(label+' fill='+cs.fill+' sw='+cs.strokeWidth);
+  el.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+sa('fill-attr','rect','fill','red');
+sa('stroke-attr','rect','stroke','blue');
+sa('sw-attr','rect','stroke-width','4');
+// geometry via getAttribute round-trip
+function geo(label,tag,attrs){ try{
+  const ns='http://www.w3.org/2000/svg';
+  const el=document.createElementNS(ns,tag);
+  for(const k in attrs) el.setAttribute(k,attrs[k]);
+  document.body.appendChild(el);
+  const cs=getComputedStyle(el);
+  out.push(label+' w='+cs.width+' h='+cs.height+' x='+cs.x+' y='+cs.y);
+  el.remove();
+}catch(e){ out.push(label+' ERR '+e.message); } }
+geo('rect-geom','rect',{width:'100',height:'50',x:'10',y:'20'});
+geo('circle-geom','circle',{r:'25',cx:'50',cy:'60'});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

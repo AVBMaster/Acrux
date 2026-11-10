@@ -1,0 +1,8 @@
+rect-plain fill=rgb(0, 0, 0) stroke=none sw=1px
+rect-fillblue fill=rgb(0, 0, 0) stroke=none sw=1px
+rect-strokew fill=rgb(0, 0, 0) stroke=none sw=1px
+fill-attr fill=rgb(0, 0, 0) sw=1px
+stroke-attr fill=rgb(0, 0, 0) sw=1px
+sw-attr fill=rgb(0, 0, 0) sw=1px
+rect-geom w=auto h=auto x=0px y=0px
+circle-geom w=auto h=auto x=0px y=0px
