@@ -1,0 +1,44 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b483: flex/grid alignment detailed
+s('jc-fs','display:flex;justify-content:flex-start',['justify-content']);
+s('jc-fe','display:flex;justify-content:flex-end',['justify-content']);
+s('jc-c','display:flex;justify-content:center',['justify-content']);
+s('jc-sb','display:flex;justify-content:space-between',['justify-content']);
+s('jc-sa','display:flex;justify-content:space-around',['justify-content']);
+s('jc-se','display:flex;justify-content:space-evenly',['justify-content']);
+s('ai-fs','display:flex;align-items:flex-start',['align-items']);
+s('ai-fe','display:flex;align-items:flex-end',['align-items']);
+s('ai-c','display:flex;align-items:center',['align-items']);
+s('ai-b','display:flex;align-items:baseline',['align-items']);
+s('ai-st','display:flex;align-items:stretch',['align-items']);
+s('as-fs','display:flex;align-self:flex-start',['align-self']);
+s('as-fe','display:flex;align-self:flex-end',['align-self']);
+s('as-c','display:flex;align-self:center',['align-self']);
+s('as-b','display:flex;align-self:baseline',['align-self']);
+s('as-st','display:flex;align-self:stretch',['align-self']);
+s('as-auto','display:flex;align-self:auto',['align-self']);
+s('ji-c','display:grid;justify-items:center',['justify-items']);
+s('ji-st','display:grid;justify-items:start',['justify-items']);
+s('ji-end','display:grid;justify-items:end',['justify-items']);
+s('js-c','display:grid;justify-self:center',['justify-self']);
+s('js-st','display:grid;justify-self:start',['justify-self']);
+s('js-end','display:grid;justify-self:end',['justify-self']);
+s('ac-fs','display:flex;flex-wrap:wrap;align-content:flex-start',['align-content']);
+s('ac-c','display:flex;flex-wrap:wrap;align-content:center',['align-content']);
+s('ac-fe','display:flex;flex-wrap:wrap;align-content:flex-end',['align-content']);
+s('ac-sb','display:flex;flex-wrap:wrap;align-content:space-between',['align-content']);
+s('ac-sa','display:flex;flex-wrap:wrap;align-content:space-around',['align-content']);
+s('ac-se','display:flex;flex-wrap:wrap;align-content:space-evenly',['align-content']);
+s('ac-st','display:flex;flex-wrap:wrap;align-content:stretch',['align-content']);
+out.push('SUP justify-content:space-evenly = '+(()=>{try{return CSS.supports('justify-content','space-evenly')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP align-items:baseline = '+(()=>{try{return CSS.supports('align-items','baseline')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP align-content:space-between = '+(()=>{try{return CSS.supports('align-content','space-between')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP align-content:space-evenly = '+(()=>{try{return CSS.supports('align-content','space-evenly')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
