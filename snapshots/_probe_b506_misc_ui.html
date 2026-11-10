@@ -1,0 +1,44 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// misc UI properties
+s('user-select','user-select:none',['user-select']);
+s('user-select-all','user-select:all',['user-select']);
+s('user-select-auto','user-select:auto',['user-select']);
+s('caret-auto','caret-color:auto',['caret-color']);
+s('caret-red','caret-color:red',['caret-color']);
+s('accent-red','accent-color:red',['accent-color']);
+s('accent-auto','accent-color:auto',['accent-color']);
+s('pointer-none','pointer-events:none',['pointer-events']);
+s('pointer-auto','pointer-events:auto',['pointer-events']);
+s('touch-auto','touch-action:auto',['touch-action']);
+s('touch-none','touch-action:none',['touch-action']);
+s('touch-panx','touch-action:pan-x',['touch-action']);
+s('resize-none','resize:none',['resize']);
+s('resize-both','resize:both',['resize']);
+s('cursor-pointer','cursor:pointer',['cursor']);
+s('cursor-auto','cursor:auto',['cursor']);
+s('visibility-hidden','visibility:hidden',['visibility']);
+s('visibility-visible','visibility:visible',['visibility']);
+s('visibility-collapse','visibility:collapse',['visibility']);
+// box-shadow
+s('bs-none','box-shadow:none',['box-shadow']);
+s('bs-px','box-shadow:2px 2px 4px rgba(0,0,0,0.5)',['box-shadow']);
+s('bs-inset','box-shadow:inset 2px 2px 4px red',['box-shadow']);
+// isolation / mix-blend
+s('isolation-auto','isolation:auto',['isolation']);
+s('isolation-isolate','isolation:isolate',['isolation']);
+s('mix-normal','mix-blend-mode:normal',['mix-blend-mode']);
+s('mix-multiply','mix-blend-mode:multiply',['mix-blend-mode']);
+// object-fit / object-position
+s('of-fill','object-fit:fill',['object-fit']);
+s('of-cover','object-fit:cover',['object-fit']);
+s('of-contain','object-fit:contain',['object-fit']);
+s('op-center','object-position:center',['object-position']);
+s('op-px','object-position:10px 20px',['object-position']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
