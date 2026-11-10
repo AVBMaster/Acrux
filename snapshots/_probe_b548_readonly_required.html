@@ -1,0 +1,25 @@
+<!doctype html><html><body>
+<input id="i-ro" readonly value="r">
+<input id="i-rw" value="w">
+<input id="i-dis" disabled value="d">
+<textarea id="ta-ro" readonly>t</textarea>
+<textarea id="ta-rw">t</textarea>
+<input type="checkbox" id="cb">
+<input type="radio" id="rd">
+<select id="sel"><option>o</option></select>
+<input id="i-req" required value="v">
+<input id="i-opt" value="v">
+<input id="i-req-dis" required disabled value="v">
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(id,sel){ const e=document.getElementById(id);
+  out.push(id+' '+sel+'='+e.matches(sel)); }
+['i-ro','i-rw','i-dis','ta-ro','ta-rw','cb','rd','sel'].forEach(id=>{
+  m(id,':read-only'); m(id,':read-write');
+});
+['i-req','i-opt','i-req-dis'].forEach(id=>{
+  m(id,':required'); m(id,':optional');
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
