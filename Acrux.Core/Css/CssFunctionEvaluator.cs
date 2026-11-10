@@ -385,7 +385,10 @@ public static class CssFunctionEvaluator
                     {
                         var pname = prop[..colon].Trim();
                         var pval = prop[(colon + 1)..].Trim();
-                        if (pname.Equals("--" + name, StringComparison.OrdinalIgnoreCase))
+                        // Custom property names are case-sensitive (CSS Variables 1 §3): '--X' and
+                        // '--x' are two different names, so '--X: red' does not answer 'var(--x)'
+                        // (measured: the reference engine computes the initial colour there, not red).
+                        if (pname.Equals("--" + name, StringComparison.Ordinal))
                             return CommentAsSpace(pval);
                     }
                 }

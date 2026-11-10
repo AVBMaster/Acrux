@@ -1,0 +1,23 @@
+<!doctype html><html><head><style>
+.sheet-lit{color:red}
+.sheet-fb{color:var(--missing, red)}
+.sheet-def{--c: blue; color:var(--c)}
+.sheet-def-fb{--c: blue; color:var(--missing, green)}
+</style></head><body><pre id=rec></pre><script>
+const out=[];
+function cls(label, cn, decl){
+  const d=document.createElement('div'); d.className=cn;
+  document.body.appendChild(d);
+  let cs=getComputedStyle(d).color;
+  if(decl!==undefined){ d.style.setProperty('color', decl); cs=getComputedStyle(d).color; }
+  out.push(label+' color='+JSON.stringify(cs));
+  d.remove();
+}
+cls('sheet-lit','sheet-lit');
+cls('sheet-fb','sheet-fb');
+cls('sheet-def','sheet-def');
+cls('sheet-def-fb','sheet-def-fb');
+cls('setprop-literal',null,'red');
+cls('setprop-fb',null,'var(--missing, red)');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

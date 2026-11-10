@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function row(label, css){ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); out.push(label+' color='+JSON.stringify(getComputedStyle(d).color)); d.remove(); }
+row('literal-red',        'color:red');
+row('literal-RED',        'color:RED');
+row('literal-RGB',        'color:RGB(255,0,0)');
+row('bg-literal-blue',    'background-color:BLUE');
+row('var-norm',           '--x: green; color: var(--x)');
+row('var-upper-def',      '--X: green; color: var(--X)');
+row('var-case-mismatch',  '--x: green; color: var(--X)');
+row('var-upper-def2',     '--X: green; color: var(--x)');
+row('var-inline-upper',   '--X: green; color: var(--X);');
+row('bad-color',          'color: bogus');
+row('bad-rgb12',          'color: rgb(1,2)');
+row('caret-bogus',        'caret-color: bogus');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

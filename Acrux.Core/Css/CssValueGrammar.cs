@@ -5368,6 +5368,13 @@ public static class CssValueGrammar
     /// layer list to write.</summary>
     internal static bool IsColorListValue(string text, int max, params string[] extra)
     {
+        // A value that still carries a var() is nobody's colour yet: the substitution has not run,
+        // so the words are '--c', not the colour it will become. Judging it by the colour grammar
+        // drops 'color: var(--c)' outright — the declaration never reaches the cascade — where every
+        // other property's var() value is held as written and resolved later (CSS Variables 1 §3,
+        // measured: 'color: var(--c)' with '--c: blue' computed black). Held, not accepted: the
+        // substitution that follows decides whether the value it becomes is a colour.
+        if (text.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0) return true;
         if (SaysTopLevelComma(text)) return false;
         var words = SplitComponents(text);
         if (words.Count == 0 || words.Count > max) return false;

@@ -758,7 +758,10 @@ public class ComputedStyle
     /// in core/style/style_reflection.h.
     /// </summary>
     public StyleReflection? BoxReflect { get; set; }
-    private readonly Dictionary<string, string> _customProperties = new(StringComparer.OrdinalIgnoreCase);
+    // Custom property names are case-sensitive (CSS Variables 1 §3): '--X' and '--x' are two
+    // different names, so '--X: red' does not answer 'var(--x)' (measured: the reference engine
+    // computes the initial colour there).
+    private readonly Dictionary<string, string> _customProperties = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The values of properties the reference engine declares and this engine has no behaviour for
