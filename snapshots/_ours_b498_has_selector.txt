@@ -1,0 +1,27 @@
+inner
+para
+x
+heading
+after
+ 
+h1
+one
+two
+three
+has-span n=2 ids=a,d
+has-p n=1 ids=b
+has-attr n=0 ids=
+has-sibling n=1 ids=h
+has-class n=0 ids=
+has-not n=1 ids=b
+is-basic n=6 ids=a,b,c,d
+is-nested n=2 ids=a,b
+where-basic n=6 ids=a,b,c,d
+not-list n=2 ids=c,d
+not-has n=2 ids=b,c
+focus-within n=0 ids=
+nth-of n=1 ids=l3
+empty n=1 ids=c
+lang n=0 ids=
+SUPPORTS has = true
+SUPPORTS is = true

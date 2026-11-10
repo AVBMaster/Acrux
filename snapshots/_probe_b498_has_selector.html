@@ -1,0 +1,33 @@
+<!doctype html><html><body>
+<div id="a" class="target"><span>inner</span></div>
+<div id="b" class="target"><p>para</p></div>
+<div id="c" class="target"></div>
+<div id="d" class="foo"><span>x</span></div>
+<h1 id="h">heading</h1><p id="p1">after h1</p>
+<a id="link" href="#">link</a>
+<ul><li id="l1" class="x">one</li><li id="l2">two</li><li id="l3" class="x">three</li></ul>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function q(label, sel){ try{ const n=document.querySelectorAll(sel).length;
+  const ids=[...document.querySelectorAll(sel)].map(e=>e.id).filter(Boolean).join(',');
+  out.push(label+' n='+n+' ids='+ids); }catch(e){ out.push(label+' ERR '+e.message); } }
+q('has-span', 'div:has(span)');
+q('has-p', 'div:has(> p)');
+q('has-attr', 'div:has([href])');
+q('has-sibling', 'h1:has(+ p)');
+q('has-class', 'div:has(.foo)');
+q('has-not', 'div:has(:not(span))');
+q('is-basic', ':is(div, span)');
+q('is-nested', 'div:is(#a, #b)');
+q('where-basic', ':where(div, span)');
+q('not-list', 'div:not(#a, #b)');
+q('not-has', 'div:not(:has(span))');
+q('focus-within', 'div:focus-within');
+q('nth-of', 'li:nth-child(2 of .x)');
+q('empty', 'div:empty');
+q('lang', 'div:lang(en)');
+out.push('SUPPORTS has = '+CSS.supports('selector(div:has(span))'));
+out.push('SUPPORTS is = '+CSS.supports('selector(:is(div,span))'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

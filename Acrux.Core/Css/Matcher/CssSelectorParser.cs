@@ -775,7 +775,10 @@ public class CssSelectorParser
                 depth--;
                 if (depth == 0) break;
             }
-            else if (stream.Current.Type == CssTokenType.LeftParenthesisToken) depth++;
+            else if (stream.Current.Type == CssTokenType.LeftParenthesisToken
+                  || stream.Current.Type == CssTokenType.FunctionToken)
+                // A function token carries its own '(' — same bug as CollectTokensUntilParen.
+                depth++;
             stream.Next();
         }
         var text = stream.RawRange(start, stream.TokenStart);
@@ -799,6 +802,16 @@ public class CssSelectorParser
             {
                 depth++;
                 result.Append('(');
+            }
+            else if (stream.Current.Type == CssTokenType.FunctionToken)
+            {
+                // A function token carries its own '(' (':is' prints ':is('), so it opens a
+                // group exactly as a bare '(' does. Not counting it leaves the inner function's
+                // ')' to be read as the outer pseudo's terminator: 'div:not(:is(span))' then
+                // hands the list parser ':is(span' — an unterminated function — and the whole
+                // selector is refused (measured: Edge matches it, returning the element).
+                depth++;
+                result.Append(stream.Current.ToCssText());
             }
             else if (stream.Current.IsEof)
             {
