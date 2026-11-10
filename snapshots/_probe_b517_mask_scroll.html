@@ -1,0 +1,32 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// mask family
+s('mask-none','mask:none',['mask-image','mask-mode','mask-repeat','mask-size','mask-position']);
+s('mask-url','mask:url(x.png)',['mask-image','mask-repeat']);
+s('mask-grad','mask:linear-gradient(black,transparent)',['mask-image','mask-repeat']);
+s('mask-repeat','mask:linear-gradient(black,transparent) repeat-x',['mask-repeat']);
+s('mask-size','mask:linear-gradient(black,transparent) 50% 50%',['mask-size','mask-position']);
+s('mask-pos','mask:linear-gradient(black,transparent) center/cover',['mask-position','mask-size']);
+s('mask-mode-alpha','mask:linear-gradient(black,transparent) alpha',['mask-mode']);
+s('mask-clip','mask-clip:border-box',['mask-clip']);
+s('mask-origin','mask-origin:padding-box',['mask-origin']);
+s('mask-composite','mask-composite:add',['mask-composite']);
+// scroll
+s('scroll-behavior','scroll-behavior:smooth',['scroll-behavior']);
+s('scroll-gutter','scrollbar-gutter:stable',['scrollbar-gutter']);
+s('scroll-margin','scroll-margin:10px',['scroll-margin-top','scroll-margin-left']);
+s('scroll-padding','scroll-padding:10px',['scroll-padding-top']);
+s('overscroll-contain','overscroll-behavior:contain',['overscroll-behavior']);
+s('overscroll-none','overscroll-behavior:none',['overscroll-behavior']);
+s('overscroll-x','overscroll-behavior-x:contain',['overscroll-behavior-x']);
+s('overscroll-y','overscroll-behavior-y:none',['overscroll-behavior-y']);
+// scrollbar-color/width
+s('sb-color','scrollbar-color:red blue',['scrollbar-color']);
+s('sb-width','scrollbar-width:thin',['scrollbar-width']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

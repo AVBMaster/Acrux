@@ -1,0 +1,20 @@
+mask-none mask-image=none | mask-mode=match-source | mask-repeat=repeat | mask-size=auto | mask-position=0% 0%
+mask-url mask-image=url("file:///home/master/Acrux/snapshots/x.png") | mask-repeat=repeat
+mask-grad mask-image=linear-gradient(rgb(0, 0, 0), rgba(0, 0, 0, 0)) | mask-repeat=repeat
+mask-repeat mask-repeat=repeat-x
+mask-size mask-size=auto | mask-position=50% 50%
+mask-pos mask-position=50% 50% | mask-size=cover
+mask-mode-alpha mask-mode=alpha
+mask-clip mask-clip=border-box
+mask-origin mask-origin=padding-box
+mask-composite mask-composite=add
+scroll-behavior scroll-behavior=smooth
+scroll-gutter scrollbar-gutter=stable
+scroll-margin scroll-margin-top=10px | scroll-margin-left=10px
+scroll-padding scroll-padding-top=10px
+overscroll-contain overscroll-behavior=contain
+overscroll-none overscroll-behavior=none
+overscroll-x overscroll-behavior-x=contain
+overscroll-y overscroll-behavior-y=none
+sb-color scrollbar-color=rgb(255, 0, 0) rgb(0, 0, 255)
+sb-width scrollbar-width=thin
