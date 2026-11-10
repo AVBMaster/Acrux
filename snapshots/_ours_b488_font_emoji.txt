@@ -1,0 +1,27 @@
+flo-normal font-language-override=normal
+flo-jpn font-language-override="JPN"
+flo-str font-language-override="ENG"
+fvp-normal font-variant-position=normal
+fvp-sub font-variant-position=sub
+fvp-super font-variant-position=super
+fve-normal font-variant-emoji=normal
+fve-text font-variant-emoji=text
+fve-emoji font-variant-emoji=emoji
+fve-unicode font-variant-emoji=unicode
+te-none text-emphasis=none rgb(0, 0, 0) | text-emphasis-style=none | text-emphasis-color=rgb(0, 0, 0)
+te-dot text-emphasis=dot rgb(0, 0, 0) | text-emphasis-style=dot | text-emphasis-color=rgb(0, 0, 0)
+te-circle-red text-emphasis=circle rgb(255, 0, 0) | text-emphasis-style=circle | text-emphasis-color=rgb(255, 0, 0)
+te-sesame text-emphasis=sesame rgb(0, 0, 0) | text-emphasis-style=sesame | text-emphasis-color=rgb(0, 0, 0)
+te-double-circle text-emphasis=double-circle rgb(0, 0, 0) | text-emphasis-style=double-circle | text-emphasis-color=rgb(0, 0, 0)
+te-triangle text-emphasis=triangle rgb(0, 0, 0) | text-emphasis-style=triangle | text-emphasis-color=rgb(0, 0, 0)
+te-filled text-emphasis=dot rgb(0, 0, 0) | text-emphasis-style=dot | text-emphasis-color=rgb(0, 0, 0)
+te-open text-emphasis=open dot rgb(0, 0, 0) | text-emphasis-style=open dot | text-emphasis-color=rgb(0, 0, 0)
+te-dot-sesame text-emphasis=none rgb(0, 0, 0) | text-emphasis-style=none | text-emphasis-color=rgb(0, 0, 0)
+tes-filled-circle text-emphasis-style=circle
+tes-open-dot text-emphasis-style=open dot
+tes-str text-emphasis-style="*"
+tecm text-emphasis-color=rgb(0, 0, 0)
+teca-over text-emphasis-position=over
+teca-under text-emphasis-position=under left
+teca-over-left text-emphasis-position=over left
+fl-normal font-language-override=normal
