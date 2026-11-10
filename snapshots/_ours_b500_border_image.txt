@@ -1,0 +1,19 @@
+bi-none border-image-source=none | border-image-slice=100% | border-image-width=1 | border-image-outset=0 | border-image-repeat=stretch
+bi-url border-image-source=url("file:///home/master/Acrux/snapshots/x.png") | border-image-slice=30
+bi-slice border-image-source=linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255)) | border-image-slice=30
+bi-slice-fill border-image-source=linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255)) | border-image-slice=30 fill
+bi-repeat border-image-repeat=round
+bi-width border-image-width=20px
+bi-outset border-image-outset=5px
+bi-full border-image-source=linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255)) | border-image-slice=30 | border-image-width=20px | border-image-outset=5px | border-image-repeat=space
+bi-source border-image-source=url("file:///home/master/Acrux/snapshots/a.png")
+bi-slice-2val border-image-slice=30 40
+bi-slice-4val border-image-slice=10 20 30 40
+ol-short outline-width=1px | outline-style=solid | outline-color=rgb(255, 0, 0)
+ol-auto outline-style=auto
+ol-none outline-style=none
+ol-offset outline-width=1px | outline-offset=3px
+br-1val border-top-left-radius=10px | border-top-right-radius=10px
+br-2val border-top-left-radius=10px | border-top-right-radius=20px
+br-4val border-top-left-radius=1px | border-bottom-right-radius=3px
+br-slash border-top-left-radius=10px 5px

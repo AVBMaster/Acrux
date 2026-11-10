@@ -1,0 +1,31 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// border-image
+s('bi-none','border-image:none',['border-image-source','border-image-slice','border-image-width','border-image-outset','border-image-repeat']);
+s('bi-url','border-image:url(x.png) 30',['border-image-source','border-image-slice']);
+s('bi-slice','border-image:linear-gradient(red,blue) 30',['border-image-source','border-image-slice']);
+s('bi-slice-fill','border-image:linear-gradient(red,blue) 30 fill',['border-image-source','border-image-slice']);
+s('bi-repeat','border-image:linear-gradient(red,blue) 30 round',['border-image-repeat']);
+s('bi-width','border-image:linear-gradient(red,blue) 30 / 20px',['border-image-width']);
+s('bi-outset','border-image:linear-gradient(red,blue) 30 / 20px / 5px',['border-image-outset']);
+s('bi-full','border-image:linear-gradient(red,blue) 30 / 20px / 5px space',['border-image-source','border-image-slice','border-image-width','border-image-outset','border-image-repeat']);
+s('bi-source','border-image-source:url(a.png)',['border-image-source']);
+s('bi-slice-2val','border-image:linear-gradient(red,blue) 30 40',['border-image-slice']);
+s('bi-slice-4val','border-image:linear-gradient(red,blue) 10 20 30 40',['border-image-slice']);
+// outline
+s('ol-short','outline:1px solid red',['outline-width','outline-style','outline-color']);
+s('ol-auto','outline:auto',['outline-style']);
+s('ol-none','outline:none',['outline-style']);
+s('ol-offset','outline:1px solid red;outline-offset:3px',['outline-width','outline-offset']);
+// border-radius
+s('br-1val','border-radius:10px',['border-top-left-radius','border-top-right-radius']);
+s('br-2val','border-radius:10px 20px',['border-top-left-radius','border-top-right-radius']);
+s('br-4val','border-radius:1px 2px 3px 4px',['border-top-left-radius','border-bottom-right-radius']);
+s('br-slash','border-radius:10px / 5px',['border-top-left-radius']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

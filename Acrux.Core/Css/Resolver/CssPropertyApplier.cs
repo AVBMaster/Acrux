@@ -1132,7 +1132,13 @@ public static class CssPropertyApplier
                 if (!ContentHasUnusableAttrFallback(value)) style.Content = value;
                 break;
             case "counter-increment": style.CounterIncrement = value; break;
-            case "counter-reset": style.CounterReset = value; break;
+            // 'counter-reset' does not inherit, so 'inherit' resolves to the parent's
+            // computed value — 'none' when the parent has none. Without this guard the
+            // keyword falls through and echoes 'inherit 0' (measured).
+            case "counter-reset":
+                style.CounterReset = value.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                    ? "none" : value;
+                break;
             case "counter-set": style.CounterSet = value; break;
             case "quotes": style.Quotes = value; break;
             case "aspect-ratio":
@@ -2915,6 +2921,11 @@ public static class CssPropertyApplier
                 style.BorderImageSourceText = token;
                 continue;
             }
+            // 'border-image: none' says no image, not a slice named "none": the slice part keeps
+            // its initial '100%' (CSS Backgrounds 3 §5.1, measured: 'border-image: none' computes
+            // 'border-image-slice: 100%', not 'none'). The same applies to any other reserved word
+            // that reaches here without a source — none of them is a slice value.
+            if (lower == "none" && style.BorderImageSourceText == null) continue;
             if (boxGroup == 0) slice.Add(token);
             else if (boxGroup == 1) width.Add(token);
             else outset.Add(token);
