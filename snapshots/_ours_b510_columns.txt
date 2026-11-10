@@ -1,0 +1,23 @@
+cols-2 column-count=2 | column-width=auto
+cols-100px column-count=auto | column-width=100px
+col-count column-count=3
+col-width column-width=150px
+col-width-auto column-width=auto
+col-gap-c column-gap=20px
+col-rule column-rule-width=1px | column-rule-style=solid | column-rule-color=rgb(255, 0, 0)
+col-rule-style column-rule-style=dashed
+col-span column-span=none
+col-span-all column-span=all
+col-fill column-fill=balance
+col-fill-auto column-fill=auto
+cbrk-inside break-inside=auto
+cbrk-after break-after=auto
+orphans-2 orphans=2
+widows-2 widows=2
+size-page size=
+size-px size=
+cap-top caption-side=top
+cap-bottom caption-side=bottom
+empty-hide empty-cells=hide
+tlayout-fixed table-layout=fixed
+tlayout-auto table-layout=auto
