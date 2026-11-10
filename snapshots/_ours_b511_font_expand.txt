@@ -1,0 +1,18 @@
+f-12px font-size=12px | font-family=serif | font-weight=400 | font-style=normal | line-height=normal
+f-bold font-weight=700 | font-size=12px | font-family=serif
+f-italic font-style=italic | font-size=12px
+f-lh font-size=12px | line-height=18px | font-family=serif
+f-weight-size font-weight=700 | font-size=14px | font-family=sans-serif
+f-small-caps font-variant-caps=small-caps | font-size=12px
+f-caption font-size=16px | font-family=Arial
+f-weight-style font-style=italic | font-weight=700 | font-size=12px
+fw-100 font-weight=100
+fw-normal font-weight=400
+fw-bold font-weight=700
+fw-bolder font-weight=700
+fw-lighter font-weight=100
+td-none text-decoration-line=none
+td-under text-decoration-line=underline
+td-line-through text-decoration-line=line-through
+td-overline-under text-decoration-line=underline overline
+td-style text-decoration-line=underline | text-decoration-style=wavy | text-decoration-color=rgb(255, 0, 0)

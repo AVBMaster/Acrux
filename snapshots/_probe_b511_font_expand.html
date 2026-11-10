@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// font shorthand expansion
+s('f-12px','font:12px serif',['font-size','font-family','font-weight','font-style','line-height']);
+s('f-bold','font:bold 12px serif',['font-weight','font-size','font-family']);
+s('f-italic','font:italic 12px serif',['font-style','font-size']);
+s('f-lh','font:12px/1.5 serif',['font-size','line-height','font-family']);
+s('f-weight-size','font:700 14px sans-serif',['font-weight','font-size','font-family']);
+s('f-small-caps','font:small-caps 12px serif',['font-variant-caps','font-size']);
+s('f-caption','font:caption',['font-size','font-family']);
+s('f-weight-style','font:italic bold 12px serif',['font-style','font-weight','font-size']);
+// font-weight individual
+s('fw-100','font-weight:100',['font-weight']);
+s('fw-normal','font-weight:normal',['font-weight']);
+s('fw-bold','font-weight:bold',['font-weight']);
+s('fw-bolder','font-weight:bolder',['font-weight']);
+s('fw-lighter','font-weight:lighter',['font-weight']);
+// text-decoration
+s('td-none','text-decoration:none',['text-decoration-line']);
+s('td-under','text-decoration:underline',['text-decoration-line']);
+s('td-line-through','text-decoration:line-through',['text-decoration-line']);
+s('td-overline-under','text-decoration:underline overline',['text-decoration-line']);
+s('td-style','text-decoration:underline wavy red',['text-decoration-line','text-decoration-style','text-decoration-color']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
