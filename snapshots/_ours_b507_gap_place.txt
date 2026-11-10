@@ -1,0 +1,19 @@
+gap-1 gap=10px | row-gap=10px | column-gap=10px
+gap-2 row-gap=10px | column-gap=20px
+gap-normal row-gap=normal | column-gap=normal
+row-gap row-gap=5px
+col-gap column-gap=15px
+gap-pct row-gap=5% | column-gap=5%
+place-items-1 align-items=center | justify-items=center
+place-items-2 align-items=start | justify-items=end
+place-content-1 align-content=center | justify-content=center
+place-self-1 align-self=center | justify-self=center
+ji-start justify-items=start
+ji-stretch justify-items=stretch
+js-end justify-self=end
+ac-center align-content=center
+ac-space align-content=space-between
+ac-safe align-content=safe center
+jc-center justify-content=center
+jc-space justify-content=space-around
+jc-safe justify-content=safe end

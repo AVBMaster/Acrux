@@ -1,0 +1,33 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// gap family
+s('gap-1','display:flex;gap:10px',['gap','row-gap','column-gap']);
+s('gap-2','display:grid;gap:10px 20px',['row-gap','column-gap']);
+s('gap-normal','display:flex;gap:normal',['row-gap','column-gap']);
+s('row-gap','display:grid;row-gap:5px',['row-gap']);
+s('col-gap','display:grid;column-gap:15px',['column-gap']);
+s('gap-pct','display:flex;gap:5%',['row-gap','column-gap']);
+// place-items / place-content / place-self
+s('place-items-1','display:grid;place-items:center',['align-items','justify-items']);
+s('place-items-2','display:grid;place-items:start end',['align-items','justify-items']);
+s('place-content-1','display:grid;place-content:center',['align-content','justify-content']);
+s('place-self-1','display:grid;place-self:center',['align-self','justify-self']);
+// justify-items / justify-self standalone
+s('ji-start','display:grid;justify-items:start',['justify-items']);
+s('ji-stretch','display:grid;justify-items:stretch',['justify-items']);
+s('js-end','display:grid;justify-self:end',['justify-self']);
+// align-content values
+s('ac-center','display:flex;align-content:center',['align-content']);
+s('ac-space','display:flex;align-content:space-between',['align-content']);
+s('ac-safe','display:flex;align-content:safe center',['align-content']);
+// justify-content values
+s('jc-center','display:flex;justify-content:center',['justify-content']);
+s('jc-space','display:flex;justify-content:space-around',['justify-content']);
+s('jc-safe','display:flex;justify-content:safe end',['justify-content']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
