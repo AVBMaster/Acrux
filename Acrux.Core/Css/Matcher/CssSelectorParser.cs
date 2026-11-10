@@ -1052,6 +1052,7 @@ public class CssSelectorParser
         ("default", CssPseudoType.Default),
         ("defined", CssPseudoType.Defined),
         ("disabled", CssPseudoType.Disabled),
+        ("dir", CssPseudoType.Dir),
         ("done", CssPseudoType.Done),
         ("drag", CssPseudoType.Drag),
         ("empty", CssPseudoType.Empty),

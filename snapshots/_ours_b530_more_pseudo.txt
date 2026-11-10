@@ -1,6 +1,24 @@
+only
+a
+b
+s
+b
+only-child n=1 ids=only
+only-of-type n=1 ids=only
+first-child n=2 ids=only,p1
+last-child n=2 ids=only,p2
+nth-child-2 n=1 ids=p2
+nth-child-odd n=2 ids=only,p1
+nth-last-child-1 n=2 ids=only,p2
+nth-of-type-1 n=2 ids=only,p1
+href-link n=1 ids=href
+no-href n=1 ids=nohref
+details-open n=1 ids=det
+det-open n=1 ids=det
 root n=1 ids=
 root-html n=1 ids=
-dir-ltr ERR Failed to execute 'querySelectorAll' on 'Document': ':dir(ltr)' is not a valid selector.
-dir-rtl ERR Failed to execute 'querySelectorAll' on 'Document': ':dir(rtl)' is not a valid selector.
+scope-all n=1 ids=
+dir-ltr n=15 ids=root,only,multi,p1,p2,href,nohref,det,sum,body,rec
+dir-rtl n=0 ids=
 target n=0 ids=
 any-link n=1 ids=href

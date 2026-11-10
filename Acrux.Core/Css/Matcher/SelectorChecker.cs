@@ -279,6 +279,7 @@ public class SelectorChecker
             // own descendants (all measured).
             CssPseudoType.Scope => ReferenceEquals(element, QueryScope),
             CssPseudoType.Lang => MatchLang(selector.Argument, element),
+            CssPseudoType.Dir => MatchDir(selector.Argument, element),
             CssPseudoType.Defined => true,
             CssPseudoType.Target => false,
             CssPseudoType.Modal => element.IsModal,
@@ -401,6 +402,24 @@ public class SelectorChecker
         if (language == null) return false;
         return language.Equals(range, StringComparison.OrdinalIgnoreCase)
             || language.StartsWith(range + "-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether the element's effective direction — its own or its nearest ancestor's
+    /// 'dir' attribute, defaulting to 'ltr' — is the one ':dir()' names (HTML §6.2, measured:
+    /// ':dir(ltr)' matches every element of an ltr document and ':dir(rtl)' matches none).
+    /// The direction inherits, so a 'dir' on an ancestor governs its descendants too.</summary>
+    private static bool MatchDir(string? value, Element element)
+    {
+        if (string.IsNullOrEmpty(value)) return false;
+        var wanted = value.Trim().ToLowerInvariant();
+        if (wanted is not ("ltr" or "rtl")) return false;
+        var direction = "ltr";
+        for (Element? el = element; el != null; el = el.ParentElement)
+        {
+            var dir = el.GetAttribute("dir");
+            if (!string.IsNullOrEmpty(dir)) { direction = dir.ToLowerInvariant(); break; }
+        }
+        return direction == wanted;
     }
 
     /// <summary>The language declared for the element, following HTML: the nearest 'lang' attribute

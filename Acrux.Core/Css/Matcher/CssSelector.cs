@@ -41,7 +41,7 @@ public enum CssPseudoType
 {
     Unknown,
     Active, AnyLink, AnyLinkPseudo, Autofill, Blank, Bullet, 
-    Checked, Closed, CorF, Current, Defined, Default, Disabled, Done, Drag, 
+    Checked, Closed, CorF, Current, Defined, Default, Disabled, Dir, Done, Drag, 
     Empty, Enabled, FirstChild, FirstOfType, FirstPage, Focus, FocusVisible, 
     FocusWithin, Fullscreen, Future, Has, Host, HostContext, Hover, 
     InRange, Indeterminate, Invalid, Is, LastChild, LastOfType, Left, 
