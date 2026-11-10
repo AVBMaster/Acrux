@@ -1,0 +1,30 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b482: CSS logical properties
+s('mi-start','margin-inline-start:10px',['margin-inline-start']);
+s('mi-end','margin-inline-end:20px',['margin-inline-end']);
+s('mb-start','margin-block-start:5px',['margin-block-start']);
+s('mb-end','margin-block-end:15px',['margin-block-end']);
+s('pi-start','padding-inline-start:10px',['padding-inline-start']);
+s('pi-end','padding-inline-end:20px',['padding-inline-end']);
+s('pb-start','padding-block-start:5px',['padding-block-start']);
+s('pb-end','padding-block-end:15px',['padding-block-end']);
+s('bd-inline','border-inline-start:2px solid red',['border-inline-start-width','border-inline-start-style','border-inline-start-color']);
+s('bd-block','border-block-end:3px solid blue',['border-block-end-width','border-block-end-style','border-block-end-color']);
+s('in-inline','inset-inline-start:10px;inset-inline-end:20px',['inset-inline-start','inset-inline-end']);
+s('in-block','inset-block-start:5px;inset-block-end:15px',['inset-block-start','inset-block-end']);
+s('is-size','inline-size:100px',['inline-size']);
+s('bs-size','block-size:50px',['block-size']);
+s('min-is','min-inline-size:50px',['min-inline-size']);
+s('max-bs','max-block-size:80px',['max-block-size']);
+out.push('SUP margin-inline-start:10px = '+(()=>{try{return CSS.supports('margin-inline-start','10px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP padding-block-end:15px = '+(()=>{try{return CSS.supports('padding-block-end','15px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP inline-size:100px = '+(()=>{try{return CSS.supports('inline-size','100px')?'Y':'N';}catch(e){return 'ERR';}})());
+out.push('SUP inset-inline-start:10px = '+(()=>{try{return CSS.supports('inset-inline-start','10px')?'Y':'N';}catch(e){return 'ERR';}})());
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

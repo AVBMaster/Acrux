@@ -1,0 +1,20 @@
+mi-start margin-inline-start=10px
+mi-end margin-inline-end=20px
+mb-start margin-block-start=5px
+mb-end margin-block-end=15px
+pi-start padding-inline-start=10px
+pi-end padding-inline-end=20px
+pb-start padding-block-start=5px
+pb-end padding-block-end=15px
+bd-inline border-inline-start-width=2px | border-inline-start-style=solid | border-inline-start-color=rgb(255, 0, 0)
+bd-block border-block-end-width=3px | border-block-end-style=solid | border-block-end-color=rgb(0, 0, 255)
+in-inline inset-inline-start=10px | inset-inline-end=20px
+in-block inset-block-start=5px | inset-block-end=15px
+is-size inline-size=100px
+bs-size block-size=50px
+min-is min-inline-size=50px
+max-bs max-block-size=80px
+SUP margin-inline-start:10px = Y
+SUP padding-block-end:15px = Y
+SUP inline-size:100px = Y
+SUP inset-inline-start:10px = Y
