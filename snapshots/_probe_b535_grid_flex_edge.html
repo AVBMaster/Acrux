@@ -1,0 +1,25 @@
+<!doctype html><html><body>
+<div id="g1" style="display:grid;width:300px;grid-template-columns:repeat(3,1fr)">
+  <div style="background:red">a</div><div style="background:green">b</div><div style="background:blue">c</div>
+</div>
+<div id="g2" style="display:grid;width:300px;grid-template-columns:100px 1fr">
+  <div style="background:red">a</div><div style="background:green">b</div>
+</div>
+<div id="g3" style="display:grid;width:300px;grid-template-columns:auto auto">
+  <div style="background:red;width:50px">a</div><div style="background:green">b</div>
+</div>
+<div id="g4" style="display:flex;width:300px;flex-wrap:wrap">
+  <div style="width:200px;background:red">a</div><div style="width:200px;background:green">b</div>
+</div>
+<div id="sc" style="display:flex;width:300px;height:100px;align-items:stretch"><div style="background:red"></div></div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function dim(el){ return Math.round(el.getBoundingClientRect().width*100)/100; }
+out.push('repeat3-1fr: '+[0,1,2].map(i=>dim(document.getElementById('g1').children[i])).join(' '));
+out.push('100px-1fr: '+dim(document.getElementById('g2').children[0])+' '+dim(document.getElementById('g2').children[1]));
+out.push('auto-auto: '+dim(document.getElementById('g3').children[0])+' '+dim(document.getElementById('g3').children[1]));
+out.push('flex-wrap: '+dim(document.getElementById('g4').children[0])+' '+dim(document.getElementById('g4').children[1]));
+out.push('align-stretch h='+Math.round(document.getElementById('sc').children[0].getBoundingClientRect().height*100)/100);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
