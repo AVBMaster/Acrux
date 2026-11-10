@@ -1,0 +1,31 @@
+<!doctype html><html><body><pre id=rec></pre><script>
+const out=[];
+function s(label,css,props){ try{ const d=document.createElement('div'); d.style.cssText=css;
+  document.body.appendChild(d); const cs=getComputedStyle(d); const parts=[];
+  for(const p of props) parts.push(p+'='+cs.getPropertyValue(p));
+  out.push(label+' '+parts.join(' | ')); d.remove(); }
+  catch(e){ out.push(label+' ERR '+e.message); } }
+// b494: containment
+s('wc-none','will-change:none',['will-change']);
+s('wc-auto','will-change:auto',['will-change']);
+s('wc-scroll','will-change:scroll-position',['will-change']);
+s('wc-opacity','will-change:opacity',['will-change']);
+s('wc-two','will-change:opacity, transform',['will-change']);
+s('ct-none','contain:none',['contain']);
+s('ct-strict','contain:strict',['contain']);
+s('ct-content','contain:content',['contain']);
+s('ct-size','contain:size',['contain']);
+s('ct-layout','contain:layout',['contain']);
+s('ct-paint','contain:paint',['contain']);
+s('ct-style','contain:style',['contain']);
+s('ct-both','contain:layout paint',['contain']);
+s('ct-inline','contain:inline-size',['contain']);
+s('ct-block','contain:block-size',['contain']);
+s('cv-auto','content-visibility:auto',['content-visibility']);
+s('cv-hidden','content-visibility:hidden',['content-visibility']);
+s('cv-visible','content-visibility:visible',['content-visibility']);
+s('cis-none','contain-intrinsic-size:none',['contain-intrinsic-size']);
+s('cis-px','contain-intrinsic-size:100px 50px',['contain-intrinsic-size']);
+s('cis-auto','contain-intrinsic-size:auto 100px',['contain-intrinsic-size']);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
