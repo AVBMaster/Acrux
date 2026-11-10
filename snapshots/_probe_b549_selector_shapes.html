@@ -1,0 +1,33 @@
+<!doctype html><html><body>
+<div id="h1"><span>x</span></div>
+<div id="h2"><p>y</p></div>
+<div id="h3"><a href="#">z</a></div>
+<div id="h4">no child</div>
+<ul id="ul"><li id="li1">1</li><li id="li2">2</li><li id="li3">3</li></ul>
+<input id="ai" type="TEXT" value="v">
+<a id="ah" HREF="http://x">l</a>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function m(id,sel){ try{ const e=document.getElementById(id);
+  out.push(id+' '+sel+'='+e.matches(sel)); }
+  catch(err){ out.push(id+' '+sel+' ERR '+err.message); } }
+// :has() relative shapes
+m('h1',':has(span)');
+m('h1',':has(> span)');
+m('h1',':has(+ p)');
+m('h2',':has(+ div)');
+m('h4',':has(*)');
+// sibling combinators
+m('li1','#li1 + li');
+m('li1','#li1 ~ li');
+m('li3','#li1 ~ li');
+// attribute case-insensitive value (HTML default)
+m('ai','[type="text"]');
+m('ai','[type="TEXT"]');
+m('ah','[href]');
+// :is() forgiving
+m('li1',':is(li, p)');
+m('li1',':is(#nope, li)');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
