@@ -1,0 +1,33 @@
+<!doctype html><html><head><style>
+  .f1 { font-family: monospace; font-size: 16px; font-weight: bold; font-style: italic; }
+  .f2 { letter-spacing: 2px; word-spacing: 4px; }
+  .f3 { line-height: 1.5; text-indent: 10px; }
+  .f4 { text-align: center; text-decoration: underline; }
+  .f5 { text-transform: uppercase; white-space: nowrap; }
+  .f6 { direction: rtl; unicode-bidi: bidi-override; }
+  .f7 { word-break: break-all; overflow-wrap: anywhere; }
+  .f8 { font-variant: small-caps; }
+</style></head><body>
+<div class="f1" id="f1">f1</div>
+<div class="f2" id="f2">f2</div>
+<div class="f3" id="f3">f3</div>
+<div class="f4" id="f4">f4</div>
+<div class="f5" id="f5">f5</div>
+<div class="f6" id="f6" dir="rtl">f6</div>
+<div class="f7" id="f7">f7</div>
+<div class="f8" id="f8">f8</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('f1','font-family'); g('f1','font-weight'); g('f1','font-style');
+g('f2','letter-spacing'); g('f2','word-spacing');
+g('f3','line-height'); g('f3','text-indent');
+g('f4','text-align'); g('f4','text-decoration-line');
+g('f5','text-transform'); g('f5','white-space');
+g('f6','direction');
+g('f7','word-break'); g('f7','overflow-wrap');
+g('f8','font-variant');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
