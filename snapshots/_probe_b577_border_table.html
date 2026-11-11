@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:14px monospace;margin:4px}
+.b{margin:4px 0}
+/* border styles */
+#bd1{border:2px solid #000;width:60px;height:20px}
+#bd2{border:2px dashed #000;width:60px;height:20px}
+#bd3{border:2px dotted #000;width:60px;height:20px}
+/* border per-side */
+#bd4{border-top:3px solid red;border-right:1px solid blue;border-bottom:5px solid green;border-left:2px solid black;width:60px;height:20px}
+/* border-radius */
+#br1{border:2px solid #000;border-radius:10px;width:60px;height:30px;background:#eef}
+#br2{border-radius:50%;width:40px;height:40px;background:#efe}
+#br3{border-radius:10px 0 10px 0;width:60px;height:30px;background:#ffe;border:1px solid #999}
+/* border-collapse table */
+table{border-collapse:collapse;border-spacing:0}
+td{border:1px solid #000;padding:3px;width:30px}
+/* list */
+ul{list-style:square;margin:4px 0;padding-left:20px}
+ol{list-style:decimal;margin:4px 0;padding-left:20px}
+/* pseudo elements */
+#pe::before{content:"B-";color:red}
+#pe::after{content:"-A";color:blue}
+/* outline */
+#ol{outline:2px solid green;outline-offset:3px;width:60px;height:20px}
+/* box-sizing border-box */
+#bb{box-sizing:border-box;width:60px;height:30px;padding:5px;border:3px solid #000;background:#f8f}
+/* margin auto centering */
+#ma{width:40px;height:20px;margin:0 auto;background:#eff}
+/* float */
+#fl{float:left;width:40px;height:20px;background:#fef;margin:2px}
+</style></head><body>
+<div class=b id=bd1>solid</div>
+<div class=b id=bd2>dashed</div>
+<div class=b id=bd3>dotted</div>
+<div class=b id=bd4>per-side</div>
+<div class=b id=br1>radius10</div>
+<div class=b id=br2>circle</div>
+<div class=b id=br3>radius-odd</div>
+<table class=b><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>
+<ul><li>item1</li><li>item2</li></ul>
+<ol><li>one</li><li>two</li></ol>
+<div class=b id=pe>pe</div>
+<div class=b id=ol>outline</div>
+<div class=b id=bb>border-box</div>
+<div class=b id=ma>auto-margin</div>
+<div class=b><div id=fl>float</div>text after float</div>
+<script>
+const ids=["bd1","bd2","bd3","bd4","br1","br2","br3","ol","bb","ma","fl"];
+const g=id=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();const s=getComputedStyle(e);return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top)+" br="+s.borderTopWidth+" rad="+s.borderTopLeftRadius+" box="+s.boxSizing;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>
