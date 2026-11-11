@@ -170,10 +170,9 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     // Colors & Styles
     public object? FillStyle { get; set; } = "#000000";
     public object? StrokeStyle { get; set; } = "#000000";
-    public double? CreateLinearGradient(double x0, double y0, double x1, double y1) => null;
-    public double? CreateRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) => null;
-    public double? CreateConicGradient(double startAngle, double x, double y) => null;
-    public Pattern? CreatePattern(CanvasImageSource image, string repetition) => null;
+    // The gradients and the pattern are answered from the bootstrap, where the CanvasGradient and
+    // CanvasPattern prototype objects live — a host return here would marshal to an object with no
+    // interface behind it.
 
     // Shadows
     // (properties above)
@@ -211,11 +210,11 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     public void DrawImage(CanvasImageSource image, double sx, double sy, double sw, double sh, double dx, double dy, double dw, double dh) { }
 
     // Pixel Manipulation
-    public ImageData CreateImageData(double sw, double sh) => new(sw, sh);
-    public ImageData CreateImageData(ImageData imagedata) => new(imagedata.Width, imagedata.Height);
-    public ImageData GetImageData(double sx, double sy, double sw, double sh) => new(sw, sh);
-    public void PutImageData(ImageData imagedata, double dx, double dy) { }
-    public void PutImageData(ImageData imagedata, double dx, double dy, double dirtyX, double dirtyY, double dirtyWidth, double dirtyHeight) { }
+    // createImageData / getImageData / createLinearGradient / createRadialGradient /
+    // createConicGradient / createPattern are answered from the bootstrap, on the
+    // CanvasRenderingContext2D prototype: a reflector method here becomes a non-configurable own
+    // property on the context that hands back a byte array and an enum ordinal instead of the
+    // ImageData, gradient and pattern objects the page reads through.
 
     // Line styles
     public double GetLineDash() => 0;
@@ -244,8 +243,29 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     // Clip
 }
 
-public class CanvasGradient { }
-public class CanvasPattern { }
+public class CanvasGradient : Acrux.Core.JavaScript.IDomPrototypeHost
+{
+    public CanvasGradient() => Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    public string[] __domTypeChain => new[] { "CanvasGradient" };
+    public override string ToString() => "[object CanvasGradient]";
+    // 2D Context §5: the stops a page adds are the gradient's own state, held here so a later
+    // paint could read them even though the engine rasterises through its own display list.
+    public List<(double Offset, string Color)> Stops { get; } = new();
+    public void AddColorStop(double offset, string color)
+    {
+        if (!double.IsFinite(offset) || offset < 0 || offset > 1)
+            throw new IndexOutOfRangeException("addColorStop");
+        Stops.Add((offset, color));
+    }
+}
+
+public class CanvasPattern : Acrux.Core.JavaScript.IDomPrototypeHost
+{
+    public CanvasPattern() => Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    public string[] __domTypeChain => new[] { "CanvasPattern" };
+    public override string ToString() => "[object CanvasPattern]";
+    public void SetTransform(DomMatrix? transform) { }
+}
 
 public class Path2D
 {
@@ -262,12 +282,23 @@ public class Path2D
     public void RoundRect(double x, double y, double w, double h, object? radii = null) { }
 }
 
-public class ImageData
+public class ImageData : Acrux.Core.JavaScript.IDomPrototypeHost
 {
+    public ImageData() => Acrux.Core.JavaScript.JsIntegrationService.FixProto(this);
+    public string[] __domTypeChain => new[] { "ImageData" };
+    public override string ToString() => "[object ImageData]";
     public double Width { get; }
     public double Height { get; }
     public byte[] Data { get; } = Array.Empty<byte>();
     public ColorSpace ColorSpace { get; set; } = ColorSpace.SRgb;
+    // HTML §4.8.10.15: the page reads 'colorSpace' as the string naming the colour space, not the
+    // enum ordinal the CLR hands back.
+    public string ColorSpaceName => ColorSpace switch
+    {
+        ColorSpace.DisplayP3 => "display-p3",
+        ColorSpace.LinearSRgb => "srgb-linear",
+        _ => "srgb",
+    };
 
     public ImageData(double width, double height)
     {

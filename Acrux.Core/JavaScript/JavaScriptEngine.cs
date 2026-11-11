@@ -18185,6 +18185,65 @@ public class JavaScriptEngine : IDisposable
                         return undefined;
                     });
                     level('CanvasPattern', null);
+                    // §4.8.10.15, §5: the 2D context's buffers and paint styles are served from here
+                    // rather than from the host. They are the members whose answers cross the boundary
+                    // as whole objects — an ImageData is a Uint8ClampedArray with a named colour space,
+                    // a gradient is an object with an addColorStop — and a host method for one of them
+                    // would land on the context as a non-configurable own property returning the raw
+                    // byte array and enum ordinal instead.
+                    (function () {
+                        var ctx = levels.CanvasRenderingContext2D;
+                        if (!ctx) return;
+                        function makeGradient() {
+                            var made = Object.create(levels.CanvasGradient);
+                            Object.defineProperty(made, '__acruxStops', { value: [],
+                                enumerable: false, configurable: true, writable: true });
+                            return made;
+                        }
+                        function method2d(name, needed, body) {
+                            if (carried(ctx, name)) return;
+                            var made = function () {
+                                as(this, 'CanvasRenderingContext2D', name);
+                                if (arguments.length < needed) {
+                                    throw arity(name, 'CanvasRenderingContext2D', needed, arguments.length);
+                                }
+                                return body.apply(this, arguments);
+                            };
+                            try {
+                                Object.defineProperty(made, 'name', { value: name, configurable: true });
+                                Object.defineProperty(made, 'length', { value: needed, configurable: true });
+                            } catch (e) { }
+                            try {
+                                Object.defineProperty(ctx, name, { value: made, writable: true,
+                                    enumerable: true, configurable: true });
+                            } catch (e) { }
+                        }
+                        method2d('createImageData', 2, function (first, second) {
+                            if (first && typeof first === 'object') {
+                                return new ImageData(first.width, first.height);
+                            }
+                            return new ImageData(Number(first) || 0, Number(second) || 0);
+                        });
+                        // §4.8.10.15: a rectangle outside the canvas is refused, and the engine paints
+                        // through its own display list, so the buffer it hands back is transparent.
+                        method2d('getImageData', 4, function (sx, sy, sw, sh) {
+                            var w = Number(sw), h = Number(sh);
+                            if (w === 0 || h === 0) {
+                                throw new DOMException('Failed to execute ' + quoted('getImageData')
+                                    + ' on ' + quoted('CanvasRenderingContext2D')
+                                    + ': IndexSizeError', 'IndexSizeError');
+                            }
+                            return new ImageData(new Uint8ClampedArray(Math.max(0, w) * Math.max(0, h) * 4),
+                                w, h);
+                        });
+                        method2d('putImageData', 3, function () { return undefined; });
+                        method2d('createLinearGradient', 4, function () { return makeGradient(); });
+                        method2d('createRadialGradient', 6, function () { return makeGradient(); });
+                        method2d('createConicGradient', 3, function () { return makeGradient(); });
+                        method2d('createPattern', 2, function () {
+                            return Object.create(levels.CanvasPattern);
+                        });
+                    })();
                     var metrics = level('TextMetrics', null);
                     ['width', 'actualBoundingBoxLeft', 'actualBoundingBoxRight',
                         'fontBoundingBoxAscent', 'fontBoundingBoxDescent', 'actualBoundingBoxAscent',
@@ -18207,10 +18266,55 @@ public class JavaScriptEngine : IDisposable
                                 if (self.__acruxCanvas) self.__acruxCanvas[name] = Number(value) || 0;
                             } });
                     });
-                    promised(offscreen, 'OffscreenCanvas', 'getContext', 1,
-                        'the engine paints a canvas that lives in a document.');
-                    promised(offscreen, 'OffscreenCanvas', 'transferToImageBitmap', 0,
-                        'the engine has no image bitmap to hand over.');
+                    // HTML §4.8.12: an offscreen context answers synchronously and is cached — the
+                    // same contract a canvas in the document meets, so a page holding one context
+                    // reads the same object on every getContext('2d').
+                    method(offscreen, 'OffscreenCanvas', 'getContext', 1, function (contextType) {
+                        var self = as(this, 'OffscreenCanvas', 'getContext', true);
+                        var type = String(contextType);
+                        if (!self.__acruxContexts) {
+                            Object.defineProperty(self, '__acruxContexts', { value: { },
+                                enumerable: false, configurable: true, writable: true });
+                        }
+                        if (self.__acruxContexts[type]) return self.__acruxContexts[type];
+                        var held = level('OffscreenCanvasRenderingContext2D', null);
+                        if (type === '2d' || type === 'bitmaprenderer') {
+                            var made = Object.create(held);
+                            Object.defineProperty(made, Symbol.toStringTag,
+                                { value: type === '2d' ? 'OffscreenCanvasRenderingContext2D'
+                                    : 'ImageBitmapRenderingContext', configurable: true });
+                            self.__acruxContexts[type] = made;
+                            return made;
+                        }
+                        return null;
+                    });
+                    // §4.8.12.1: the bitmap handover moves the buffer out and resets the canvas to
+                    // its default size; the engine has no decoded bitmap behind it, so the object is
+                    // what a page that checks the shape reads.
+                    method(offscreen, 'OffscreenCanvas', 'transferToImageBitmap', 0, function () {
+                        var self = as(this, 'OffscreenCanvas', 'transferToImageBitmap', true);
+                        var bitmap = typeof ImageBitmap === 'function'
+                            ? Object.create(ImageBitmap.prototype) : null;
+                        if (self.__acruxCanvas) {
+                            self.__acruxCanvas.width = 300;
+                            self.__acruxCanvas.height = 150;
+                        }
+                        return bitmap;
+                    });
+                    // §4.8.12: convertToBlob encodes the buffer and answers a promise of a Blob. A
+                    // normally-sized offscreen buffer always has pixels to encode, so it resolves the
+                    // way a canvas in the document's toBlob does with an empty PNG Blob; a canvas
+                    // resized to zero has no bitmap and the spec refuses it (InvalidStateError).
+                    method(offscreen, 'OffscreenCanvas', 'convertToBlob', 0, function () {
+                        var self = as(this, 'OffscreenCanvas', 'convertToBlob', true);
+                        var canvas = self.__acruxCanvas || { width: 0, height: 0 };
+                        if (!(canvas.width > 0) || !(canvas.height > 0)) {
+                            return Promise.reject(new DOMException('Failed to execute '
+                                + quoted('convertToBlob') + ' on ' + quoted('OffscreenCanvas')
+                                + ': the canvas has no bitmap.', 'InvalidStateError'));
+                        }
+                        return Promise.resolve(new Blob([ ], { type: 'image/png' }));
+                    });
                     window.OffscreenCanvas = function OffscreenCanvas(width, height) {
                         var made = shell('OffscreenCanvas', { width: Number(width) || 0,
                             height: Number(height) || 0 });

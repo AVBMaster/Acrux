@@ -1,0 +1,177 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. OffscreenCanvas ───────────────────────────────────────────────────
+    eq('A1 OffscreenCanvas is a constructor', typeof OffscreenCanvas, 'function');
+    eq('A2 defaults the size the page gives it', safe(function () {
+        var o = new OffscreenCanvas(100, 50); return [o.width, o.height].join(',');
+    }), 'ok:100,50');
+    eq('A3 width is writable', safe(function () {
+        var o = new OffscreenCanvas(10, 10); o.width = 200; return o.width;
+    }), 'ok:200');
+    eq('A4 getContext is a function', safe(function () {
+        return typeof new OffscreenCanvas(10, 10).getContext;
+    }), 'ok:function');
+    eq('A5 getContext(2d) answers synchronously (not a promise)', safe(function () {
+        var c = new OffscreenCanvas(10, 10).getContext('2d');
+        return [String(c !== null), c instanceof Promise,
+            Object.prototype.toString.call(c)].join(',');
+    }), 'ok:true,false,[object OffscreenCanvasRenderingContext2D]');
+    eq('A6 the context is cached', safe(function () {
+        var o = new OffscreenCanvas(10, 10);
+        return String(o.getContext('2d') === o.getContext('2d'));
+    }), 'ok:true');
+    eq('A7 convertToBlob is a function', safe(function () {
+        return typeof new OffscreenCanvas(10, 10).convertToBlob;
+    }), 'ok:function');
+    eq('A8 transferToImageBitmap is a function', safe(function () {
+        return typeof new OffscreenCanvas(10, 10).transferToImageBitmap;
+    }), 'ok:function');
+    eq('A9 the object brands itself', safe(function () {
+        return Object.prototype.toString.call(new OffscreenCanvas(1, 1));
+    }), 'ok:[object OffscreenCanvas]');
+
+    // ── B. ImageBitmap ───────────────────────────────────────────────────────
+    eq('B1 ImageBitmap is a constructor', typeof ImageBitmap, 'function');
+    eq('B2 createImageBitmap is a function', typeof createImageBitmap, 'function');
+    eq('B3 createImageBitmap answers a promise', safe(function () {
+        return createImageBitmap(new Blob(['x'])) instanceof Promise;
+    }), 'ok:true');
+    eq('B4 the prototype brands itself', safe(function () {
+        return Object.prototype.toString.call(ImageBitmap.prototype);
+    }), 'ok:[object ImageBitmap]');
+    eq('B5 ImageBitmap is not directly constructible', safe(function () {
+        try { new ImageBitmap(); return 'constructed'; } catch (e) { return 'throws:' + e.name; }
+    }), 'ok:throws:TypeError');
+
+    // ── C. ImageData ─────────────────────────────────────────────────────────
+    eq('C1 createImageData sizes the buffer', safe(function () {
+        var d = document.createElement('canvas').getContext('2d').createImageData(2, 3);
+        return [d.width, d.height, d.data.length].join(',');
+    }), 'ok:2,3,24');
+    eq('C2 the pixel data is a Uint8ClampedArray', safe(function () {
+        return document.createElement('canvas').getContext('2d')
+            .createImageData(1, 1).data instanceof Uint8ClampedArray;
+    }), 'ok:true');
+    eq('C3 colorSpace answers the string name', safe(function () {
+        return document.createElement('canvas').getContext('2d')
+            .createImageData(1, 1).colorSpace;
+    }), 'ok:srgb');
+    eq('C4 ImageData is a constructor', typeof ImageData, 'function');
+    eq('C5 the size constructor', safe(function () {
+        var d = new ImageData(2, 2); return [d.width, d.height].join(',');
+    }), 'ok:2,2');
+    eq('C6 a buffer too small is refused', safe(function () {
+        return new ImageData(new Uint8ClampedArray(8), 2, 2) && 'made';
+    }).slice(0, 20), 'ERR:IndexSizeError:F');
+    eq('C7 the pixel data is writable', safe(function () {
+        var d = document.createElement('canvas').getContext('2d').createImageData(1, 1);
+        d.data[0] = 255; return d.data[0];
+    }), 'ok:255');
+
+    // ── D. Path2D ────────────────────────────────────────────────────────────
+    eq('D1 Path2D is a constructor', typeof Path2D, 'function');
+    eq('D2 the recording methods are there', safe(function () {
+        var p = new Path2D(); return [typeof p.moveTo, typeof p.lineTo,
+            typeof p.addPath].join(',');
+    }), 'ok:function,function,function');
+    eq('D3 the SVG-path constructor', safe(function () {
+        return new Path2D('M 10 10 L 20 20') instanceof Path2D;
+    }), 'ok:true');
+    eq('D4 the commands a page gives are accepted', safe(function () {
+        var p = new Path2D(); p.moveTo(1, 2); p.lineTo(3, 4); p.closePath(); return 'ok';
+    }), 'ok:ok');
+
+    // ── E. CanvasGradient / CanvasPattern ────────────────────────────────────
+    eq('E1 createLinearGradient answers a gradient', safe(function () {
+        var g = document.createElement('canvas').getContext('2d')
+            .createLinearGradient(0, 0, 10, 0);
+        return [typeof g.addColorStop, Object.prototype.toString.call(g)].join(',');
+    }), 'ok:function,[object CanvasGradient]');
+    eq('E2 addColorStop takes a stop inside [0,1]', safe(function () {
+        var g = document.createElement('canvas').getContext('2d')
+            .createLinearGradient(0, 0, 10, 0);
+        g.addColorStop(0, 'red'); g.addColorStop(1, 'blue'); return 'ok';
+    }), 'ok:ok');
+    eq('E3 a stop outside [0,1] is refused', safe(function () {
+        var g = document.createElement('canvas').getContext('2d')
+            .createLinearGradient(0, 0, 10, 0);
+        try { g.addColorStop(2, 'red'); return 'no'; } catch (e) { return 'throws:' + e.name; }
+    }), 'ok:throws:IndexSizeError');
+    eq('E4 createRadialGradient answers a gradient', safe(function () {
+        return Object.prototype.toString.call(document.createElement('canvas')
+            .getContext('2d').createRadialGradient(0, 0, 0, 10, 0, 10));
+    }), 'ok:[object CanvasGradient]');
+    eq('E5 createPattern answers a pattern', safe(function () {
+        var c = document.createElement('canvas');
+        return Object.prototype.toString.call(c.getContext('2d').createPattern(c, 'repeat'));
+    }), 'ok:[object CanvasPattern]');
+
+    // ── F. the 2D context member surface ─────────────────────────────────────
+    eq('F1 every 2D-context member the spec names is there', safe(function () {
+        var x = document.createElement('canvas').getContext('2d');
+        var names = ['canvas', 'fillStyle', 'strokeStyle', 'lineWidth', 'lineCap', 'lineJoin',
+            'miterLimit', 'font', 'textAlign', 'textBaseline', 'direction', 'globalAlpha',
+            'globalCompositeOperation', 'imageSmoothingEnabled', 'imageSmoothingQuality',
+            'shadowBlur', 'shadowColor', 'shadowOffsetX', 'shadowOffsetY', 'lineDashOffset',
+            'filter', 'fontKerning', 'letterSpacing', 'wordSpacing', 'fillRect', 'strokeRect',
+            'clearRect', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arc', 'arcTo',
+            'bezierCurveTo', 'quadraticCurveTo', 'rect', 'ellipse', 'roundRect', 'fill', 'stroke',
+            'clip', 'drawImage', 'save', 'restore', 'translate', 'rotate', 'scale', 'transform',
+            'setTransform', 'resetTransform', 'createLinearGradient', 'createRadialGradient',
+            'createConicGradient', 'createPattern', 'createImageData', 'getImageData',
+            'putImageData', 'measureText', 'fillText', 'strokeText', 'setLineDash', 'getLineDash',
+            'isPointInPath', 'isPointInStroke'];
+        var missing = names.filter(function (n) { return !(n in x); });
+        return missing.length === 0 ? 'none' : missing.join('|');
+    }), 'ok:none');
+
+    // ── G. the state defaults (2D Context §5) ────────────────────────────────
+    eq('G1 lineWidth', document.createElement('canvas').getContext('2d').lineWidth, '1');
+    eq('G2 globalAlpha', document.createElement('canvas').getContext('2d').globalAlpha, '1');
+    eq('G3 textAlign', document.createElement('canvas').getContext('2d').textAlign, 'start');
+    eq('G4 textBaseline', document.createElement('canvas').getContext('2d').textBaseline, 'alphabetic');
+    eq('G5 globalCompositeOperation', document.createElement('canvas').getContext('2d').globalCompositeOperation, 'source-over');
+    eq('G6 lineCap', document.createElement('canvas').getContext('2d').lineCap, 'butt');
+    eq('G7 lineJoin', document.createElement('canvas').getContext('2d').lineJoin, 'miter');
+    eq('G8 miterLimit', document.createElement('canvas').getContext('2d').miterLimit, '10');
+    eq('G9 font', document.createElement('canvas').getContext('2d').font, '10px sans-serif');
+    eq('G10 imageSmoothingEnabled', document.createElement('canvas').getContext('2d').imageSmoothingEnabled, 'true');
+    eq('G11 the context knows its canvas', safe(function () {
+        return String(document.createElement('canvas').getContext('2d').canvas !== undefined);
+    }), 'ok:true');
+
+    // ── H. measureText and the pixel buffer round-trip ────────────────────────
+    eq('H1 measureText answers a TextMetrics', safe(function () {
+        return Object.prototype.toString.call(
+            document.createElement('canvas').getContext('2d').measureText('hi'));
+    }), 'ok:[object TextMetrics]');
+    eq('H2 TextMetrics.width is a number', safe(function () {
+        return typeof document.createElement('canvas').getContext('2d').measureText('hi').width;
+    }), 'ok:number');
+    eq('H3 getImageData sizes the buffer', safe(function () {
+        var c = document.createElement('canvas'); c.width = 2; c.height = 2;
+        var d = c.getContext('2d').getImageData(0, 0, 2, 2);
+        return [d.width, d.height].join(',');
+    }), 'ok:2,2');
+    eq('H4 putImageData accepts a buffer', safe(function () {
+        var c = document.createElement('canvas'); c.width = 2; c.height = 2;
+        c.getContext('2d').putImageData(c.getContext('2d').createImageData(2, 2), 0, 0);
+        return 'ok';
+    }), 'ok:ok');
+
+    // ── I. convertToBlob answers a promise of a Blob ─────────────────────────
+    eq('I1 convertToBlob resolves', safe(function () {
+        return new OffscreenCanvas(10, 10).convertToBlob() instanceof Promise;
+    }), 'ok:true');
+})();
+</script></body></html>
