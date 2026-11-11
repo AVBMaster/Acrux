@@ -1,0 +1,15 @@
+<!doctype html><html><head><style>
+  .w { container-type: inline-size; width: 300px; }
+  .w2 { container-type: size; width: 300px; height: 200px; }
+</style></head><body>
+<div class="w" id="w1"><div id="t1">t1</div></div>
+<style>@container (orientation: landscape) { #t1 { background: red; } }</style>
+<div class="w2" id="w2"><div id="t2">t2</div></div>
+<style>@container (orientation: landscape) { #t2 { background: red; } }</style>
+<pre id="rec"></pre>
+<script>
+const out=[];
+out.push('t1 inline-size orientation-landscape='+JSON.stringify(getComputedStyle(document.getElementById('t1')).backgroundColor));
+out.push('t2 size orientation-landscape='+JSON.stringify(getComputedStyle(document.getElementById('t2')).backgroundColor));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

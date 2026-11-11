@@ -448,6 +448,13 @@ public class StyleResolver
                 {
                     MatchGroupRules(layer.ChildRules, element, state, CascadeOrigin.Author, 0, treeOrder, ref position);
                 }
+                else if (rule is StyleRuleContainer container)
+                {
+                    if (EvaluateContainerConditionText(container.ConditionText, element))
+                    {
+                        MatchGroupRules(container.ChildRules, element, state, CascadeOrigin.Author, 0, treeOrder, ref position);
+                    }
+                }
                 else if (rule is StyleRuleStartingStyle starting)
                 {
                     MatchGroupRules(starting.ChildRules, element, state, CascadeOrigin.Author, 0, treeOrder, ref position);
@@ -477,8 +484,16 @@ public class StyleResolver
             }
             else if (rule is StyleRuleContainer container)
             {
-                // Containers not yet resolvable; treat as always matching.
-                MatchGroupRules(container.ChildRules, element, state, origin, layerOrder, treeOrder, ref position);
+                // A container query prelude is '[ <container-name> ] <container-condition>' (CSS
+                // Containment 3 §4): the words before the first parenthesis name the container the
+                // query resolves against, and only what follows is the size/style condition. Until
+                // named containers expose their own size, resolve the condition against the
+                // viewport — which is what the reference does for a page with no narrower ancestor
+                // container. The name has to be stripped first: 'card (min-width: 200px)' is not
+                // itself a media query and would answer no for every named query (measured: the
+                // rules applied nothing until the name was stripped).
+                if (EvaluateContainerConditionText(container.ConditionText, element))
+                    MatchGroupRules(container.ChildRules, element, state, origin, layerOrder, treeOrder, ref position);
             }
             else if (rule is StyleRuleLayerBlock layer)
             {
@@ -493,6 +508,77 @@ public class StyleResolver
                 MatchGroupRules(starting.ChildRules, element, state, origin, layerOrder, treeOrder, ref position);
             }
         }
+    }
+
+    /// <summary>Whether a container query prelude's size/style condition matches, resolved against
+    /// the viewport. A container query prelude is '[ <container-name> ] <container-condition>' (CSS
+    /// Containment 3 §4): the words before the first parenthesis name the container the query
+    /// resolves against, and only what follows is the condition. Until named containers expose
+    /// their own size, resolve that condition against the viewport — which is what the reference
+    /// does for a page with no narrower ancestor container. The name has to be stripped first:
+    /// 'card (min-width: 200px)' is not itself a media query and would answer no for every named
+    /// query (measured: the rules applied nothing until the name was stripped).</summary>
+    private bool EvaluateContainerConditionText(string condition, Element element)
+    {
+        if (string.IsNullOrWhiteSpace(condition)) return true;
+        var cond = condition.TrimStart();
+
+        // A prelude is '[ <container-name> ] <container-condition>': the words before the first
+        // '(' name the container the query resolves against, and the parenthesis starts the
+        // condition itself. An unnamed query is already a parenthesis, so its name is empty.
+        string name;
+        var paren = cond.IndexOf('(');
+        if (paren > 0)
+        {
+            name = cond[..paren].Trim().ToLowerInvariant();
+            cond = cond[paren..].TrimStart();
+        }
+        else
+        {
+            name = "";
+        }
+
+        // A container query resolves against the nearest ancestor that establishes a container of
+        // the queried name (CSS Containment 3 §4), not the viewport. Resolving against the
+        // viewport instead made 'orientation: landscape' and 'width > 100px' wrongly match a
+        // 300px-wide container (measured). With no such ancestor the query matches nothing.
+        for (var a = element.ParentElement; a != null; a = a.ParentElement)
+        {
+            var cs = a.ComputedStyle;
+            var type = cs?.GetEchoed("container-type");
+            if (type is null || type.Equals("normal", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // A named query only resolves against an ancestor declaring that name; an unnamed one
+            // against any container.
+            var declName = (cs!.GetEchoed("container-name") ?? "none").ToLowerInvariant();
+            if (name.Length > 0 && declName != name) continue;
+
+            var box = a.LayoutBox;
+            if (box == null) continue;
+
+            // An 'inline-size' container only exposes its inline size: a query about the block
+            // size matches nothing against it (CSS Containment 3 §3.2). 'orientation' compares
+            // width against height, and 'aspect-ratio' is a width/height quotient — both read the
+            // block size the inline-size container does not expose (measured: neither matches an
+            // inline-size container, while both match a 'size' container).
+            var w = box.ContentBox.Width;
+            var isInlineSize = type.Equals("inline-size", StringComparison.OrdinalIgnoreCase);
+            if (isInlineSize && QueriesBlockSize(cond))
+                return false;
+            var h = box.ContentBox.Height;
+            var env = MediaQueryEnvironment.Default(w, h, _colorScheme);
+            return MediaQueryEvaluator.Evaluate(cond, w, h, _colorScheme, env);
+        }
+        return false;
+    }
+
+    /// <summary>Whether a container condition reads the container's block size, which an
+    /// 'inline-size' container does not expose. 'height' names it directly; 'orientation' and
+    /// 'aspect-ratio' read it implicitly (measured: neither matches an inline-size container).</summary>
+    private static bool QueriesBlockSize(string condition)
+    {
+        var c = condition.ToLowerInvariant();
+        return c.Contains("height") || c.Contains("orientation") || c.Contains("aspect-ratio");
     }
 
     private static bool HasPseudoElement(string selectorText, string name)
