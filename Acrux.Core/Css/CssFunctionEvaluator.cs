@@ -326,11 +326,19 @@ public static class CssFunctionEvaluator
                 continue;
             }
             var resolved = ResolveVar(name[2..], context);
-            bool answered = resolved != null && resolved.Trim().Length > 0;
-            // Only the branch that is taken is read: a fallback beside an answered name never was.
+            // A name the chain answers with a value — even an empty one — is answered, and its
+            // fallback is never read (CSS Variables 1 §3: a fallback belongs to an UNDEFINED
+            // name only). A defined-but-empty value substitutes to nothing, which leaves the
+            // property with no value to parse: the whole declaration is invalid at computed-value
+            // time and is dropped, so the property takes its inherited value or its initial —
+            // never the fallback (measured: '--empty:;color:var(--empty,green)' is the initial
+            // black, not green). An UNDEFINED name without a fallback also substitutes to nothing
+            // for the same reason; with a fallback the fallback answers instead.
+            bool defined = resolved != null;
+            bool answered = defined && resolved!.Trim().Length > 0;
             var substitution = answered ? resolved!
-                : comma < 0 ? string.Empty
-                : argument[(comma + 1)..].Trim();
+                : !defined && comma >= 0 ? argument[(comma + 1)..].Trim()
+                : string.Empty;
             sb.Append(substitution.Contains('(')
                 ? Evaluate(substitution, context, parentFontSize, rootFontSize,
                     viewportWidth, viewportHeight, maxRecursion - 1)
