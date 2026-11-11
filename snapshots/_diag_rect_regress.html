@@ -1,0 +1,5 @@
+<!doctype html><html><head><style>body{font:20px monospace;white-space:pre;margin:0}
+#a{width:100px;height:50px;background:#eef}#b{width:80px;height:40px;background:#efe;position:absolute;left:200px;top:100px}
+</style></head><body><div id=a>a</div><div id=b>b</div>
+<script>const g=(id)=>{const r=document.getElementById(id).getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+document.body.appendChild(document.createTextNode(g("a")+" # "+g("b")));</script></body></html>

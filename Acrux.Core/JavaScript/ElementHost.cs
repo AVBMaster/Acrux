@@ -880,10 +880,116 @@ public partial class ElementHost : IDomPrototypeHost
             return (0, 0, 0, 0);
         var box = _element.LayoutBox;
         if (box != null)
+        {
+            // CSSOM View 4: the rectangle is the transformed border box's axis-aligned
+            // bounding box, so a transformed element reports the box its transform maps
+            // it to, not the untransformed one (measured: translate(20px,10px) shifts the
+            // rect by (20,10), scale(1.5) grows it about its origin, rotate(45deg) gives
+            // the rotated box its larger axis-aligned envelope).
+            if (_element.ComputedStyle is { } style && style.HasAnyTransform)
+            {
+                var matrix = TransformMatrixOf(style, box);
+                if (matrix != null)
+                    return TransformedRect(box.BorderBox, matrix.Value);
+            }
             return (box.BorderBox.Left, box.BorderBox.Top, box.BorderBox.Width, box.BorderBox.Height);
+        }
         return Acrux.Core.Layout.InlineGeometry.TryGetBoundingRect(_element, out var union)
             ? (union.Left, union.Top, union.Width, union.Height)
             : (0, 0, 0, 0);
+    }
+
+    /// <summary>The matrix that maps the element's border box into its transformed place:
+    /// the transform functions turned about the transform-origin (CSS Transforms 1 §4).
+    /// Null when the element carries no transform, so the caller uses the raw box.</summary>
+    private static SkiaSharp.SKMatrix? TransformMatrixOf(ComputedStyle style, LayoutBox box)
+    {
+        var transform = style.EffectiveTransform(box.BorderBox.Width, box.BorderBox.Height);
+        if (string.IsNullOrWhiteSpace(transform) || transform == "none") return null;
+        var operations = TransformParser.Parse(transform);
+        if (operations == null || operations.Count == 0) return null;
+        var (originX, originY) = TransformOriginOf(style.TransformOrigin, box.BorderBox);
+        return TransformParser.ToMatrix(operations, originX, originY);
+    }
+
+    /// <summary>Resolve 'transform-origin' against the border box (CSS Transforms 1 §4):
+    /// keywords name an edge or the middle, a percentage a share of the box's size, and a
+    /// length a distance from the box's own start edge. Mirrors the paint pass so a
+    /// script's measured rectangle lands where the element is painted.</summary>
+    private static (float X, float Y) TransformOriginOf(string? origin, SkiaSharp.SKRect borderBox)
+    {
+        float left = borderBox.Left, top = borderBox.Top;
+        float width = borderBox.Width, height = borderBox.Height;
+        if (string.IsNullOrWhiteSpace(origin))
+            return (left + width / 2f, top + height / 2f);
+        var parts = origin.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // The trailing bare <length> is the z-offset a flat engine ignores.
+        if (parts.Length >= 3 && IsLengthToken(parts[^1])) parts = parts[..^1];
+        string? xToken = null, yToken = null;
+        foreach (var part in parts)
+        {
+            switch (part.Trim().ToLowerInvariant())
+            {
+                case "left" or "right": xToken ??= part.Trim().ToLowerInvariant(); continue;
+                case "top" or "bottom": yToken ??= part.Trim().ToLowerInvariant(); continue;
+                case "center":
+                    if (xToken == null) xToken = "center"; else yToken ??= "center";
+                    continue;
+            }
+            if (xToken == null) xToken = part.Trim().ToLowerInvariant();
+            else yToken ??= part.Trim().ToLowerInvariant();
+        }
+        float Resolve(string? token, float size, float offset)
+        {
+            switch (token)
+            {
+                case "left" or "top": return offset;
+                case "right" or "bottom": return offset + size;
+                case null or "center": return offset + size / 2f;
+            }
+            if (token!.EndsWith('%') && float.TryParse(token[..^1], NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var pct))
+                return offset + size * pct / 100f;
+            if (Acrux.Core.Dom.Length.TryParse(token, out var length))
+                return offset + length.ToPixels(size, size, size, size);
+            return offset + size / 2f;
+        }
+        return (Resolve(xToken, width, left), Resolve(yToken, height, top));
+    }
+
+    /// <summary>Whether a transform-origin token is a bare or unit-bearing <length>,
+    /// as opposed to a keyword or percentage (the z-offset test).</summary>
+    private static bool IsLengthToken(string token)
+    {
+        string text = token.Trim();
+        if (text.Length == 0 || text.EndsWith('%')) return false;
+        int unit = 0;
+        while (unit < text.Length && (char.IsDigit(text[unit]) || text[unit] is '.' or '-' or '+'))
+            unit++;
+        if (unit == 0) return false;
+        if (unit == text.Length) return true;
+        return Acrux.Core.Dom.Length.TryParse(text, out _);
+    }
+
+    /// <summary>The axis-aligned bounding box of |rect| mapped through |matrix|: the four
+    /// corners are transformed and their min/max taken (CSSOM View 4).</summary>
+    private static (float left, float top, float width, float height) TransformedRect(
+        SkiaSharp.SKRect rect, SkiaSharp.SKMatrix matrix)
+    {
+        var pts = new[]
+        {
+            matrix.MapPoint(rect.Left, rect.Top),
+            matrix.MapPoint(rect.Right, rect.Top),
+            matrix.MapPoint(rect.Right, rect.Bottom),
+            matrix.MapPoint(rect.Left, rect.Bottom),
+        };
+        float minX = pts[0].X, maxX = pts[0].X, minY = pts[0].Y, maxY = pts[0].Y;
+        foreach (var p in pts)
+        {
+            minX = Math.Min(minX, p.X); maxX = Math.Max(maxX, p.X);
+            minY = Math.Min(minY, p.Y); maxY = Math.Max(maxY, p.Y);
+        }
+        return (minX, minY, maxX - minX, maxY - minY);
     }
 
     /// <summary>How far the scrollers above a box have moved it. The layout tree keeps the

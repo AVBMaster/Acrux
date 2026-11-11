@@ -1,0 +1,12 @@
+<!doctype html><html><head><style>
+body{font:20px monospace;white-space:pre}
+#tr{width:60px;height:40px;background:#fcc;transform:scale(1.5);transform-origin:center}
+#tr2{width:60px;height:40px;background:#cfc;transform:rotate(90deg);transform-origin:0 0}
+#tr3{width:60px;height:40px;background:#ccf;transform:translate(20px,10px)}
+#tr4{width:60px;height:40px;background:#ffc;transform:rotate(45deg)}
+</style></head><body>
+<div id=tr>scale</div><div id=tr2>rot</div><div id=tr3>trans</div><div id=tr4>rot45</div>
+<script>
+const g=(id)=>{const r=document.getElementById(id).getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+document.body.appendChild(document.createTextNode(["tr","tr2","tr3","tr4"].map(g).join(" # ")));
+</script></body></html>

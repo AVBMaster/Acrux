@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+.t{margin:6px 0;padding:2px}
+/* linear-gradient multi-stop + angle */
+#g1{width:120px;height:40px;background:linear-gradient(90deg,red 0%,blue 50%,green 100%)}
+/* radial-gradient circle */
+#g2{width:80px;height:80px;background:radial-gradient(circle,white 0%,black 100%)}
+/* conic-gradient */
+#g3{width:80px;height:80px;background:conic-gradient(red,yellow,green,blue,red)}
+/* repeating-linear-gradient */
+#g4{width:120px;height:30px;background:repeating-linear-gradient(45deg,#000 0 5px,#fff 5px 10px)}
+/* background multiple layers */
+#bg{width:100px;height:60px;background:url(data:image/gif;base64,R0lGODlhAQABAIAAAP///yH5BAAAAAAALAAAAAABAAEAAAIBRAA7),linear-gradient(to bottom,red,blue);background-repeat:no-repeat;background-position:center}
+/* background-size cover / contain */
+#bcover{width:100px;height:50px;background:url(data:image/gif;base64,R0lGODlhAQABAIAAAOnp6f///yH5BAAAAAAALAAAAAABAAEAAAIBRAA7) center/cover no-repeat}
+#bcontain{width:100px;height:50px;background:url(data:image/gif;base64,R0lGODlhAQABAIAAAOnp6f///yH5BAAAAAAALAAAAAABAAEAAAIBRAA7) center/contain no-repeat}
+/* transform-origin + scale */
+#tr{width:60px;height:40px;background:#fcc;transform:scale(1.5);transform-origin:center}
+#tr2{width:60px;height:40px;background:#cfc;transform:rotate(90deg);transform-origin:0 0}
+/* mask-image gradient */
+#mk{width:80px;height:40px;background:linear-gradient(red,blue);-webkit-mask-image:linear-gradient(to right,black,transparent)}
+/* box-shadow inset */
+#inset{width:60px;height:30px;background:#fff;box-shadow:inset 4px 4px 0 red}
+/* outline */
+#ol{width:60px;height:30px;background:#eef;outline:3px solid green;outline-offset:2px}
+/* mix-blend-mode */
+#mb{width:60px;height:30px;background:red;mix-blend-mode:multiply}
+/* opacity + rgba */
+#op{width:60px;height:30px;background:rgba(0,0,255,.5)}
+</style></head><body>
+<div class=t id=g1>lin</div>
+<div class=t id=g2>rad</div>
+<div class=t id=g3>conic</div>
+<div class=t id=g4>rep</div>
+<div class=t id=bg>mlayer</div>
+<div class=t id=bcover>cover</div>
+<div class=t id=bcontain>contain</div>
+<div class=t><div id=tr>scale</div></div>
+<div class=t><div id=tr2>rot</div></div>
+<div class=t id=mk>mask</div>
+<div class=t id=inset>inset</div>
+<div class=t id=ol>outline</div>
+<div class=t id=mb>blend</div>
+<div class=t id=op>opac</div>
+<div id=o></div>
+<script>
+const g=(id)=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+const out=["g1","g2","g3","g4","bg","bcover","bcontain","tr","tr2","mk","inset","ol","mb","op"].map(g);
+out.push("bgsize="+getComputedStyle(document.getElementById("bcover")).backgroundSize);
+out.push("blend="+getComputedStyle(document.getElementById("mb")).mixBlendMode);
+out.push("oloff="+getComputedStyle(document.getElementById("ol")).outlineOffset);
+document.getElementById("o").textContent=out.join(" | ");
+</script></body></html>
