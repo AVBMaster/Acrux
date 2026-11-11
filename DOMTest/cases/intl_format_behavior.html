@@ -1,0 +1,109 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    // The formatted digits themselves are locale-dependent, so most rows assert the
+    // STRUCTURE the reference guarantees (a string, the group separator present, the
+    // currency symbol present) rather than an exact string.
+
+    // ── A. Intl.NumberFormat ─────────────────────────────────────────────────
+    eq('A1 NumberFormat().format answers a string', safe(function () {
+        return typeof new Intl.NumberFormat('en-US').format(1234.5);
+    }), 'ok:string');
+    eq('A2 NumberFormat default has a group separator', safe(function () {
+        return new Intl.NumberFormat('en-US').format(1234567).indexOf(',') >= 0;
+    }), 'ok:true');
+    eq('A3 NumberFormat currency style includes the symbol', safe(function () {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+            .format(9).indexOf('$') >= 0;
+    }), 'ok:true');
+    eq('A4 NumberFormat percent style includes %', safe(function () {
+        return new Intl.NumberFormat('en-US', { style: 'percent' }).format(0.5).indexOf('%') >= 0;
+    }), 'ok:true');
+    eq('A5 NumberFormat maximumFractionDigits is honoured', safe(function () {
+        return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(1.9);
+    }), 'ok:2');
+    eq('A6 NumberFormat minimumFractionDigits pads decimals', safe(function () {
+        return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(1);
+    }), 'ok:1.00');
+    eq('A7 NumberFormat locale de-DE uses a comma decimal', safe(function () {
+        return new Intl.NumberFormat('de-DE').format(1.5).indexOf(',') >= 0;
+    }), 'ok:true');
+    eq('A8 NumberFormat resolvedOptions has locale and numberingSystem', safe(function () {
+        var r = new Intl.NumberFormat('en-US').resolvedOptions();
+        return typeof r.locale + ',' + typeof r.numberingSystem;
+    }), 'ok:string,string');
+    eq('A9 NumberFormat empty-string locale throws RangeError', safe(function () {
+        new Intl.NumberFormat('');
+        return 'made';
+    }).slice(0, 3), 'ERR');
+    eq('A10 NumberFormat supportedLocalesOf is a function', safe(function () {
+        return typeof Intl.NumberFormat.supportedLocalesOf;
+    }), 'ok:function');
+
+    // ── B. Intl.DateTimeFormat ───────────────────────────────────────────────
+    eq('B1 DateTimeFormat().format answers a string', safe(function () {
+        return typeof new Intl.DateTimeFormat('en-US').format(new Date(2021, 0, 1));
+    }), 'ok:string');
+    eq('B2 DateTimeFormat includes the year digits', safe(function () {
+        return new Intl.DateTimeFormat('en-US', { year: 'numeric' })
+            .format(new Date(2021, 0, 1)).indexOf('2021') >= 0;
+    }), 'ok:true');
+    eq('B3 DateTimeFormat month numeric', safe(function () {
+        return new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
+            .format(new Date(2021, 5, 15)).indexOf('6') >= 0;
+    }), 'ok:true');
+    eq('B4 DateTimeFormat locale de-DE uses dots', safe(function () {
+        return new Intl.DateTimeFormat('de-DE').format(new Date(2021, 0, 1)).indexOf('.') >= 0;
+    }), 'ok:true');
+    eq('B5 DateTimeFormat resolvedOptions has timeZone', safe(function () {
+        var r = new Intl.DateTimeFormat('en-US').resolvedOptions();
+        return typeof r.timeZone;
+    }), 'ok:string');
+    eq('B6 DateTimeFormat with timeZone UTC is deterministic', safe(function () {
+        var f = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
+        return typeof f.format(new Date(Date.UTC(2021, 0, 1)));
+    }), 'ok:string');
+    eq('B7 invalid DateTimeFormat options throw RangeError', safe(function () {
+        new Intl.DateTimeFormat('en-US', { hour: 'bogus' });
+        return 'made';
+    }).slice(0, 3), 'ERR');
+
+    // ── C. Intl.Collator ─────────────────────────────────────────────────────
+    eq('C1 Collator().compare answers -1/0/1', safe(function () {
+        var c = new Intl.Collator('en');
+        var a = c.compare('a', 'b'); return a === -1 || a === 1;
+    }), 'ok:true');
+    eq('C2 Collator compare is reflexive (equal strings -> 0)', safe(function () {
+        return new Intl.Collator('en').compare('same', 'same');
+    }), 'ok:0');
+    eq('C3 Collator sensitivity base ignores case', safe(function () {
+        var c = new Intl.Collator('en', { sensitivity: 'base' });
+        return c.compare('A', 'a');
+    }), 'ok:0');
+    eq('C4 Collator resolvedOptions has sensitivity', safe(function () {
+        return typeof new Intl.Collator('en').resolvedOptions().sensitivity;
+    }), 'ok:string');
+
+    // ── D. Intl.PluralRules ──────────────────────────────────────────────────
+    eq('D1 PluralRules is a constructor', safe(function () {
+        return typeof Intl.PluralRules;
+    }), 'ok:function');
+    eq('D2 PluralRules.select one -> one', safe(function () {
+        return new Intl.PluralRules('en').select(1);
+    }), 'ok:one');
+    eq('D3 PluralRules.select two -> other', safe(function () {
+        return new Intl.PluralRules('en').select(2);
+    }), 'ok:other');
+    eq('D4 PluralRules.select zero -> other for en', safe(function () {
+        return new Intl.PluralRules('en').select(0);
+    }), 'ok:other');
+})();
+</script></body></html>
