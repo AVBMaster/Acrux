@@ -1,0 +1,72 @@
+<!DOCTYPE html><html><body><div id="root">
+<div id="outer" class="wrap">
+  <p class="a" data-k="1"><span id="s1">one</span></p>
+  <p class="b" data-k="2"><span id="s2">two</span><em class="a">em</em></p>
+  <ul id="list"><li>1</li><li class="sel">2</li><li>3</li></ul>
+</div>
+</body></html>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var root = document.getElementById('root');
+
+    // ── A. getElementById / getElementsByClassName / getElementsByTagName ────
+    eq('A1 getElementById finds a nested node', document.getElementById('s1').textContent, 'one');
+    eq('A2 getElementById returns null for a missing id', document.getElementById('nope'), 'null');
+    eq('A3 getElementsByClassName matches across the tree', document.getElementsByClassName('a').length, '2');
+    eq('A4 getElementsByTagName finds all descendants', document.getElementById('outer').getElementsByTagName('p').length, '2');
+    eq('A5 getElementsByTagName on the document', document.getElementsByTagName('li').length, '3');
+
+    // ── B. querySelector / querySelectorAll ──────────────────────────────────
+    eq('B1 querySelector returns the first match', document.querySelector('.a').id || document.querySelector('.a').className, 'a');
+    eq('B2 querySelector returns null when nothing matches', document.querySelector('#nope'), 'null');
+    eq('B3 querySelectorAll counts matches', document.querySelectorAll('p').length, '2');
+    eq('B4 querySelectorAll is static (a snapshot)', safe_snapshot(), '3');
+    eq('B5 compound selector #id.class', document.querySelector('#s1').parentNode.className, 'a');
+    eq('B6 descendant selector', document.querySelectorAll('#outer p').length, '2');
+    eq('B7 child combinator', document.querySelectorAll('#outer > p').length, '2');
+    eq('B8 attribute selector', document.querySelectorAll('[data-k="2"]').length, '1');
+    eq('B9 pseudo-class :first-child', document.querySelectorAll('li:first-child').length, '1');
+    eq('B10 :nth-child(2)', document.querySelector('li:nth-child(2)').className, 'sel');
+    eq('B11 multiple selectors (comma)', document.querySelectorAll('li, em').length, '4');
+
+    function safe_snapshot() {
+        var list = document.querySelectorAll('li');
+        var li = document.createElement('li');
+        document.getElementById('list').appendChild(li);
+        var n = list.length; // static: unaffected by the new li
+        li.remove();
+        return n;
+    }
+
+    // ── C. closest / matches ─────────────────────────────────────────────────
+    eq('C1 closest walks up to the nearest matching ancestor', document.getElementById('s1').closest('p').className, 'a');
+    eq('C2 closest matches the element itself first', document.getElementById('s2').closest('span').id, 's2');
+    eq('C3 closest returns null when no ancestor matches', document.getElementById('s1').closest('ul'), 'null');
+    eq('C4 matches confirms a selector on an element', document.querySelector('.b').matches('p.b'), 'true');
+    eq('C5 matches rejects a non-matching selector', document.querySelector('.b').matches('p.a'), 'false');
+
+    // ── D. tree-walking properties ───────────────────────────────────────────
+    eq('D1 parentNode of a nested span', document.getElementById('s1').parentNode.className, 'a');
+    eq('D2 childElementCount of the list', document.getElementById('list').childElementCount, '3');
+    eq('D3 firstElementChild / lastElementChild', document.getElementById('list').firstElementChild.textContent + ',' + document.getElementById('list').lastElementChild.textContent, '1,3');
+    eq('D4 nextElementSibling walks siblings', document.querySelector('li').nextElementSibling.className, 'sel');
+    eq('D5 previousElementSibling walks back', document.querySelector('li.sel').previousElementSibling.textContent, '1');
+    eq('D6 children is element-only (no text nodes)', document.getElementById('list').children.length, '3');
+
+    // ── E. traversal helpers ─────────────────────────────────────────────────
+    eq('E1 TreeWalker visits only elements', (function () {
+        var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+        var n = 0; while (w.nextNode()) n++; return n > 0;
+    })(), 'true');
+    eq('E2 NodeIterator walks element nodes', (function () {
+        var it = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+        var n = 0; while (it.nextNode()) n++; return n > 0;
+    })(), 'true');
+    eq('E3 contains checks ancestry', root.contains(document.getElementById('s1')), 'true');
+    eq('E4 contains is false for an unrelated node', root.contains(document.createElement('div')), 'false');
+})();
+</script></body></html>

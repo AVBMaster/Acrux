@@ -190,12 +190,27 @@ public class JsNodeList : IList, IDomPrototypeHost
     private readonly Func<DomElement, List<DomElement>>? _filter;
     private readonly bool _childNodes;
     private readonly JavaScriptEngine? _engine;
+    // A static list holds the nodes a selector query matched at the moment it ran; it never
+    // re-runs the filter, so adding or removing elements after the query does not change it
+    // (DOM 4 §4.2.4: querySelectorAll returns a static NodeList).
+    private readonly List<Node>? _snapshot;
 
     public JsNodeList(DomElement root, Func<DomElement, List<DomElement>>? filter = null)
     {
         _root = root;
         _filter = filter;
         _engine = JavaScriptEngine.Current;
+    }
+
+    /// <summary>A static NodeList holds the nodes a query matched when it ran. Unlike the live
+    /// child and selector lists it never re-walks the tree, so a node added after the query does
+    /// not appear in it (DOM 4 §4.2.4, measured).</summary>
+    internal JsNodeList(IReadOnlyList<Node> snapshot, JavaScriptEngine? engine,
+        string interfaceName = "NodeList")
+    {
+        _snapshot = snapshot.ToList();
+        _engine = engine;
+        InterfaceName = interfaceName;
     }
 
     /// <summary>A node that holds no children still answers 'childNodes' with a list of its own —
@@ -290,6 +305,7 @@ public class JsNodeList : IList, IDomPrototypeHost
 
     private List<Node> GetNodes()
     {
+        if (_snapshot != null) return _snapshot;
         if (_root == null) return new List<Node>();
         if (_childNodes)
             return _root.Children.ToList();

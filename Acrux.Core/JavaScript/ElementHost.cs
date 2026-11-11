@@ -350,12 +350,12 @@ public partial class ElementHost : IDomPrototypeHost
     public JsNodeList querySelectorAll(string selector)
     {
         CssSelectorMatcher.ParseForQuery(selector, "querySelectorAll", "Element");
-        return new JsNodeList(_element, Engine, root =>
-        {
-            var list = new List<Element>();
-            CssSelectorMatcher.CollectDescendants(root, selector, list, root);
-            return list;
-        });
+        // DOM 4 §4.2.4: querySelectorAll answers a STATIC NodeList — the nodes matched at the
+        // moment it ran, never re-walked (measured: a matching element added after the query does
+        // not appear in it).
+        var list = new List<Element>();
+        CssSelectorMatcher.CollectDescendants(_element, selector, list, _element);
+        return new JsNodeList(list.Cast<Node>().ToList(), Engine);
     }
 
     public JsHtmlCollection getElementsByTagName(string tagName) =>

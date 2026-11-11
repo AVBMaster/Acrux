@@ -243,12 +243,13 @@ public class DocumentHost : IDomPrototypeHost
     {
         CssSelectorMatcher.ParseForQuery(selector, "querySelectorAll", "Document");
         if (_document.DocumentElement == null) return new object[0];
-        return new JsNodeList(_document.DocumentElement, Engine, root =>
-        {
-            var list = new List<Element>();
-            CssSelectorMatcher.CollectDescendants(root, selector, list, root, includeRoot: true);
-            return list;
-        });
+        // DOM 4 §4.2.4: querySelectorAll answers a STATIC NodeList — the nodes it matched at the
+        // moment it ran, never re-walked. A live list would grow when the page later added a
+        // matching element, which the reference does not do (measured).
+        var list = new List<Element>();
+        CssSelectorMatcher.CollectDescendants(_document.DocumentElement, selector, list,
+            _document.DocumentElement, includeRoot: true);
+        return new JsNodeList(list.Cast<Node>().ToList(), Engine);
     }
 
     public object getElementsByTagName(string tagName)
