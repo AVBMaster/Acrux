@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset=utf-8></head><body>
+<div id=ok1></div>
+<div id=ok2><!--c--></div>
+<div id=no1>text</div>
+<div id=no2>   </div>
+<div id=no3><span></span></div>
+<div id=no4><br></div>
+<script>
+const q=sel=>{try{return sel.split(":")[0]+"="+document.querySelectorAll(sel).length;}catch(e){return sel+"=ERR";}};
+const sels=["#ok1:empty","#ok2:empty","#no1:empty","#no2:empty","#no3:empty","#no4:empty"];
+document.body.appendChild(document.createElement("div")).textContent=sels.map(q).join("#");
+</script></body></html>
