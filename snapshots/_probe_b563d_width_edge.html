@@ -1,0 +1,16 @@
+<!doctype html><html><head><style>
+  #fix { width: 100px; }
+  #ini { width: initial; }
+  #plain { }
+</style></head><body>
+<div id="fix">fix</div>
+<div id="ini">ini</div>
+<div id="plain">plain</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+['fix','ini','plain'].forEach(id=>{
+  out.push(id+' width='+JSON.stringify(getComputedStyle(document.getElementById(id)).width));
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
