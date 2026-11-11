@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+#v1{--c:red;color:var(--c)}
+#v2{color:var(--undefined,green)}
+#v3{--w:30px;width:var(--w);height:20px;background:#eef}
+#v4{--a:var(--b);--b:blue;color:var(--a)}
+#v5{color:var(--late);--late:purple}
+#v6{--n:10px;width:calc(var(--n) * 2);height:20px}
+#v7{--bad:10px;color:var(--bad,red)}
+#v8{--bw:3px;border:var(--bw) solid black;width:40px;height:20px}
+#v9{--empty:;color:var(--empty,green)}
+#v10{color:var(--x,var(--y,orange))}
+#v11{color:red}
+#v12{--e:;--f:var(--e);color:var(--f,teal)}
+</style></head><body><meta charset=utf-8>
+<div id=v1>v1</div><div id=v2>v2</div><div id=v3>v3</div><div id=v4>v4</div>
+<div id=v5>v5</div><div id=v6>v6</div><div id=v7>v7</div><div id=v8>v8</div>
+<div id=v9>v9</div><div id=v10>v10</div><div id=v11>v11</div><div id=v12>v12</div>
+<script>
+const hex=c=>{const m=c.match(/\d+/g);if(!m)return c;return "#"+m.slice(0,3).map(n=>(+n).toString(16).padStart(2,"0")).join("");};
+const ids=["v1","v2","v3","v4","v5","v6","v7","v8","v9","v10","v11","v12"];
+const out=ids.map(id=>{const e=document.getElementById(id);const s=getComputedStyle(e);
+ const w=e.getBoundingClientRect().width;
+ return id+"="+hex(s.color)+(id=="v3"?" w="+Math.round(w):"")+(id=="v6"?" w="+Math.round(w):"");});
+document.body.appendChild(document.createElement("div")).textContent=out.join("#");
+</script></body></html>
