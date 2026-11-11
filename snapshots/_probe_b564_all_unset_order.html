@@ -1,0 +1,26 @@
+<!doctype html><html><head><style>
+  /* A: all:unset first, then declaration */
+  #a { all: unset; color: blue; }
+  /* B: declaration first, then all:unset */
+  #b { color: blue; all: unset; }
+  /* C: control - no all, just color */
+  #c { color: blue; }
+  /* D: all:unset alone */
+  #d { all: unset; }
+  /* E: background via all:unset then background-color */
+  #e { all: unset; background-color: yellow; }
+</style></head><body>
+<div id="a">a</div>
+<div id="b">b</div>
+<div id="c">c</div>
+<div id="d">d</div>
+<div id="e">e</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('a','color'); g('b','color'); g('c','color'); g('d','color');
+g('e','background-color');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
