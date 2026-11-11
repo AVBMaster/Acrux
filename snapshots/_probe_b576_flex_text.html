@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:16px monospace;margin:0}
+.row{margin-bottom:8px}
+/* flex-wrap + align */
+#w1{display:flex;flex-wrap:wrap;width:150px;gap:4px}
+#w1>div{width:50px;height:20px;background:#cde}
+/* align-items stretch/flex-start/center */
+#a1{display:flex;align-items:flex-start;width:150px;height:60px}
+#a2{display:flex;align-items:center;width:150px;height:60px}
+#a3{display:flex;align-items:stretch;width:150px;height:60px}
+#a1>div,#a2>div,#a3>div{width:40px;height:20px;background:#cfc}
+/* justify-content */
+#j1{display:flex;justify-content:space-between;width:200px;height:30px}
+#j1>div{width:40px;height:20px;background:#ccf}
+/* flex shrink */
+#sh{display:flex;width:150px}
+#sh>div{flex:1 1 auto;width:100px;height:20px;background:#fec}
+/* text-align */
+#ta{text-align:center;width:200px;background:#f8f8ff}
+#ta2{text-align:right;width:200px;background:#f8f8ff}
+/* white-space pre / nowrap */
+#pre{white-space:pre;width:120px;background:#ffe}
+#nowrap{white-space:nowrap;width:60px;overflow:hidden;background:#eff}
+/* margin collapse (adjacent siblings) */
+#mc1{margin-bottom:20px;height:10px;background:#cde}
+#mc2{margin-top:20px;height:10px;background:#dec}
+/* % height needs definite parent */
+#ph{height:100px;background:#f8f}
+#ph>div{height:50%;background:#dff}
+/* line-height */
+#lh{line-height:40px;height:80px;background:#f8f8ff}
+</style></head><body>
+<div class=row id=w1><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<div class=row id=a1><div>1</div><div>2</div></div>
+<div class=row id=a2><div>1</div><div>2</div></div>
+<div class=row id=a3><div>1</div><div>2</div></div>
+<div class=row id=j1><div>1</div><div>2</div><div>3</div></div>
+<div class=row id=sh><div>A</div><div>B</div></div>
+<div class=row id=ta>center text</div>
+<div class=row id=ta2>right text</div>
+<div class=row id=pre>line1
+line2</div>
+<div class=row id=nowrap>nowrap text that is quite long indeed</div>
+<div class=row><div id=mc1>1</div><div id=mc2>2</div></div>
+<div class=row id=ph><div>50%</div></div>
+<div class=row id=lh>line height text</div>
+<script>
+const ids=["w1","a1","a2","a3","j1","sh","ta","ta2","pre","nowrap","mc1","mc2","ph","lh"];
+const g=id=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+// a1 first child height (stretch?) ; ph child height
+const extra=[
+ "a1c0="+Math.round(document.querySelector("#a1>div").getBoundingClientRect().height),
+ "a3c0="+Math.round(document.querySelector("#a3>div").getBoundingClientRect().height),
+ "j1c1="+Math.round(document.querySelectorAll("#j1>div")[1].getBoundingClientRect().left),
+ "shc0="+Math.round(document.querySelector("#sh>div").getBoundingClientRect().width),
+ "phc0="+Math.round(document.querySelector("#ph>div").getBoundingClientRect().height),
+ "mc2top="+Math.round(document.getElementById("mc2").getBoundingClientRect().top),
+];
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#")+"#"+extra.join("#");
+</script></body></html>

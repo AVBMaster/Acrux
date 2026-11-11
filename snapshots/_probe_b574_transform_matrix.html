@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:20px monospace;white-space:pre;margin:0}
+div{position:absolute}
+/* transform-origin variants */
+#o1{left:10px;top:10px;width:60px;height:40px;background:#fcc;transform:rotate(90deg);transform-origin:center}
+#o2{left:100px;top:10px;width:60px;height:40px;background:#cfc;transform:rotate(90deg);transform-origin:0% 0%}
+#o3{left:200px;top:10px;width:60px;height:40px;background:#ccf;transform:rotate(90deg);transform-origin:100% 100%}
+#o4{left:10px;top:100px;width:60px;height:40px;background:#ffc;transform:rotate(90deg);transform-origin:30px 20px}
+#o5{left:100px;top:100px;width:60px;height:40px;background:#fcf;transform:rotate(90deg);transform-origin:left top}
+#o6{left:200px;top:100px;width:60px;height:40px;background:#cff;transform:rotate(90deg);transform-origin:right bottom}
+/* transform functions */
+#f1{left:10px;top:190px;width:60px;height:40px;background:#ecc;transform:scaleX(2)}
+#f2{left:100px;top:190px;width:60px;height:40px;background:#cec;transform:scaleY(2)}
+#f3{left:200px;top:190px;width:60px;height:40px;background:#cce;transform:skewX(45deg)}
+#f4{left:10px;top:250px;width:60px;height:40px;background:#eec;transform:translate(30px,20px)}
+#f5{left:100px;top:250px;width:60px;height:40px;background:#ece;transform:matrix(1,0,0,1,20,10)}
+#f6{left:200px;top:250px;width:60px;height:40px;background:#cee;transform:rotate(-45deg)}
+/* scale + translate combined (order matters) */
+#c1{left:10px;top:310px;width:60px;height:40px;background:#fdd;transform:translate(20px,0) scale(2)}
+#c2{left:150px;top:310px;width:60px;height:40px;background:#dfd;transform:scale(2) translate(20px,0)}
+</style></head><body>
+<div id=o1></div><div id=o2></div><div id=o3></div>
+<div id=o4></div><div id=o5></div><div id=o6></div>
+<div id=f1></div><div id=f2></div><div id=f3></div>
+<div id=f4></div><div id=f5></div><div id=f6></div>
+<div id=c1></div><div id=c2></div>
+<script>
+const ids=["o1","o2","o3","o4","o5","o6","f1","f2","f3","f4","f5","f6","c1","c2"];
+const g=id=>{const r=document.getElementById(id).getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+document.body.appendChild(document.createTextNode(ids.map(g).join("#")));
+</script></body></html>

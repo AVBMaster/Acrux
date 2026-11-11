@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:20px monospace;white-space:pre;margin:0}
+.wrap{position:relative;width:300px;height:200px;background:#f0f0f0;display:inline-block;vertical-align:top}
+/* z-index stacking */
+#z1{position:absolute;left:10px;top:10px;width:80px;height:50px;background:red;z-index:10}
+#z2{position:absolute;left:30px;top:30px;width:80px;height:50px;background:blue;z-index:auto}
+#z3{position:absolute;left:50px;top:50px;width:80px;height:50px;background:green;z-index:5}
+/* overflow variants */
+#ov1{position:absolute;left:10px;top:120px;width:100px;height:40px;overflow:hidden;background:#ffc}
+#ov2{position:absolute;left:130px;top:120px;width:100px;height:40px;overflow:scroll;background:#cfc}
+#ov3{position:absolute;left:10px;top:170px;width:100px;height:40px;overflow:visible;background:#ccf}
+/* clip-path */
+#cl{position:absolute;left:130px;top:170px;width:100px;height:40px;background:#fcc;clip-path:inset(5px 10px 5px 10px)}
+/* fixed positioning */
+#fx{position:fixed;left:5px;top:250px;width:60px;height:30px;background:#eee;border:1px solid #000}
+/* sticky */
+#st{position:sticky;left:100px;top:250px;width:60px;height:30px;background:#dfd}
+/* absolute with inset over-constrained */
+#ab1{position:absolute;left:10px;right:10px;top:10px;bottom:10px;width:50px;height:30px;background:#fdf}
+/* percentage inset */
+#ab2{position:absolute;left:50%;top:50%;width:40px;height:20px;background:#ddf}
+</style></head><body>
+<div class=wrap>
+<div id=z1>z10</div><div id=z2>zauto</div><div id=z3>z5</div>
+<div id=ov1>hid</div><div id=ov2>scr</div><div id=ov3>vis</div>
+<div id=cl>clip</div>
+</div>
+<div id=fx>fixed</div>
+<div id=st>sticky</div>
+<div style="position:relative;display:inline-block;width:150px;height:120px;background:#f8f8ff;vertical-align:top">
+<div id=ab1>ab1</div><div id=ab2>ab2</div>
+</div>
+<script>
+const ids=["z1","z2","z3","ov1","ov2","ov3","cl","fx","st","ab1","ab2"];
+const g=id=>{const r=document.getElementById(id).getBoundingClientRect();const s=getComputedStyle(document.getElementById(id));return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top)+" z"+s.zIndex;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>

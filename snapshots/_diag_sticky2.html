@@ -1,0 +1,8 @@
+<!doctype html><html><head><style>body{font:16px monospace;margin:0}
+#s{position:sticky;top:50px;width:60px;height:30px;background:#dfd}
+#n{width:80px;height:20px;background:#fdd}
+</style></head><body>
+<div id=s>s</div>
+<div id=n>n</div>
+<script>const g=id=>{const r=document.getElementById(id).getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+document.body.appendChild(document.createTextNode(g("s")+"#"+g("n")));</script></body></html>
