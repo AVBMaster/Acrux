@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:14px monospace;margin:4px}
+.row{margin:6px 0}
+#ti{text-indent:20px;width:120px;background:#f8f8ff}
+#ti2{text-indent:-10px;width:120px;background:#f8f8ff}
+#ti3{text-indent:20%;width:120px;background:#f8f8ff}
+#ls{letter-spacing:3px;width:120px;background:#eef}
+#ws{word-spacing:8px;width:150px;background:#ffe}
+#tt1{text-transform:uppercase;width:120px}
+#tt2{text-transform:capitalize;width:120px}
+#tt3{text-transform:lowercase;width:120px}
+#ws1{white-space:pre;width:100px;background:#ffe}
+#ws2{white-space:nowrap;width:60px;overflow:hidden;background:#eff}
+#ws3{white-space:pre-wrap;width:60px;background:#fef}
+#ws4{white-space:break-spaces;width:60px;background:#fef}
+#td1{text-decoration:underline;line-through;width:120px}
+#td2{text-decoration:underline wavy red;width:120px}
+#td3{text-decoration:overline;text-decoration-style:dotted;width:120px}
+#wd{word-break:break-all;width:50px;background:#cfe}
+#ow{overflow-wrap:break-word;width:50px;background:#cef}
+#hy{hyphens:manual;width:50px;background:#fce}
+</style></head><body>
+<div class=row id=ti>indent20 the quick brown fox jumps</div>
+<div class=row id=ti2>indent-10 the quick brown</div>
+<div class=row id=ti3>indent20pct the quick</div>
+<div class=row id=ls>letterspacing3 here</div>
+<div class=row id=ws>word spacing8 two words</div>
+<div class=row id=tt1>uppercase text</div>
+<div class=row id=tt2>capitalize text here</div>
+<div class=row id=tt3>LOWERCASE Text</div>
+<div class=row id=ws1>pre
+line two</div>
+<div class=row id=ws2>nowrap long text overflows</div>
+<div class=row id=ws3>pre-wrap long text wraps now</div>
+<div class=row id=ws4>break-spaces long text   here</div>
+<div class=row id=td1>underline line-through</div>
+<div class=row id=td2>underlined wavy red</div>
+<div class=row id=td3>overline dotted</div>
+<div class=row id=wd>breakallwordshere long</div>
+<div class=row id=ow>overflowwrap breakwordlong</div>
+<div class=row id=hy>manual hyphen text</div>
+<script>
+const ids=["ti","ti2","ti3","ls","ws","tt1","tt2","tt3","ws1","ws2","ws3","ws4","td1","td2","td3","wd","ow","hy"];
+const g=id=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();const s=getComputedStyle(e);
+ return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+" tt="+s.textTransform+" ws="+s.whiteSpace+" td="+s.textDecorationLine;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>

@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset=utf-8><style>body{font:14px monospace;margin:0}
+#c1{text-transform:capitalize;width:120px;background:#fdd}
+#c2{width:120px;background:#dfd}
+#c3{text-transform:capitalize;width:120px;background:#ddf}
+</style></head><body>
+<div id=c1>capitalize text here</div>
+<div id=c2>capitalize text here</div>
+<div id=c3>hello world foo</div>
+<script>
+const g=id=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+" lines="+Math.round(r.height/20);};
+document.body.appendChild(document.createTextNode(["c1","c2","c3"].map(g).join("#")));
+</script></body></html>
