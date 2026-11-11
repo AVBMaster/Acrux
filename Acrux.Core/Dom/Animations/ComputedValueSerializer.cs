@@ -1917,6 +1917,7 @@ public static class ComputedValueSerializer
                                               BorderSideText(style, "border-inline-end"));
             case "border-radius": return BorderRadiusText(style);
             case "corner-shape": return CornerShapeText(style);
+            case "text-box": return TextBoxText(style);
             case "outline":
                 // Measured order: the colour, the style, the width.
                 return $"{Longhand(style, "outline-color")} {Longhand(style, "outline-style")} "
@@ -2144,6 +2145,22 @@ public static class ComputedValueSerializer
         if (br == tl && bl == tr) return $"{tl} {tr}";
         if (bl == tr) return $"{tl} {tr} {br}";
         return $"{tl} {tr} {br} {bl}";
+    }
+
+    /// <summary>The computed 'text-box' synthesised from its two longhands: the trim, then the edge.
+    /// The reference engine elides the default 'trim-both' only when an edge is set beside it
+    /// ('trim-both cap text' reads 'cap text') but says a bare 'trim-both' when no edge is
+    /// (measured), and the initial reads 'normal'. Both longhands are echo-only, so they are read
+    /// through <see cref="ComputedStyle.GetEchoed"/> rather than <see cref="Longhand"/>.</summary>
+    private static string TextBoxText(ComputedStyle style)
+    {
+        var trim = style.GetEchoed("text-box-trim") ?? "none";
+        var edge = style.GetEchoed("text-box-edge") ?? "auto";
+        // A box that named neither axis reads back the property's initial 'normal'.
+        if (trim == "none" && edge == "auto") return "normal";
+        // 'trim-both' is the default trim, so it is said only when there is no edge beside it.
+        if (trim == "trim-both") return edge == "auto" ? "trim-both" : edge;
+        return edge == "auto" ? trim : $"{trim} {edge}";
     }
 
     private static string ColumnsText(ComputedStyle style)

@@ -1963,6 +1963,34 @@ public static class CssValueGrammar
         // (measured), and so is the second word of the draft's two-word form.
         CssPropertyId.TextSpacingTrim => static text => IsOneWordOnly(text,
             "normal", "none", "space-all", "space-first", "trim-start"),
+        // CSS Inline Layout 3 §6: the block-start/block-end line-box trims. One keyword (the
+        // two-word list the draft allows is refused, measured). The shorthand 'text-box' is gated by
+        // its own expansion below.
+        CssPropertyId.TextBoxTrim => static text => IsOneWordOnly(text,
+            "none", "trim-start", "trim-end", "trim-both"),
+        // One over-baseline word ('cap'/'ex'/'text') and an optional under-baseline word
+        // ('alphabetic'/'text'); a lone 'text' names both axes, while 'cap'/'ex'/'alphabetic' on
+        // their own name only one axis and are no edge (measured).
+        CssPropertyId.TextBoxEdge => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count is < 1 or > 2) return false;
+            if (words.Count == 1) return IsOneOf(words[0], "text");
+            return IsOneOf(words[0], "cap", "ex", "text") && IsOneOf(words[1], "alphabetic", "text");
+        },
+        // The 'text-box' shorthand: 'normal', a trim, an edge, or a trim followed by an edge. The
+        // two parts are judged by the longhands' own grammar, so a value the reference engine drops
+        // ('cap' alone, two trims) leaves the declaration out rather than expanding (measured).
+        CssPropertyId.TextBox => static text =>
+        {
+            var words = SplitComponents(text);
+            if (words.Count == 1 && IsOneOf(words[0], "normal")) return true;
+            int trim = words.Count > 0 && IsOneOf(words[0], "none", "trim-start", "trim-end", "trim-both")
+                ? 1 : 0;
+            var edge = string.Join(" ", words.Skip(trim));
+            if (edge.Length == 0) return trim == 1;
+            return ValueTextIsValid("text-box-edge", edge);
+        },
         // CSSOM View §7.1: 'instant' is not a value of this property here (measured).
         CssPropertyId.ScrollBehavior => static text => IsOneWordOnly(text, "auto", "smooth"),
         // CSS Multi-column 1 §3.4: one keyword. The '||' with 'all'/'columns' of the same draft is

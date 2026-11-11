@@ -570,6 +570,9 @@ public enum CssPropertyId
     // surfaces before this existed.
     TextAutospace,
     TextSpacingTrim,
+    TextBoxTrim,
+    TextBoxEdge,
+    TextBox,
     CaretAnimation,
     Interactivity,
     ScrollInitialTarget,

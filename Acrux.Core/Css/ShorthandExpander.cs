@@ -69,6 +69,7 @@ public static class ShorthandExpander
             case "contain-intrinsic-size": ExpandContainIntrinsicSize(result, value); break;
             case "text-wrap": ExpandTextWrap(result, value); break;
             case "text-emphasis": ExpandTextEmphasis(result, value); break;
+            case "text-box": ExpandTextBox(result, value); break;
             case "overscroll-behavior": ExpandPair(result, value, "overscroll-behavior-x",
                 "overscroll-behavior-y", "auto"); break;
             case "position-try": ExpandPositionTry(result, value); break;
@@ -234,7 +235,7 @@ public static class ShorthandExpander
         "margin-block", "margin-inline", "padding-block",
         "padding-inline", "overflow", "contain-intrinsic-size", "mask", "gap", "columns",
         "border-spacing", "marker",
-        "column-rule", "flex-flow", "text-decoration", "text-emphasis", "grid-column",
+        "column-rule", "flex-flow", "text-decoration", "text-emphasis", "text-box", "grid-column",
         "overscroll-behavior", "position-try",
         "grid-row", "grid-area",
         // Every shorthand <see cref="ExpandProperty"/> knows has to be listed here as well:
@@ -2672,6 +2673,27 @@ public static class ShorthandExpander
         if (ParseTextEmphasisParts(value) is not { } parts) return;
         result["text-emphasis-style"] = parts.Style;
         if (parts.Color != null) result["text-emphasis-color"] = parts.Color;
+    }
+
+    /// <summary>'text-box' is 'text-box-trim' then 'text-box-edge'. Both longhands reset here so a
+    /// shorthand clears the parts it does not name (CSS Inline Layout 3 §6): 'text-box: cap
+    /// alphabetic' drops a 'trim-start' an earlier declaration had set. A trim word left out is the
+    /// effective default 'trim-both' (measured: 'text-box: cap alphabetic' reads back 'cap
+    /// alphabetic', the default trim elided), while a lone 'normal' is the page spelling of the
+    /// initial and puts both longhands at theirs.</summary>
+    private static void ExpandTextBox(Dictionary<string, string> result, string value)
+    {
+        result["text-box-trim"] = "none";
+        result["text-box-edge"] = "auto";
+        var words = value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 1 && words[0].Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return;
+        int trimCount = words.Length > 0 && words[0].ToLowerInvariant() is "none" or "trim-start"
+            or "trim-end" or "trim-both" ? 1 : 0;
+        // A trim the page did not name is 'trim-both', which the shorthand echo elides.
+        result["text-box-trim"] = trimCount == 1 ? words[0].ToLowerInvariant() : "trim-both";
+        var edge = string.Join(" ", words.Skip(trimCount));
+        if (edge.Length > 0) result["text-box-edge"] = edge;
     }
 
     private static void ExpandGap(Dictionary<string, string> result, string value)

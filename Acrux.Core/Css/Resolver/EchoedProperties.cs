@@ -490,6 +490,21 @@ public static class EchoedProperties
                 Normalize = NormalizeContainerShorthand },
             new() { Name = "interpolate-size", Initial = "numeric-only", Inherited = true,
                 Normalize = Single("numeric-only", "allow-keywords") },
+
+            // ===== CSS Inline Layout 3 §6: the block-start and block-end edge adjustments that
+            // carve the half-leading off a line box. 'text-box' is their shorthand, read as the
+            // two longhands: the trim (none / trim-start / trim-end / trim-both) and the edge, which
+            // is one over-baseline and one under-baseline word (CSS Text 4 §5.4 — over 'cap'/'ex'/
+            // 'text', under 'alphabetic'/'text'). Measured: a lone 'text' stands for both axes and
+            // echoes as 'text', while 'cap'/'ex'/'alphabetic' on their own are no edge; 'text text'
+            // folds back to 'text' but every other pair keeps both words. The shorthand's echo drops
+            // a 'trim-both' (the default) and keeps 'trim-start'/'trim-end'/'none' (all measured).
+            new() { Name = "text-box-trim", Initial = "none", Inherited = true,
+                Normalize = Single("none", "trim-start", "trim-end", "trim-both") },
+            new() { Name = "text-box-edge", Initial = "auto", Inherited = true,
+                Normalize = NormalizeTextBoxEdge },
+            new() { Name = "text-box", Initial = "normal", Inherited = true,
+                Normalize = NormalizeTextBox },
         };
 
         var map = new Dictionary<string, Entry>(StringComparer.Ordinal);
@@ -723,6 +738,50 @@ public static class EchoedProperties
     {
         var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ' ');
         return words.Count == 1 ? CornerShapeText(words[0]) : null;
+    }
+
+    /// <summary>The 'text-box-edge' value: one over-baseline word ('cap', 'ex' or 'text') and an
+    /// optional under-baseline word ('alphabetic' or 'text'). A lone 'text' names both axes and
+    /// echoes 'text'; 'cap'/'ex'/'alphabetic' on their own are no edge, because the two axes must
+    /// both be named unless the one word is 'text' (CSS Inline Layout 3 §6, all measured).</summary>
+    private static string? NormalizeTextBoxEdge(string value)
+    {
+        var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ' ');
+        if (words.Count is < 1 or > 2) return null;
+        var over = words[0].ToLowerInvariant();
+        if (words.Count == 1)
+            return over == "text" ? "text" : null;
+        var under = words[1].ToLowerInvariant();
+        bool overOk = over is "cap" or "ex" or "text";
+        bool underOk = under is "alphabetic" or "text";
+        if (!overOk || !underOk) return null;
+        // 'text text' names one edge twice and folds back to the single word (measured).
+        return over == "text" && under == "text" ? "text" : over + " " + under;
+    }
+
+    /// <summary>The 'text-box' shorthand: an optional trim, then the same edge value the longhand
+    /// takes. 'normal' is the page-visible spelling of the property's initial and is said back; a
+    /// bare trim word is the trim alone with the edge unset (measured: 'trim-start' reads
+    /// 'trim-start', while 'trim-both' reads back as 'trim-both' on the longhand and as its edge on
+    /// the shorthand, whose echo drops the default trim).</summary>
+    private static string? NormalizeTextBox(string value)
+    {
+        var words = Acrux.Core.Css.MaskLayerParser.SplitTopLevel(value, ' ');
+        if (words.Count == 1)
+        {
+            var one = words[0].ToLowerInvariant();
+            if (one == "normal") return "normal";
+            if (Single("none", "trim-start", "trim-end", "trim-both")(one) != null) return one;
+        }
+        int trimCount = words.Count > 0 &&
+            Single("none", "trim-start", "trim-end", "trim-both")(words[0].ToLowerInvariant()) != null
+            ? 1 : 0;
+        var edgeText = string.Join(" ", words.Skip(trimCount));
+        var edge = edgeText.Length == 0 ? null : NormalizeTextBoxEdge(edgeText);
+        if (edge == null) return null;
+        string? trim = trimCount == 1 ? words[0].ToLowerInvariant() : "trim-both";
+        // The shorthand's echo drops the default 'trim-both' (measured); the other trims stand.
+        return trim == "trim-both" ? edge : trim + " " + edge;
     }
 
     /// <summary>One shape as the engine prints it: one of the five words, or 'superellipse()' with
