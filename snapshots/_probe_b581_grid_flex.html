@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* grid auto-flow dense */
+#af{display:grid;grid-template-columns:repeat(3,40px);grid-auto-flow:row dense;gap:2px}
+#af>div{background:#cde;height:20px}
+/* grid item order */
+#ord{display:grid;grid-template-columns:repeat(2,50px);gap:2px}
+#ord>div{background:#cfc;height:20px}
+#ord>div:first-child{order:2}
+#ord>div:nth-child(2){order:1}
+/* grid item align-self / justify-self */
+#as{display:grid;grid-template-columns:100px 100px;grid-template-rows:60px 60px;gap:2px}
+#as>div{background:#ffc}
+#as>div:nth-child(1){justify-self:start;align-self:start;width:40px;height:20px}
+#as>div:nth-child(2){justify-self:end;align-self:end;width:40px;height:20px}
+/* implicit rows */
+#ir{display:grid;grid-template-columns:repeat(2,50px);grid-auto-rows:30px;gap:2px}
+#ir>div{background:#fcf}
+/* grid-column span */
+#sp{display:grid;grid-template-columns:repeat(3,40px);gap:2px}
+#sp>div{background:#cff;height:20px}
+#sp>div:first-child{grid-column:span 2}
+/* gap column vs row */
+#gp{display:grid;grid-template-columns:repeat(2,40px);column-gap:10px;row-gap:20px}
+#gp>div{background:#dde;height:15px}
+/* flex-basis + grow */
+#fb{display:flex;width:200px}
+#fb>div{flex:2 1 50px;background:#eee;height:20px}
+#fb>div:last-child{flex:1 1 50px;background:#fee}
+/* flex order */
+#fo{display:flex;width:200px}
+#fo>div{width:40px;height:20px;background:#efe}
+#fo>div:first-child{order:3}
+#fo>div:nth-child(2){order:1}
+</style></head><body>
+<div class=row id=af><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<div class=row id=ord><div>A</div><div>B</div><div>C</div></div>
+<div class=row id=as><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<div class=row id=ir><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+<div class=row id=sp><div>span2</div><div>b</div><div>c</div></div>
+<div class=row id=gp><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<div class=row id=fb><div>A</div><div>B</div></div>
+<div class=row id=fo><div>A</div><div>B</div><div>C</div></div>
+<script>
+const ids=["af","ord","as","ir","sp","gp","fb","fo"];
+const g=id=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height);};
+const extra=[
+ "ord1="+Math.round(document.querySelector("#ord>div").getBoundingClientRect().left),
+ "ord2="+Math.round(document.querySelectorAll("#ord>div")[1].getBoundingClientRect().left),
+ "sp1w="+Math.round(document.querySelector("#sp>div").getBoundingClientRect().width),
+ "fbA="+Math.round(document.querySelector("#fb>div").getBoundingClientRect().width),
+ "fbB="+Math.round(document.querySelector("#fb>div:last-child").getBoundingClientRect().width),
+ "foA="+Math.round(document.querySelector("#fo>div").getBoundingClientRect().left),
+ "gprow="+Math.round(document.querySelectorAll("#gp>div")[2].getBoundingClientRect().top-document.querySelectorAll("#gp>div")[0].getBoundingClientRect().top),
+];
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#")+"#"+extra.join("#");
+</script></body></html>
