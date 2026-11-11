@@ -1,0 +1,114 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. Presentation ──────────────────────────────────────────────────────
+    eq('A1 PresentationRequest is a constructor', typeof PresentationRequest, 'function');
+    eq('A2 PresentationConnection is a constructor', typeof PresentationConnection, 'function');
+    eq('A3 PresentationAvailability is a constructor', typeof PresentationAvailability, 'function');
+    eq('A4 PresentationReceiver is a constructor', typeof PresentationReceiver, 'function');
+    eq('A5 PresentationConnectionList is a constructor', typeof PresentationConnectionList, 'function');
+    eq('A6 navigator.presentation brands itself', Object.prototype.toString.call(navigator.presentation), '[object Presentation]');
+    eq('A7 defaultRequest defaults to null', String(navigator.presentation.defaultRequest), 'null');
+    eq('A8 a connection begins connecting', safe(function () {
+        return new PresentationConnection().state;
+    }), 'ok:connecting');
+
+    // ── B. Bluetooth GATT ────────────────────────────────────────────────────
+    eq('B1 navigator.bluetooth brands itself', Object.prototype.toString.call(navigator.bluetooth), '[object Bluetooth]');
+    eq('B2 requestDevice is a function', typeof navigator.bluetooth.requestDevice, 'function');
+    eq('B3 the GATT hierarchy are constructors', safe(function () {
+        return [typeof BluetoothRemoteGATTServer, typeof BluetoothRemoteGATTService,
+            typeof BluetoothRemoteGATTCharacteristic, typeof BluetoothRemoteGATTDescriptor].join(',');
+    }), 'ok:function,function,function,function');
+    eq('B4 BluetoothUUID and properties are constructors', safe(function () {
+        return [typeof BluetoothUUID, typeof BluetoothCharacteristicProperties].join(',');
+    }), 'ok:function,function');
+    eq('B5 a GATT server begins disconnected', safe(function () {
+        return new BluetoothRemoteGATTServer().connected;
+    }), 'ok:false');
+    eq('B6 a characteristic property defaults false', safe(function () {
+        return new BluetoothCharacteristicProperties().read;
+    }), 'ok:false');
+
+    // ── C. Idle Detection ────────────────────────────────────────────────────
+    eq('C1 IdleDetector is a constructor', typeof IdleDetector, 'function');
+    eq('C2 a detector is an instance of IdleDetector', safe(function () {
+        return new IdleDetector() instanceof IdleDetector;
+    }), 'ok:true');
+    eq('C3 a detector begins in unknown state', safe(function () {
+        return new IdleDetector().userState;
+    }), 'ok:unknown');
+    eq('C4 screenState begins unknown', safe(function () {
+        return new IdleDetector().screenState;
+    }), 'ok:unknown');
+
+    // ── D. Credentials ───────────────────────────────────────────────────────
+    eq('D1 navigator.credentials brands itself', Object.prototype.toString.call(navigator.credentials), '[object CredentialsContainer]');
+    eq('D2 get/store/create are functions', safe(function () {
+        return [typeof navigator.credentials.get, typeof navigator.credentials.store,
+            typeof navigator.credentials.create].join(',');
+    }), 'ok:function,function,function');
+    eq('D3 the credential kinds are constructors', safe(function () {
+        return [typeof PasswordCredential, typeof PublicKeyCredential,
+            typeof CredentialsContainer].join(',');
+    }), 'ok:function,function,function');
+
+    // ── E. Network Information ───────────────────────────────────────────────
+    eq('E1 navigator.connection brands itself', Object.prototype.toString.call(navigator.connection), '[object NetworkInformation]');
+    eq('E2 the effective type answers', safe(function () {
+        return typeof navigator.connection.effectiveType;
+    }), 'ok:string');
+    eq('E3 NetworkInformation is a constructor', typeof NetworkInformation, 'function');
+
+    // ── F. Screen / ScreenOrientation ────────────────────────────────────────
+    eq('F1 screen.orientation brands itself', Object.prototype.toString.call(screen.orientation), '[object ScreenOrientation]');
+    eq('F2 the orientation type answers', safe(function () {
+        return typeof screen.orientation.type;
+    }), 'ok:string');
+    eq('F3 ScreenOrientation is a constructor', typeof ScreenOrientation, 'function');
+
+    // ── G. Web Locks ─────────────────────────────────────────────────────────
+    eq('G1 navigator.locks brands itself', Object.prototype.toString.call(navigator.locks), '[object LockManager]');
+    eq('G2 request and query are functions', safe(function () {
+        return [typeof navigator.locks.request, typeof navigator.locks.query].join(',');
+    }), 'ok:function,function');
+    eq('G3 LockManager and Lock are constructors', safe(function () {
+        return [typeof LockManager, typeof Lock].join(',');
+    }), 'ok:function,function');
+
+    // ── H. Reporting ─────────────────────────────────────────────────────────
+    eq('H1 ReportingObserver is a constructor', typeof ReportingObserver, 'function');
+    eq('H2 Report is a constructor', typeof Report, 'function');
+    eq('H3 ReportBody is a constructor', typeof ReportBody, 'function');
+    eq('H4 DeprecationReportBody is a constructor', typeof DeprecationReportBody, 'function');
+    eq('H5 a report body reads its message', safe(function () {
+        var body = new DeprecationReportBody();
+        return typeof body.message;
+    }), 'ok:string');
+
+    // ── I. Performance Observer deep ─────────────────────────────────────────
+    eq('I1 the performance entry kinds are constructors', safe(function () {
+        return [typeof PerformanceEntry, typeof PerformanceResourceTiming,
+            typeof PerformanceNavigationTiming, typeof PerformancePaintTiming,
+            typeof PerformanceLongTaskTiming].join(',');
+    }), 'ok:function,function,function,function,function');
+    eq('I2 supportedEntryTypes answers a list', safe(function () {
+        return PerformanceObserver.supportedEntryTypes.length > 0;
+    }), 'ok:true');
+
+    // ── J. Resize / Intersection Observer ────────────────────────────────────
+    eq('J1 the observer family are constructors', safe(function () {
+        return [typeof ResizeObserver, typeof ResizeObserverEntry,
+            typeof IntersectionObserver, typeof IntersectionObserverEntry].join(',');
+    }), 'ok:function,function,function,function');
+})();
+</script></body></html>

@@ -10720,6 +10720,7 @@ public class JavaScriptEngine : IDisposable
                     ['serial', 'Serial', true],
                     ['usb', 'USB', true], ['virtualKeyboard', 'VirtualKeyboard', true],
                     ['xr', 'XRSystem', true], ['storageBuckets', 'StorageBucketManager', false],
+                    ['bluetooth', 'Bluetooth', true],
                     ['login', 'NavigatorLogin', false], ['managed', 'NavigatorManagedData', false],
                     ['webkitPersistentStorage', 'DeprecatedStorageQuota', false],
                     ['webkitTemporaryStorage', 'DeprecatedStorageQuota', false]];
@@ -19174,6 +19175,31 @@ public class JavaScriptEngine : IDisposable
                         deviceClass: null, vendorIdSource: null, vendorId: null,
                         productId: null }, p: { watchAdvertisements: 0 },
                         s: 'the engine has no Bluetooth device to watch.' }],
+                    // Web Bluetooth §3: the GATT hierarchy a page walks on a connected device, and
+                    // the UUID helper the specification adds. The engine has no adapter, so the
+                    // services and characteristics carry their reads and refuse their work.
+                    ['BluetoothRemoteGATTServer', null, { r: { device: null, connected: false },
+                        p: { connect: 1, disconnect: 0, getPrimaryService: 1,
+                            getPrimaryServices: 0 },
+                        s: 'the engine connects to no GATT server.' }],
+                    ['BluetoothRemoteGATTService', null, { r: { device: null, uuid: '',
+                        isPrimary: false }, p: { getCharacteristic: 1, getCharacteristics: 0 },
+                        s: 'the engine exposes no GATT service.' }],
+                    ['BluetoothRemoteGATTCharacteristic', 'EventTarget', {
+                        r: { service: null, uuid: '', properties: null, value: null },
+                        p: { readValue: 0, writeValue: 1, startNotifications: 0,
+                            stopNotifications: 0 },
+                        s: 'the engine exposes no GATT characteristic.' }],
+                    ['BluetoothRemoteGATTDescriptor', null, { r: { characteristic: null,
+                        uuid: '', value: null }, p: { readValue: 0, writeValue: 1 },
+                        s: 'the engine exposes no GATT descriptor.' }],
+                    ['BluetoothCharacteristicProperties', null, { r: { broadcast: false,
+                        read: false, writeWithoutResponse: false, write: false,
+                        notify: false, indicate: false, authenticatedSignedWrites: false,
+                        reliableWrite: false, writableAuxiliaries: false },
+                        s: 'the engine exposes no characteristic properties.' }],
+                    ['BluetoothUUID', null, { p: { canonicalUUID: 1 },
+                        s: 'the engine resolves no Bluetooth UUID.' }],
                     ['USB', 'EventTarget', { r: { onconnect: null, ondisconnect: null },
                         p: { getDevices: 0, requestDevice: 1 },
                         s: 'the engine has no USB device to open.' }],
@@ -19332,6 +19358,32 @@ public class JavaScriptEngine : IDisposable
                         bidirectionalStreams: null, unidirectionalStreams: null,
                         datagrams: null }, q: { close: 0 },
                         s: 'the engine speaks no WebTransport.' }],
+                    // Presentation API §5-§7: the connection a second screen would carry, and the
+                    // availability the page asks for before it connects. The engine wires no second
+                    // screen, so each carries its reads and the work is refused.
+                    ['PresentationConnection', 'EventTarget', { r: { state: 'connecting',
+                        id: '', url: '' }, q: { close: 0, send: 1 },
+                        s: 'the engine opens no presentation connection.' }],
+                    ['PresentationAvailability', 'EventTarget', { r: { value: false,
+                        onchange: null }, s: 'the engine reports no presentation availability.' }],
+                    ['PresentationReceiver', null, { r: { connectionList: null },
+                        s: 'the engine receives no presentation.' }],
+                    ['PresentationConnectionList', 'EventTarget', { r: { connections: [ ],
+                        onconnectionavailable: null },
+                        s: 'the engine holds no presentation connection list.' }],
+                    // Idle Detection §2: the detector the page starts and reads state from. The engine
+                    // has no idle signal, so the state answers 'unknown' until a start resolves.
+                    ['IdleDetector', 'EventTarget', { r: { userState: 'unknown',
+                        screenState: 'unknown', screen: null },
+                        p: { start: 0 }, s: 'the engine reports no idle state.' }],
+                    // Reporting API §2: the report bodies a ReportingObserver hands back. The engine
+                    // generates no reports, so each body carries its reads.
+                    ['ReportBody', null, { s: 'the engine generates no report body.' }],
+                    ['DeprecationReportBody', 'ReportBody', { r: { id: '', anticipatedRemoval: null,
+                        message: '', sourceFile: null, lineNumber: null, columnNumber: null },
+                        s: 'the engine generates no deprecation report.' }],
+                    ['Report', null, { r: { type: '', url: '', body: null },
+                        s: 'the engine generates no report.' }],
                     // XSLTProcessor: the name a page tests for, with the calls it refuses.
                     ['XSLTProcessor', null, { r: { },
                         q: { importStylesheet: 1, transformToFragment: 2, transformToDocument: 1,
@@ -19499,7 +19551,14 @@ public class JavaScriptEngine : IDisposable
                     ['TrackEvent', 1],
                     ['VideoEncoder', 0], ['VideoDecoder', 0], ['AudioEncoder', 0],
                     ['AudioDecoder', 0], ['VideoFrame', 0], ['AudioFrame', 0],
-                    ['VideoColorSpace', 0]]
+                    ['VideoColorSpace', 0],
+                    ['PresentationConnection', 0], ['PresentationAvailability', 0],
+                    ['PresentationReceiver', 0], ['PresentationConnectionList', 0],
+                    ['BluetoothRemoteGATTServer', 0], ['BluetoothRemoteGATTService', 0],
+                    ['BluetoothRemoteGATTCharacteristic', 0], ['BluetoothRemoteGATTDescriptor', 0],
+                    ['BluetoothCharacteristicProperties', 0],
+                    ['IdleDetector', 0], ['ReportBody', 0], ['DeprecationReportBody', 0],
+                    ['Report', 0]]
                     .forEach(function (row) { buildable(row[0], row[1]); });
 
                 // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit
