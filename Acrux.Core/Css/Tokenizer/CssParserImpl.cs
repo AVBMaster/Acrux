@@ -1446,8 +1446,14 @@ public class CssParserImpl
         if (!keepsItsOwnText)
             valueText = Acrux.Core.Css.CssValueGrammar.WithCommentsAsWhitespace(valueText);
 
-        // Convert to CssValue and add to parsed properties
-        if (!string.IsNullOrEmpty(propertyName) && !string.IsNullOrEmpty(valueText)
+        // Convert to CssValue and add to parsed properties. A CUSTOM property may carry an
+        // empty value — '--empty:;' is a defined custom property whose value is the empty
+        // string, not an absent one, and reading it back must not fall back
+        // (CSS Variables 1 §3: 'color:var(--empty,green)' is the property's initial, not
+        // green — the empty substitution makes the declaration invalid at computed-value time
+        // and dropped). Regular properties still require a non-empty value.
+        bool isCustomProperty = propertyName.StartsWith("--", StringComparison.Ordinal);
+        if (!string.IsNullOrEmpty(propertyName) && (!string.IsNullOrEmpty(valueText) || isCustomProperty)
             && !commentStandsInForSpace)
         {
             var name = DeclarationName(propertyName);
