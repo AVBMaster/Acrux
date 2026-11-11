@@ -1,0 +1,96 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function hasAll(obj, names) {
+        var missing = names.filter(function (n) { return !(n in obj); });
+        return missing.length === 0 ? 'none' : missing.join('|');
+    }
+
+    // ── A. Storage deep ──────────────────────────────────────────────────────
+    eq('A1 localStorage carries its members', safe(function () {
+        return hasAll(localStorage, ['getItem', 'setItem', 'removeItem', 'clear', 'key',
+            'length']);
+    }), 'ok:none');
+    eq('A2 sessionStorage carries its members', safe(function () {
+        return hasAll(sessionStorage, ['getItem', 'setItem', 'removeItem', 'clear', 'key',
+            'length']);
+    }), 'ok:none');
+    eq('A3 Storage is a constructor', typeof Storage, 'function');
+
+    // ── B. IndexedDB deep ────────────────────────────────────────────────────
+    eq('B1 indexedDB carries its methods', safe(function () {
+        return hasAll(indexedDB, ['open', 'deleteDatabase', 'cmp']);
+    }), 'ok:none');
+    eq('B2 IDBFactory is a constructor', typeof IDBFactory, 'function');
+    eq('B3 an IDBRequest carries its members', safe(function () {
+        var req = indexedDB.open('x');
+        return hasAll(req, ['result', 'error', 'readyState', 'transaction', 'onsuccess',
+            'onerror', 'then']);
+    }), 'ok:none');
+
+    // ── C. Clipboard deep ────────────────────────────────────────────────────
+    eq('C1 navigator.clipboard brands itself', Object.prototype.toString.call(navigator.clipboard), '[object Clipboard]');
+    eq('C2 clipboard carries its methods', safe(function () {
+        return hasAll(navigator.clipboard, ['read', 'readText', 'write', 'writeText']);
+    }), 'ok:none');
+    eq('C3 Clipboard is a constructor', typeof Clipboard, 'function');
+    eq('D4 ClipboardEvent is a constructor', typeof ClipboardEvent, 'function');
+    eq('C5 a ClipboardEvent carries clipboardData', safe(function () {
+        var ev = new ClipboardEvent('copy');
+        return typeof ev.clipboardData;
+    }), 'ok:object');
+
+    // ── D. Permissions deep ──────────────────────────────────────────────────
+    eq('D1 navigator.permissions carries query', safe(function () {
+        return hasAll(navigator.permissions, ['query']);
+    }), 'ok:none');
+    eq('D2 Permissions is a constructor', typeof Permissions, 'function');
+    eq('D3 PermissionStatus is a constructor', typeof PermissionStatus, 'function');
+
+    // ── E. History deep ──────────────────────────────────────────────────────
+    eq('E1 history carries its members', safe(function () {
+        return hasAll(history, ['length', 'state', 'scrollRestoration', 'back', 'forward',
+            'go', 'pushState', 'replaceState']);
+    }), 'ok:none');
+
+    // ── F. Location deep ─────────────────────────────────────────────────────
+    eq('F1 location carries its members', safe(function () {
+        return hasAll(location, ['href', 'protocol', 'host', 'hostname', 'port',
+            'pathname', 'search', 'hash', 'origin', 'assign', 'replace', 'reload',
+            'toString']);
+    }), 'ok:none');
+
+    // ── G. Screen deep ───────────────────────────────────────────────────────
+    eq('G1 screen carries its members', safe(function () {
+        return hasAll(screen, ['width', 'height', 'availWidth', 'availHeight',
+            'colorDepth', 'pixelDepth', 'orientation']);
+    }), 'ok:none');
+
+    // ── H. Geolocation deep ──────────────────────────────────────────────────
+    eq('H1 navigator.geolocation carries its members', safe(function () {
+        return hasAll(navigator.geolocation, ['getCurrentPosition', 'watchPosition',
+            'clearWatch']);
+    }), 'ok:none');
+    eq('H2 Geolocation is a constructor', typeof Geolocation, 'function');
+
+    // ── I. selection / range deep ────────────────────────────────────────────
+    eq('I1 a Selection carries its members', safe(function () {
+        var s = window.getSelection();
+        return hasAll(s, ['anchorNode', 'focusNode', 'rangeCount', 'getRangeAt',
+            'addRange', 'removeAllRanges', 'toString', 'collapse']);
+    }), 'ok:none');
+    eq('I2 a Range carries its members', safe(function () {
+        var r = document.createRange();
+        return hasAll(r, ['setStart', 'setEnd', 'collapse', 'cloneContents',
+            'extractContents', 'deleteContents', 'selectNode', 'toString']);
+    }), 'ok:none');
+})();
+</script></body></html>
