@@ -1,0 +1,12 @@
+<!doctype html><html><head><style>
+#a{aspect-ratio:2/1;height:60px}
+#b{aspect-ratio:2/1;height:60px;display:inline-block}
+#c{aspect-ratio:2/1;height:60px;float:left}
+#d{aspect-ratio:2/1;height:60px;position:absolute}
+</style></head><body>
+<div id=a>A</div><span id=b>B</span><span id=c>C</span><span id=d>D</span>
+<div id=o></div>
+<script>
+const g=(id)=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+r.width.toFixed(0)+"x"+r.height.toFixed(0)+" ar="+getComputedStyle(e).aspectRatio+" w="+getComputedStyle(e).width;};
+document.getElementById("o").textContent=["a","b","c","d"].map(g).join(" | ");
+</script></body></html>

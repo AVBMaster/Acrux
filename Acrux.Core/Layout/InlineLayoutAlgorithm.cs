@@ -146,6 +146,23 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
             _ => IntrinsicMeasure.SizeResult(Node, Space));
         Builder.InlineSize = Math.Clamp(inlineSize, minI, maxI);
 
+        // Aspect-ratio in the opposite direction: with an auto inline size and a
+        // definite block size, the ratio transfers the height to the width (CSS
+        // Aspect-Ratio 1 §5.2). Mirrors the block path; an inline formatting-context
+        // root is sized here, not by LayoutMain, so an auto width would otherwise
+        // resolve to the full available width and the height would never widen the
+        // box. Only an explicitly specified height counts.
+        if (Style.AspectRatio > 0 && Style.Width is AutoLength or null
+            && Style.Height is not (AutoLength or null or IntrinsicLength))
+        {
+            float contentBlock = Builder.BlockSize - bp.VerticalSum;
+            if (contentBlock > 0)
+            {
+                float arInline = contentBlock * Style.AspectRatio + bp.HorizontalSum;
+                Builder.InlineSize = Math.Clamp(arInline, minI, maxI);
+            }
+        }
+
         // Aspect-ratio with auto height: derive the block size from the resolved
         // inline size. Mirrors the block path; runs here because an inline
         // formatting-context root is sized by this algorithm, not LayoutMain.

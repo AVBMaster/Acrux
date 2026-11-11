@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+.t{background:#eef;border:1px solid #99a;margin:4px 0}
+/* aspect-ratio interacting with min/max and auto */
+#ar1{aspect-ratio:2/1;width:100px}
+#ar2{aspect-ratio:2/1;min-height:80px;width:100px}
+#ar3{aspect-ratio:2/1;height:60px}
+#ar4{aspect-ratio:1/1;max-width:50px;width:100px}
+/* transform creating scrollable overflow */
+#ow{width:150px;height:50px;overflow:auto;border:1px solid #333}
+#ow>div{width:100px;height:100px;transform:translateX(80px)}
+/* percentage margins/padding resolve against container width */
+#pct{width:200px}
+#pct>div{width:50%;margin-left:25%;padding-top:10%;background:#dfd}
+/* box-shadow multiple layers */
+#sh{width:80px;height:40px;background:#fff;box-shadow:2px 2px 0 red,4px 4px 0 blue}
+/* pseudo elements */
+#pe::before{content:"B";color:red}
+#pe::after{content:"A";color:blue}
+#fl::first-line{color:green;font-weight:bold}
+#sel::selection{background:yellow}
+/* form styling */
+#ra{appearance:none;width:20px;height:20px;background:#ddd}
+/* list */
+#li{list-style:square inside}
+/* columns */
+#col{columns:2;column-gap:20px;column-rule:1px solid #000;height:60px}
+</style></head><body>
+<div class=t id=ar1>ar 2/1 w100</div>
+<div class=t id=ar2>ar 2/1 minH80</div>
+<div class=t id=ar3>ar 2/1 h60</div>
+<div class=t id=ar4>ar 1/1 maxW50</div>
+<div class=t id=ow><div>x</div></div>
+<div class=t id=pct><div>pct</div></div>
+<div class=t id=sh>sh</div>
+<div class=t id=pe>pe</div>
+<div class=t id=fl>first line here and more text that wraps onto a second line for testing</div>
+<div class=t id=sel>select me</div>
+<div class=t><input type=checkbox id=ra></div>
+<ul class=t id=li><li>one</li><li>two</li></ul>
+<div class=t id=col>column text aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll</div>
+<div id=o></div>
+<script>
+const box=(id)=>{const r=document.getElementById(id).getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top);};
+const out=[
+ box("ar1"),box("ar2"),box("ar3"),box("ar4"),box("pct"),
+ "sh="+getComputedStyle(document.getElementById("sh")).boxShadow,
+ "li="+getComputedStyle(document.getElementById("li")).listStyle,
+ "ra="+getComputedStyle(document.getElementById("ra")).appearance,
+ "col="+getComputedStyle(document.getElementById("col")).columnRule,
+];
+document.getElementById("o").textContent=out.join(" | ");
+</script></body></html>
