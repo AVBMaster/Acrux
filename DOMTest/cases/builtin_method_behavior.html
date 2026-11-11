@@ -1,0 +1,177 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Array.prototype newer methods ────────────────────────────────────
+    eq('A1 Array.prototype.at (negative index)', safe(function () {
+        return [1, 2, 3].at(-1);
+    }), 'ok:3');
+    eq('A2 Array.prototype.flat', safe(function () {
+        return [1, [2, [3, [4]]]].flat(2).join(',');
+    }), 'ok:1,2,3,4');
+    eq('A3 Array.prototype.flatMap', safe(function () {
+        return [1, 2, 3].flatMap(function (x) { return [x, x * 2]; }).join(',');
+    }), 'ok:1,2,2,4,3,6');
+    eq('A4 Array.prototype.includes (NaN)', safe(function () {
+        return [1, NaN].includes(NaN);
+    }), 'ok:true');
+    eq('A5 Array.prototype.findIndex', safe(function () {
+        return [5, 12, 8].findIndex(function (x) { return x > 10; });
+    }), 'ok:1');
+    eq('A6 Array.prototype.some / every', safe(function () {
+        return [1, 2, 3].some(function (x) { return x > 2; }) + ',' +
+            [1, 2, 3].every(function (x) { return x > 0; });
+    }), 'ok:true,true');
+    eq('A7 Array.prototype.reduce with initial', safe(function () {
+        return [1, 2, 3, 4].reduce(function (a, b) { return a + b; }, 10);
+    }), 'ok:20');
+    eq('A8 Array.prototype.filter + map + sort', safe(function () {
+        return [3, 1, 2].filter(function (x) { return x > 1; }).map(function (x) { return x * 10; }).sort(function (a, b) { return b - a; }).join(',');
+    }), 'ok:30,20');
+    eq('A9 Array.prototype.fill + copyWithin', safe(function () {
+        return [1, 2, 3, 4].fill(0, 1, 3).join(',');
+    }), 'ok:1,0,0,4');
+    eq('A10 Array.prototype.from with map fn', safe(function () {
+        return Array.from([1, 2, 3], function (x) { return x * x; }).join(',');
+    }), 'ok:1,4,9');
+    eq('A11 Array.prototype.keys/values/entries', safe(function () {
+        return Array.from([10, 20].keys()).join(',') + '|' + Array.from([10, 20].entries())[1].join(':');
+    }), 'ok:0,1|1:20');
+    eq('A12 Array.prototype.findLast', safe(function () {
+        return [1, 2, 3, 4].findLast(function (x) { return x < 3; });
+    }), 'ok:2');
+
+    // ── B. Typed arrays ──────────────────────────────────────────────────────
+    eq('B1 Int32Array from array + length', safe(function () {
+        var a = new Int32Array([1, 2, 3]); return a.length + ',' + a[2];
+    }), 'ok:3,3');
+    eq('B2 Float64Array byteLength', safe(function () {
+        return new Float64Array(4).byteLength;
+    }), 'ok:32');
+    eq('B3 TypedArray.set + subarray', safe(function () {
+        var a = new Int8Array(4); a.set([9, 8]); return a.subarray(0, 2).join(',');
+    }), 'ok:9,8');
+    eq('B4 ArrayBuffer byteLength + slice', safe(function () {
+        var b = new ArrayBuffer(8); return b.byteLength + ',' + b.slice(2).byteLength;
+    }), 'ok:8,6');
+    eq('B5 DataView get/set round-trip', safe(function () {
+        var b = new ArrayBuffer(8); var d = new DataView(b);
+        d.setInt32(0, 123456); return d.getInt32(0);
+    }), 'ok:123456');
+    eq('B6 Uint8Array from string via TextEncoder', safe(function () {
+        return new Uint8Array(new TextEncoder().encode('AB')).join(',');
+    }), 'ok:65,66');
+
+    // ── C. JSON deep ─────────────────────────────────────────────────────────
+    eq('C1 JSON.parse reviver', safe(function () {
+        return JSON.parse('{"a":1,"b":2}', function (k, v) { return k === 'a' ? v * 10 : v; }).a;
+    }), 'ok:10');
+    eq('C2 JSON.stringify with replacer array', safe(function () {
+        return JSON.stringify({ a: 1, b: 2, c: 3 }, ['a', 'c']);
+    }), 'ok:{"a":1,"c":3}');
+    eq('C3 JSON.stringify with toJSON', safe(function () {
+        return JSON.stringify({ toJSON: function () { return 'x'; } });
+    }), 'ok:"x"');
+    eq('C4 JSON.stringify undefined + null', safe(function () {
+        return JSON.stringify({ a: undefined, b: null });
+    }), 'ok:{"b":null}');
+    eq('C5 JSON.stringify spacing', safe(function () {
+        return JSON.stringify({ a: 1 }, null, 2).indexOf('\n') >= 0;
+    }), 'ok:true');
+    eq('C6 JSON round-trip of nested', safe(function () {
+        return JSON.stringify(JSON.parse('[[1,2],{"k":[3]}]'));
+    }), 'ok:[[1,2],{"k":[3]}]');
+
+    // ── D. RegExp deep ───────────────────────────────────────────────────────
+    eq('D1 named capture groups', safe(function () {
+        var m = '2024-01-15'.match(/(?<y>\d{4})-(?<m>\d{2})/); return m.groups.y + '|' + m.groups.m;
+    }), 'ok:2024|01');
+    eq('D2 matchAll returns an iterator of matches', safe(function () {
+        return Array.from('a1b2'.matchAll(/\d/g)).map(function (m) { return m[0]; }).join(',');
+    }), 'ok:1,2');
+    eq('D3 lookbehind assertion', safe(function () {
+        return '100USD'.match(/(?<=\d)(USD)/)[1];
+    }), 'ok:USD');
+    eq('D4 sticky flag lastIndex', safe(function () {
+        var r = /a/y; r.lastIndex = 1; return r.exec('bab')[0];
+    }), 'ok:a');
+    eq('D5 dotAll flag matches newline', safe(function () {
+        return /a.b/s.test('a\nb');
+    }), 'ok:true');
+    eq('D6 replace with a function', safe(function () {
+        return 'a1b2'.replace(/\d/g, function (d) { return String(Number(d) * 3); });
+    }), 'ok:a3b6');
+    eq('D7 split with a capture group keeps separators', safe(function () {
+        return 'a1b2'.split(/(\d)/).join('|');
+    }), 'ok:a|1|b|2|');
+
+    // ── E. String.raw + String extras ────────────────────────────────────────
+    eq('E1 String.raw keeps backslashes', safe(function () {
+        return String.raw`a\nb`;
+    }), 'ok:a\\nb');
+    eq('E2 String.prototype.replaceAll', safe(function () {
+        return 'a-a-a'.replaceAll('-', '+');
+    }), 'ok:a+a+a');
+    eq('E3 String.prototype.trimStart/trimEnd', safe(function () {
+        return '[' + '  x  '.trimStart() + '][' + '  x  '.trimEnd() + ']';
+    }), 'ok:[x  ][  x]');
+    eq('E4 String.prototype.repeat', safe(function () {
+        return 'ab'.repeat(3);
+    }), 'ok:ababab');
+    eq('E5 String.prototype.codePointAt / fromCodePoint', safe(function () {
+        return String.fromCodePoint(0x1F600).length + ',' + '😀'.codePointAt(0).toString(16);
+    }), 'ok:2,1f600');
+
+    // ── F. Object deep ───────────────────────────────────────────────────────
+    eq('F1 Object.getOwnPropertyDescriptors', safe(function () {
+        var d = Object.getOwnPropertyDescriptors({ a: 1 }).a; return d.value + ',' + d.writable;
+    }), 'ok:1,true');
+    eq('F2 Object.create with property descriptors', safe(function () {
+        var o = Object.create(null, { x: { value: 5, enumerable: true } }); return o.x + ',' + Object.getPrototypeOf(o);
+    }), 'ok:5,null');
+    eq('F3 Object.freeze makes it read-only', safe(function () {
+        var o = Object.freeze({ a: 1 }); o.a = 9; return o.a;
+    }), 'ok:1');
+    eq('F4 Object.seal blocks adding', safe(function () {
+        var o = Object.seal({ a: 1 }); var added = safe(function () { o.b = 2; return 'added'; });
+        return added.slice(0, 2) + ',' + ('b' in o);
+    }), 'ok:ok,false');
+    eq('F5 Object.setPrototypeOf + getPrototypeOf', safe(function () {
+        var base = { greet: function () { return 'hi'; } };
+        var o = Object.setPrototypeOf({}, base); return o.greet();
+    }), 'ok:hi');
+    eq('F6 property enumeration order (integer keys first)', safe(function () {
+        return Object.keys({ 2: 'b', a: 'c', 1: 'a' }).join(',');
+    }), 'ok:1,2,a');
+
+    // ── G. Function deep ─────────────────────────────────────────────────────
+    eq('G1 Function.prototype.bind', safe(function () {
+        function f(x, y) { return this.v + x + y; }
+        return f.bind({ v: 1 })(2, 3);
+    }), 'ok:6');
+    eq('G2 Function.prototype.call / apply', safe(function () {
+        function f(a, b) { return a + b + this.c; }
+        var o = { c: 10 };
+        return f.call(o, 1, 2) + ',' + f.apply(o, [3, 4]);
+    }), 'ok:13,17');
+    eq('G3 arrow functions capture this', safe(function () {
+        var o = { v: 5, get: function () { var a = () => this.v; return a(); } };
+        return o.get();
+    }), 'ok:5');
+    eq('G4 default + rest + destructured params', safe(function () {
+        function f(a, b = 2, ...rest) { return a + b + rest.length; }
+        return f(1) + ',' + f(1, 5, 6, 7);
+    }), 'ok:3,8');
+    eq('G5 Function.length and name', safe(function () {
+        function foo(a, b) { } return foo.length + ',' + foo.name;
+    }), 'ok:2,foo');
+})();
+</script></body></html>
