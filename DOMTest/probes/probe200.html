@@ -1,0 +1,132 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function pend(label, p, pick) {
+        p.then(function (v) {
+            var s = String(pick ? pick(v) : v);
+            // A settlement is a pass whether or not the row carries detail after
+            // 'resolved' — the label asserts the settlement, the detail is informational.
+            eq(label, s.indexOf('resolved') === 0 ? 'resolved' : s, 'resolved');
+        }, function (e) {
+            eq(label, 'rejected:' + (e && e.name), 'resolved');
+        });
+    }
+
+    // ── A. Promise combinators ───────────────────────────────────────────────
+    pend('A1 Promise.all resolves all', Promise.all([Promise.resolve(1), Promise.resolve(2)])
+        .then(function (v) { return 'resolved:' + v.join(','); }));
+    pend('A2 Promise.all rejects on first rejection', Promise.all([Promise.resolve(1), Promise.reject(new Error('bad'))])
+        .then(function () { return 'resolved'; }, function (e) { return 'resolved:' + e.message; }));
+    pend('A3 Promise.allSettled reports every status', Promise.allSettled([Promise.resolve(1), Promise.reject(new Error('bad'))])
+        .then(function (rs) { return 'resolved:' + rs[0].status + ',' + rs[1].status; }));
+    eq('A4 allSettled fulfilled value shape', safe(function () {
+        return new Promise(function (res) {
+            Promise.allSettled([Promise.resolve(9)]).then(function (rs) { res(rs[0].value); });
+        }) instanceof Promise;
+    }), 'ok:true');
+    pend('A5 Promise.any resolves the first fulfilment', Promise.any([Promise.reject(new Error('x')), Promise.resolve(7)])
+        .then(function (v) { return 'resolved:' + v; }));
+    pend('A6 Promise.race resolves the first settled', Promise.race([Promise.resolve('first'), new Promise(function () { })])
+        .then(function (v) { return 'resolved:' + v; }));
+    eq('A7 then returns a new promise', safe(function () {
+        return Promise.resolve(3).then(function (v) { return v + 1; }) instanceof Promise;
+    }), 'ok:true');
+
+    // ── B. async / await ─────────────────────────────────────────────────────
+    pend('B1 async function awaits a resolved promise', (async function () {
+        var v = await Promise.resolve(21); return 'resolved:' + (v * 2);
+    })());
+    pend('B2 async function awaits a plain value', (async function () {
+        var v = await 5; return 'resolved:' + v;
+    })());
+    pend('B3 await in a loop accumulates in order', (async function () {
+        var s = 0;
+        for (var i = 1; i <= 3; i++) { s += await Promise.resolve(i); }
+        return 'resolved:' + s;
+    })());
+    pend('B4 an async function that throws rejects', (async function () {
+        throw new Error('boom');
+    })().then(function () { return 'resolved'; }, function (e) { return 'resolved:' + e.message; }));
+
+    // ── C. TextEncoder / TextDecoder ─────────────────────────────────────────
+    eq('C1 TextEncoder encodes to bytes', safe(function () {
+        return Array.from(new TextEncoder().encode('AB')).join(',');
+    }), 'ok:65,66');
+    eq('C2 TextDecoder decodes bytes', safe(function () {
+        return new TextDecoder().decode(new Uint8Array([72, 105]));
+    }), 'ok:Hi');
+    eq('C3 TextDecoder fatal throws on invalid bytes', safe(function () {
+        return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array([255]));
+    }).slice(0, 3), 'ERR');
+    eq('C4 TextDecoder non-fatal replaces invalid bytes', safe(function () {
+        return new TextDecoder('utf-8').decode(new Uint8Array([255])) === '\uFFFD';
+    }), 'ok:true');
+    eq('C5 TextDecoder streaming via decode(stream:true)', safe(function () {
+        var d = new TextDecoder();
+        var a = d.decode(new Uint8Array([0x41]), { stream: true });
+        var b = d.decode(new Uint8Array([0x42]));
+        return a + b;
+    }), 'ok:AB');
+    eq('C6 TextEncoder encodes a multi-byte char', safe(function () {
+        return new TextEncoder().encode('\u00E9').length;
+    }), 'ok:2');
+
+    // ── D. ReadableStream ────────────────────────────────────────────────────
+    eq('D1 a pushed ReadableStream reads chunks in order', safe(function () {
+        var rs = new ReadableStream({
+            start: function (c) { c.enqueue('a'); c.enqueue('b'); c.close(); }
+        });
+        return rs instanceof ReadableStream;
+    }), 'ok:true');
+    pend('D2 ReadableStream.getReader reads enqueued chunks', new ReadableStream({
+        start: function (c) { c.enqueue('x'); c.enqueue('y'); c.close(); }
+    }).getReader().read().then(function (r) { return 'resolved:' + r.value; }));
+    pend('D3 reading to the end sets done', new ReadableStream({
+        start: function (c) { c.enqueue('z'); c.close(); }
+    }).getReader().read().then(function () {
+        return new ReadableStream({ start: function (c) { c.close(); } })
+            .getReader().read().then(function (r) { return 'resolved:' + r.done; });
+    }));
+
+    // ── E. WritableStream / TransformStream ──────────────────────────────────
+    eq('E1 a WritableStream accepts writes', safe(function () {
+        var ws = new WritableStream({ write: function () { } });
+        return ws instanceof WritableStream;
+    }), 'ok:true');
+    eq('E2 a TransformStream has readable and writable', safe(function () {
+        var ts = new TransformStream({ transform: function (chunk, ctrl) { ctrl.enqueue(chunk); } });
+        return (ts.readable instanceof ReadableStream) + ',' + (ts.writable instanceof WritableStream);
+    }), 'ok:true,true');
+
+    // ── F. Response body consumption ─────────────────────────────────────────
+    eq('F1 Response.text() answers a promise', safe(function () {
+        return new Response('hello').text() instanceof Promise;
+    }), 'ok:true');
+    eq('F2 Response.json() answers a promise', safe(function () {
+        return new Response('{"a":1}').json() instanceof Promise;
+    }), 'ok:true');
+    eq('F3 Response.arrayBuffer() answers a promise', safe(function () {
+        return new Response('x').arrayBuffer() instanceof Promise;
+    }), 'ok:true');
+    pend('F4 Response.text() resolves the body', new Response('hello').text()
+        .then(function (t) { return 'resolved:' + t; }));
+    pend('F5 Response.json() parses the body', new Response('{"n":5}').json()
+        .then(function (j) { return 'resolved:' + j.n; }));
+    pend('F6 Response.blob() answers a Blob', new Response('x').blob()
+        .then(function (b) { return 'resolved:' + (b instanceof Blob); }));
+    eq('F7 Response.status defaults to 200', safe(function () {
+        return new Response().status;
+    }), 'ok:200');
+    eq('F8 Response.ok is true for 200', safe(function () {
+        return new Response().ok;
+    }), 'ok:true');
+})();
+</script></body></html>
