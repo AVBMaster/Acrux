@@ -1,0 +1,153 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // Each measurement uses its own positioned container set to margin:0, so the
+    // body's default 8px margin and cross-row margin collapsing cannot shift it.
+    function container(style) {
+        var d = document.createElement('div');
+        d.setAttribute('style', 'position:relative;margin:0;' + (style || ''));
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+    function child(parent, style) {
+        var c = document.createElement('div');
+        c.setAttribute('style', 'margin:0;' + (style || ''));
+        parent.appendChild(c);
+        return c;
+    }
+
+    // ── A. content-box offset dimensions ─────────────────────────────────────
+    eq('A1 offsetWidth = content width (content-box)', (function () {
+        var el = child(container(), 'width:100px;height:40px');
+        var w = el.offsetWidth; el.parentNode.remove(); return w;
+    })(), '100');
+    eq('A2 offsetHeight = content height', (function () {
+        var el = child(container(), 'width:100px;height:40px');
+        var h = el.offsetHeight; el.parentNode.remove(); return h;
+    })(), '40');
+    eq('A3 border adds to offsetWidth (content-box)', (function () {
+        var el = child(container(), 'width:100px;border:10px solid black');
+        var w = el.offsetWidth; el.parentNode.remove(); return w;
+    })(), '120');
+    eq('A4 padding adds to offsetWidth (content-box)', (function () {
+        var el = child(container(), 'width:100px;padding:10px');
+        var w = el.offsetWidth; el.parentNode.remove(); return w;
+    })(), '120');
+    eq('A5 border+padding both add (100+20+10=130)', (function () {
+        var el = child(container(), 'width:100px;padding:10px;border:5px solid black');
+        var w = el.offsetWidth; el.parentNode.remove(); return w;
+    })(), '130');
+
+    // ── B. border-box keeps the declared width ───────────────────────────────
+    eq('B1 border-box: border+padding stay inside the width', (function () {
+        var el = child(container(), 'box-sizing:border-box;width:100px;padding:10px;border:5px solid black');
+        var w = el.offsetWidth; el.parentNode.remove(); return w;
+    })(), '100');
+    eq('B2 border-box clientWidth = width - border (100-10=90)', (function () {
+        var el = child(container(), 'box-sizing:border-box;width:100px;padding:10px;border:5px solid black');
+        var cw = el.clientWidth; el.parentNode.remove(); return cw;
+    })(), '90');
+
+    // ── C. client dimensions (padding yes, border no) ────────────────────────
+    eq('C1 clientWidth excludes border but includes padding', (function () {
+        var el = child(container(), 'width:100px;padding:10px;border:5px solid black');
+        var cw = el.clientWidth; el.parentNode.remove(); return cw;
+    })(), '120');
+    eq('C2 clientHeight of a block with explicit height', (function () {
+        var el = child(container(), 'width:100px;height:40px;padding:5px');
+        var h = el.clientHeight; el.parentNode.remove(); return h;
+    })(), '50');
+    eq('C3 clientWidth of an inline element is 0', (function () {
+        var c = container(); var s = document.createElement('span'); s.textContent = 'x';
+        c.appendChild(s); var w = s.clientWidth; c.remove(); return w;
+    })(), '0');
+
+    // ── D. scroll dimensions ─────────────────────────────────────────────────
+    eq('D1 scrollWidth >= clientWidth', (function () {
+        var el = child(container(), 'width:100px;height:40px;overflow:auto');
+        var sw = el.scrollWidth; el.parentNode.remove(); return sw >= 100;
+    })(), 'true');
+    eq('D2 a child wider than the parent grows scrollWidth', (function () {
+        var parent = container('width:100px;height:40px;overflow:auto');
+        var c = document.createElement('div'); c.style.width = '300px';
+        parent.appendChild(c);
+        var sw = parent.scrollWidth; parent.remove(); return sw;
+    })(), '300');
+    eq('D3 scrollHeight with a taller child', (function () {
+        var parent = container('width:100px;height:40px;overflow:auto');
+        var c = document.createElement('div'); c.style.height = '200px';
+        parent.appendChild(c);
+        var sh = parent.scrollHeight; parent.remove(); return sh;
+    })(), '200');
+
+    // ── E. getBoundingClientRect within an isolated container ────────────────
+    eq('E1 getBoundingClientRect returns numeric fields', (function () {
+        var r = child(container(), 'width:10px;height:10px').getBoundingClientRect();
+        return typeof r.left + ',' + typeof r.width;
+    })(), 'number,number');
+    eq('E2 rect.width for a 50px box', (function () {
+        var el = child(container(), 'width:50px;height:20px');
+        var r = el.getBoundingClientRect(); el.parentNode.remove(); return r.width;
+    })(), '50');
+    eq('E3 rect.height for a 20px box', (function () {
+        var el = child(container(), 'width:50px;height:20px');
+        var r = el.getBoundingClientRect(); el.parentNode.remove(); return r.height;
+    })(), '20');
+    eq('E4 right - left equals the width', (function () {
+        var el = child(container(), 'width:30px;height:10px');
+        var r = el.getBoundingClientRect(); el.parentNode.remove();
+        return r.right - r.left;
+    })(), '30');
+    eq('E5 bottom - top equals the height', (function () {
+        var el = child(container(), 'width:10px;height:20px');
+        var r = el.getBoundingClientRect(); el.parentNode.remove();
+        return r.bottom - r.top;
+    })(), '20');
+
+    // ── F. offsetParent ──────────────────────────────────────────────────────
+    eq('F1 offsetParent of a static child in a relative container', (function () {
+        var c = container('width:10px;height:10px');
+        var el = document.createElement('div'); el.style.cssText = 'margin:0';
+        c.appendChild(el);
+        var op = el.offsetParent ? el.offsetParent.tagName : 'null'; c.remove(); return op;
+    })(), 'DIV');
+    eq('F2 a positioned parent becomes the offsetParent', (function () {
+        var parent = container('position:relative;width:50px;height:50px');
+        var c = document.createElement('div'); c.style.width = '10px';
+        parent.appendChild(c);
+        var op = c.offsetParent ? c.offsetParent.tagName : 'null';
+        parent.remove(); return op;
+    })(), 'DIV');
+
+    // ── G. offsetTop is relative to the positioned container ─────────────────
+    eq('G1 offsetTop is 0 relative to a positioned parent', (function () {
+        var parent = container('width:50px;height:50px');
+        var c = document.createElement('div'); c.style.cssText = 'width:10px;height:10px';
+        parent.appendChild(c);
+        var top = c.offsetTop; parent.remove(); return top;
+    })(), '0');
+    eq('G2 offsetTop accounts for the parent padding', (function () {
+        var parent = container('width:50px;height:50px;padding:20px');
+        var c = document.createElement('div'); c.style.cssText = 'width:10px;height:10px';
+        parent.appendChild(c);
+        var top = c.offsetTop; parent.remove(); return top;
+    })(), '20');
+    eq('G3 a second stacked child sits below the first', (function () {
+        var parent = container('width:50px;height:50px');
+        var a = document.createElement('div'); a.style.cssText = 'width:10px;height:20px;margin:0';
+        var b = document.createElement('div'); b.style.cssText = 'width:10px;height:20px;margin:0';
+        parent.appendChild(a); parent.appendChild(b);
+        var top = b.offsetTop; parent.remove(); return top;
+    })(), '20');
+    eq('G4 offsetLeft is 0 relative to the positioned parent', (function () {
+        var parent = container('width:50px;height:50px');
+        var c = document.createElement('div'); c.style.cssText = 'width:10px;height:10px';
+        parent.appendChild(c);
+        var left = c.offsetLeft; parent.remove(); return left;
+    })(), '0');
+})();
+</script></body></html>
