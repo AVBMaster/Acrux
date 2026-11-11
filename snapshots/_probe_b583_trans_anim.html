@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* transition shorthand + longhands */
+#t1{transition:width 2s linear;height:20px;background:#eef}
+#t2{transition:width 2s,height 1s;color:red;height:20px}
+#t3{transition-property:opacity,transform;transition-duration:1s,2s,3s;height:20px}
+#t4{transition:all .5s ease-in-out;height:20px}
+#t5{transition:none;height:20px}
+/* animation shorthand */
+#a1{animation:spin 2s linear infinite;height:20px;background:#efe}
+#a2{animation-name:spin;animation-duration:2s;animation-iteration-count:3;height:20px}
+#a3{animation:fade 1s 2 alternate both;height:20px}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+/* media queries */
+#m1{height:20px;background:#eee}
+@media (min-width:200px){#m1{background:#cfc}}
+@media (max-width:100px){#m1{background:#fcc}}
+#m2{height:20px}
+@media screen and (min-width:300px){#m2{background:#ddf}}
+@media print{#m2{background:#fcc}}
+</style></head><body>
+<div id=t1>t1</div>
+<div id=t2>t2</div>
+<div id=t3>t3</div>
+<div id=t4>t4</div>
+<div id=t5>t5</div>
+<div id=a1>a1</div>
+<div id=a2>a2</div>
+<div id=a3>a3</div>
+<div id=m1>m1</div>
+<div id=m2>m2</div>
+<script>
+const ids=["t1","t2","t3","t4","t5","a1","a2","a3","m1","m2"];
+const g=id=>{const s=getComputedStyle(document.getElementById(id));
+ return id+":tp="+s.transitionProperty+" td="+s.transitionDuration+" tf="+s.transitionTimingFunction+" tn="+s.transitionName+" ad="+s.animationDuration+" ac="+s.animationIterationCount+" bg="+s.backgroundColor;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>
