@@ -1,0 +1,188 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Syntax: destructuring, spread, template, arrow ────────────────────
+    eq('A1 array destructuring', safe(function () {
+        var a, b; [a, b] = [1, 2]; return a + ',' + b;
+    }), 'ok:1,2');
+    eq('A2 object destructuring with rename + default', safe(function () {
+        var o = { x: 1 }; var { x: y, z = 9 } = o; return y + ',' + z;
+    }), 'ok:1,9');
+    eq('A3 nested destructuring', safe(function () {
+        var o = { p: { q: 5 } }; var { p: { q } } = o; return q;
+    }), 'ok:5');
+    eq('A4 array spread in literal', safe(function () {
+        var a = [1, 2]; var b = [...a, 3]; return b.join(',');
+    }), 'ok:1,2,3');
+    eq('A5 object spread', safe(function () {
+        var o = { a: 1 }; var p = { ...o, b: 2 }; return p.a + ',' + p.b;
+    }), 'ok:1,2');
+    eq('A6 rest parameter', safe(function () {
+        function f(...args) { return args.join(','); } return f(1, 2, 3);
+    }), 'ok:1,2,3');
+    eq('A7 template literal + expression', safe(function () {
+        var v = 7; return `v=${v},sum=${v + 1}`;
+    }), 'ok:v=7,sum=8');
+    eq('A8 computed property name', safe(function () {
+        var k = 'dyn'; var o = { [k]: 4 }; return o.dyn;
+    }), 'ok:4');
+    eq('A9 shorthand property', safe(function () {
+        var a = 1, b = 2; var o = { a, b }; return o.a + ',' + o.b;
+    }), 'ok:1,2');
+
+    // ── B. Iterators / generators / for-of ───────────────────────────────────
+    eq('B1 generator function', safe(function () {
+        function* g() { yield 1; yield 2; return 3; }
+        var it = g(); var out = [];
+        out.push(it.next().value); out.push(it.next().value);
+        var last = it.next(); out.push(last.value); out.push(last.done);
+        return out.join(',');
+    }), 'ok:1,2,3,true');
+    eq('B2 for-of over array', safe(function () {
+        var s = ''; for (var v of [1, 2, 3]) s += v; return s;
+    }), 'ok:123');
+    eq('B3 for-of over a generator', safe(function () {
+        function* g() { yield 'a'; yield 'b'; }
+        var s = ''; for (var v of g()) s += v; return s;
+    }), 'ok:ab');
+    eq('B4 Symbol.iterator on an array', safe(function () {
+        return typeof [][Symbol.iterator];
+    }), 'ok:function');
+    eq('B5 custom iterator via Symbol.iterator', safe(function () {
+        var o = {}; o[Symbol.iterator] = function () {
+            var i = 0; return { next: function () { return i < 2 ? { value: i++, done: false } : { done: true }; } };
+        }; var s = ''; for (var v of o) s += v; return s;
+    }), 'ok:01');
+
+    // ── C. Classes ───────────────────────────────────────────────────────────
+    eq('C1 class with extends + super', safe(function () {
+        class A { constructor(v) { this.v = v; } get() { return this.v; } }
+        class B extends A { constructor() { super(9); } double() { return this.get() * 2; } }
+        var b = new B(); return b.get() + ',' + b.double();
+    }), 'ok:9,18');
+    eq('C2 static method', safe(function () {
+        class A { static make() { return new A(); } constructor() { this.v = 3; } }
+        return A.make().v;
+    }), 'ok:3');
+    eq('C3 getter/setter on a class', safe(function () {
+        class A { constructor() { this._x = 1; } get x() { return this._x; } set x(v) { this._x = v * 2; } }
+        var a = new A(); a.x = 5; return a.x;
+    }), 'ok:10');
+    eq('C4 class expression + typeof', safe(function () {
+        var C = class { }; return typeof C;
+    }), 'ok:function');
+    eq('C5 instanceof across the chain', safe(function () {
+        class A { } class B extends A { } var b = new B();
+        return [b instanceof B, b instanceof A, b instanceof Object].join(',');
+    }), 'ok:true,true,true');
+
+    // ── D. Object / Reflect / Proxy ──────────────────────────────────────────
+    eq('D1 Object.assign', safe(function () {
+        return JSON.stringify(Object.assign({ a: 1 }, { b: 2 }));
+    }), 'ok:{"a":1,"b":2}');
+    eq('D2 Object.keys/values/entries', safe(function () {
+        var o = { a: 1, b: 2 }; return Object.keys(o).join(',') + '|' + Object.values(o).join(',') + '|' + Object.entries(o).length;
+    }), 'ok:a,b|1,2|2');
+    eq('D3 Object.defineProperty with getter', safe(function () {
+        var o = {}; Object.defineProperty(o, 'x', { get: function () { return 42; } }); return o.x;
+    }), 'ok:42');
+    eq('D4 Reflect.ownKeys', safe(function () {
+        var o = { a: 1 }; Object.defineProperty(o, 's', { value: 2, enumerable: false });
+        return Reflect.ownKeys(o).length;
+    }), 'ok:2');
+    eq('D5 Proxy get trap', safe(function () {
+        var p = new Proxy({ a: 1 }, { get: function (t, k) { return k === 'b' ? 99 : t[k]; } });
+        return p.a + ',' + p.b;
+    }), 'ok:1,99');
+    eq('D6 Proxy has trap', safe(function () {
+        var p = new Proxy({}, { has: function () { return true; } });
+        return 'anything' in p;
+    }), 'ok:true');
+
+    // ── E. Symbol / Map / Set / WeakMap ──────────────────────────────────────
+    eq('E1 Symbol description + uniqueness', safe(function () {
+        var s1 = Symbol('x'); var s2 = Symbol('x'); return String(s1) + '|' + (s1 === s2);
+    }), 'ok:Symbol(x)|false');
+    eq('E2 Map set/get/has/delete/size', safe(function () {
+        var m = new Map(); m.set('a', 1); m.set('b', 2);
+        return [m.get('a'), m.size, m.has('b'), (m.delete('b'), m.has('b'))].join(',');
+    }), 'ok:1,2,true,false');
+    eq('E3 Map iteration', safe(function () {
+        var m = new Map([[1, 'x'], [2, 'y']]); var s = '';
+        m.forEach(function (v, k) { s += k + v; }); return s;
+    }), 'ok:1x2y');
+    eq('E4 Set add/has/size/dup', safe(function () {
+        var s = new Set(); s.add(1); s.add(1); s.add(2);
+        return [s.size, s.has(2)].join(',');
+    }), 'ok:2,true');
+    eq('E5 WeakMap set/get', safe(function () {
+        var w = new WeakMap(); var k = {}; w.set(k, 7); return w.get(k);
+    }), 'ok:7');
+    eq('E6 Symbol.for registry', safe(function () {
+        return Symbol.for('g') === Symbol.for('g');
+    }), 'ok:true');
+
+    // ── F. Promise / async / await ───────────────────────────────────────────
+    eq('F1 Promise resolve + then', safe(function () {
+        var held;
+        Promise.resolve(5).then(function (v) { held = v; });
+        return typeof held; // microtask not yet run synchronously
+    }), 'ok:undefined');
+    eq('F2 async function returns a promise', safe(function () {
+        async function f() { return 1; } return f() instanceof Promise;
+    }), 'ok:true');
+    eq('F3 await inside async', safe(function () {
+        var held;
+        (async function () { held = await Promise.resolve(8); })();
+        return typeof held;
+    }), 'ok:undefined');
+    eq('F4 Promise.all rejects with the first rejection', safe(function () {
+        var out;
+        Promise.all([Promise.reject(new Error('e'))]).catch(function (e) { out = e.message; });
+        return typeof out;
+    }), 'ok:undefined');
+
+    // ── G. Number / Math / String extras ─────────────────────────────────────
+    eq('G1 Number.isInteger / isSafeInteger', safe(function () {
+        return [Number.isInteger(3), Number.isInteger(3.5), Number.isSafeInteger(2)].join(',');
+    }), 'ok:true,false,true');
+    eq('G2 Number.EPSILON exists', safe(function () {
+        return Number.EPSILON > 0;
+    }), 'ok:true');
+    eq('G3 String.prototype.includes/startsWith/endsWith', safe(function () {
+        var s = 'hello'; return [s.includes('ell'), s.startsWith('he'), s.endsWith('lo')].join(',');
+    }), 'ok:true,true,true');
+    eq('G4 String.prototype.padStart/padEnd', safe(function () {
+        return '5'.padStart(3, '0') + '|' + '5'.padEnd(3, '0');
+    }), 'ok:005|500');
+    eq('G5 Math.trunc/sign/cbrt', safe(function () {
+        return [Math.trunc(-1.5), Math.sign(-3), Math.cbrt(27)].join(',');
+    }), 'ok:-1,-1,3');
+    eq('G6 Object.is NaN', safe(function () {
+        return Object.is(NaN, NaN);
+    }), 'ok:true');
+
+    // ── H. try/catch/finally + optional chaining / nullish ───────────────────
+    eq('H1 optional chaining ?. on missing', safe(function () {
+        var o = null; return o?.deep?.x;
+    }), 'ok:undefined');
+    eq('H2 nullish coalescing ?? picks right on null', safe(function () {
+        var v = null; return v ?? 'fallback';
+    }), 'ok:fallback');
+    eq('H3 ?? keeps 0 (unlike ||)', safe(function () {
+        var v = 0; return v ?? 'fallback';
+    }), 'ok:0');
+    eq('H4 logical assignment ??=', safe(function () {
+        var o = { a: null, b: 5 }; o.a ??= 1; o.b ??= 9; return o.a + ',' + o.b;
+    }), 'ok:1,5');
+})().catch(function (e) { window.__T('outer', false, 'threw ' + (e && e.name)); });
+</script></body></html>
