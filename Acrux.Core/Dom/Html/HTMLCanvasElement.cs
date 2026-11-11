@@ -116,7 +116,14 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     /// <summary>Current pixels for painting; null until a surface is attached.</summary>
     public SKImage? SnapshotImage() => _surface?.Snapshot();
 
-    public double GlobalAlpha { get; set; } = 1.0;
+    public double GlobalAlpha
+    {
+        // 2D Context §2: globalAlpha is clamped into [0, 1]; a value outside the range is
+        // ignored rather than stored (measured: assigning 2 reads back 1).
+        get => _globalAlpha;
+        set { if (value >= 0 && value <= 1) _globalAlpha = value; }
+    }
+    private double _globalAlpha = 1.0;
     public string GlobalCompositeOperation { get; set; } = "source-over";
     public string? Filter { get; set; }
     public bool ImageSmoothingEnabled { get; set; } = true;

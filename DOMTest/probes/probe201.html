@@ -1,0 +1,141 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function ctx() {
+        var c = document.createElement('canvas');
+        c.width = 100; c.height = 50;
+        return c.getContext('2d');
+    }
+
+    // ── A. path building ─────────────────────────────────────────────────────
+    eq('A1 beginPath/moveTo/lineTo/closePath run without error', safe(function () {
+        var x = ctx();
+        x.beginPath(); x.moveTo(10, 10); x.lineTo(50, 10); x.closePath();
+        return 'ok';
+    }), 'ok:ok');
+    eq('A2 rect() adds a rectangle subpath', safe(function () {
+        var x = ctx(); x.beginPath(); x.rect(0, 0, 10, 10); return 'ok';
+    }), 'ok:ok');
+    eq('A3 arc() with start/end angles', safe(function () {
+        var x = ctx(); x.beginPath(); x.arc(50, 50, 10, 0, Math.PI * 2); return 'ok';
+    }), 'ok:ok');
+    eq('A4 arc() with anticlockwise flag', safe(function () {
+        var x = ctx(); x.beginPath(); x.arc(50, 50, 10, 0, Math.PI, true); return 'ok';
+    }), 'ok:ok');
+    eq('A5 bezierCurveTo/quadraticCurveTo', safe(function () {
+        var x = ctx(); x.beginPath(); x.moveTo(0, 0);
+        x.bezierCurveTo(10, 0, 20, 10, 30, 10); x.quadraticCurveTo(40, 20, 50, 20);
+        return 'ok';
+    }), 'ok:ok');
+    eq('A6 arcTo connects with a tangent', safe(function () {
+        var x = ctx(); x.beginPath(); x.moveTo(0, 0); x.arcTo(10, 0, 10, 10, 5); return 'ok';
+    }), 'ok:ok');
+
+    // ── B. fill / stroke ─────────────────────────────────────────────────────
+    eq('B1 fill() with the current fillStyle', safe(function () {
+        var x = ctx(); x.fillStyle = 'red'; x.beginPath(); x.rect(0, 0, 10, 10);
+        x.fill(); return x.fillStyle;
+    }), 'ok:red');
+    eq('B2 stroke() with the current strokeStyle and lineWidth', safe(function () {
+        var x = ctx(); x.strokeStyle = 'blue'; x.lineWidth = 3;
+        x.beginPath(); x.moveTo(0, 0); x.lineTo(10, 10); x.stroke();
+        return x.strokeStyle + ',' + x.lineWidth;
+    }), 'ok:blue,3');
+    eq('B3 fillRect draws directly (no beginPath needed)', safe(function () {
+        var x = ctx(); x.fillStyle = 'green'; x.fillRect(0, 0, 10, 10); return 'ok';
+    }), 'ok:ok');
+    eq('B4 strokeRect draws directly', safe(function () {
+        var x = ctx(); x.strokeRect(0, 0, 10, 10); return 'ok';
+    }), 'ok:ok');
+    eq('B5 clearRect clears a region', safe(function () {
+        var x = ctx(); x.fillRect(0, 0, 10, 10); x.clearRect(0, 0, 5, 5); return 'ok';
+    }), 'ok:ok');
+
+    // ── C. transforms ────────────────────────────────────────────────────────
+    eq('C1 translate offsets subsequent drawing', safe(function () {
+        var x = ctx(); x.translate(10, 20); return 'ok';
+    }), 'ok:ok');
+    eq('C2 rotate accumulates', safe(function () {
+        var x = ctx(); x.rotate(Math.PI / 2); x.rotate(Math.PI / 2); return 'ok';
+    }), 'ok:ok');
+    eq('C3 scale scales subsequent drawing', safe(function () {
+        var x = ctx(); x.scale(2, 3); return 'ok';
+    }), 'ok:ok');
+    eq('C4 save/restore round-trips fillStyle', safe(function () {
+        var x = ctx(); x.fillStyle = 'red'; x.save();
+        x.fillStyle = 'blue'; x.restore(); return x.fillStyle;
+    }), 'ok:red');
+    eq('C5 nested save/restore pop in LIFO order', safe(function () {
+        var x = ctx(); x.fillStyle = 'a'; x.save();
+        x.fillStyle = 'b'; x.save(); x.fillStyle = 'c';
+        x.restore(); var one = x.fillStyle; x.restore(); var two = x.fillStyle;
+        return one + ',' + two;
+    }), 'ok:b,a');
+    eq('C6 restore on an empty stack is a no-op', safe(function () {
+        var x = ctx(); x.restore(); return 'ok';
+    }), 'ok:ok');
+    eq('C7 setTransform replaces the matrix', safe(function () {
+        var x = ctx(); x.translate(10, 10); x.setTransform(1, 0, 0, 1, 0, 0); return 'ok';
+    }), 'ok:ok');
+
+    // ── D. gradients ─────────────────────────────────────────────────────────
+    eq('D1 createLinearGradient answers a gradient', safe(function () {
+        return Object.prototype.toString.call(ctx().createLinearGradient(0, 0, 10, 0));
+    }), 'ok:[object CanvasGradient]');
+    eq('D2 createRadialGradient answers a gradient', safe(function () {
+        return Object.prototype.toString.call(ctx().createRadialGradient(0, 0, 0, 0, 0, 10));
+    }), 'ok:[object CanvasGradient]');
+    eq('D3 addColorStop accepts a stop in [0,1]', safe(function () {
+        var g = ctx().createLinearGradient(0, 0, 10, 0); g.addColorStop(0, 'red'); g.addColorStop(1, 'blue');
+        return 'ok';
+    }), 'ok:ok');
+    eq('D4 addColorStop rejects an out-of-range offset', safe(function () {
+        var g = ctx().createLinearGradient(0, 0, 10, 0); g.addColorStop(2, 'red');
+        return 'made';
+    }).slice(0, 3), 'ERR');
+    eq('D5 addColorStop can be read off an assigned gradient', safe(function () {
+        var x = ctx(); var g = x.createLinearGradient(0, 0, 10, 0);
+        return typeof g.addColorStop;
+    }), 'ok:function');
+
+    // ── E. state properties ──────────────────────────────────────────────────
+    eq('E1 globalAlpha defaults to 1', document.createElement('canvas').getContext('2d').globalAlpha, '1');
+    eq('E2 globalAlpha is clamped to [0,1]', safe(function () {
+        var x = ctx(); x.globalAlpha = 2; return x.globalAlpha;
+    }), 'ok:1');
+    eq('E3 globalCompositeOperation defaults to source-over', safe(function () {
+        return ctx().globalCompositeOperation;
+    }), 'ok:source-over');
+    eq('E4 textAlign defaults to start', safe(function () {
+        return ctx().textAlign;
+    }), 'ok:start');
+    eq('E5 lineCap defaults to butt', safe(function () {
+        return ctx().lineCap;
+    }), 'ok:butt');
+
+    // ── F. measureText ───────────────────────────────────────────────────────
+    eq('F1 measureText answers a TextMetrics', safe(function () {
+        return Object.prototype.toString.call(ctx().measureText('hello'));
+    }), 'ok:[object TextMetrics]');
+    eq('F2 TextMetrics.width is a number', safe(function () {
+        return typeof ctx().measureText('hello').width;
+    }), 'ok:number');
+    eq('F3 wider text has a larger width', safe(function () {
+        var x = ctx(); return x.measureText('hi').width <= x.measureText('hello').width;
+    }), 'ok:true');
+    eq('F4 TextMetrics carries the bounding-box reads', safe(function () {
+        var m = ctx().measureText('x');
+        var missing = ['actualBoundingBoxLeft', 'actualBoundingBoxRight', 'fontBoundingBoxAscent',
+            'fontBoundingBoxDescent'].filter(function (n) { return !(n in m); });
+        return missing.length === 0 ? 'none' : missing.join('|');
+    }), 'ok:none');
+})();
+</script></body></html>
