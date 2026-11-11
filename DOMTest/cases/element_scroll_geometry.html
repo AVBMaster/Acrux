@@ -1,0 +1,106 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    var el = document.getElementById('root');
+
+    // ── A. fullscreen lives on Document, not on the element ─────────────────
+    // Fullscreen §5: the element only carries requestFullscreen; the document
+    // owns exitFullscreen and fullscreenElement.
+    eq('A1 requestFullscreen is a function', typeof el.requestFullscreen, 'function');
+    eq('A2 webkitRequestFullscreen is a function', typeof el.webkitRequestFullscreen, 'function');
+    eq('A3 exitFullscreen is NOT on the element', typeof el.exitFullscreen, 'undefined');
+    eq('A4 requestFullscreen() answers a promise', safe(function () {
+        return el.requestFullscreen() instanceof Promise;
+    }), 'ok:true');
+    eq('A5 document.exitFullscreen is a function', typeof document.exitFullscreen, 'function');
+    eq('A6 document.fullscreenElement defaults to null', String(document.fullscreenElement), 'null');
+    eq('A7 document.fullscreenEnabled is true', String(document.fullscreenEnabled), 'true');
+    eq('A8 the on* slot starts null', String(el.onfullscreenchange), 'null');
+
+    // ── B. the scroll family ─────────────────────────────────────────────────
+    eq('B1 scrollIntoView is a function', typeof el.scrollIntoView, 'function');
+    eq('B2 scrollIntoView() runs', safe(function () { el.scrollIntoView(); return 'called'; }), 'ok:called');
+    eq('B3 scrollIntoView takes options', safe(function () {
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' }); return 'called';
+    }), 'ok:called');
+    eq('B4 scroll/scrollBy/scrollTo are functions', safe(function () {
+        return [typeof el.scroll, typeof el.scrollBy, typeof el.scrollTo].join(',');
+    }), 'ok:function,function,function');
+    eq('B5 scroll() takes coordinates and options', safe(function () {
+        el.scroll(10, 20); el.scroll({ top: 5, left: 6 }); return 'called';
+    }), 'ok:called');
+    eq('B6 scrollBy() runs', safe(function () { el.scrollBy(1, 2); el.scrollBy({ top: 3 }); return 'called'; }), 'ok:called');
+    eq('B7 a partial options bag is accepted', safe(function () { el.scroll({ top: 'bad' }); return 'no throw'; }), 'ok:no throw');
+
+    // ── C. client geometry reads are numbers ─────────────────────────────────
+    eq('C1 the client reads are all numbers', safe(function () {
+        return [typeof el.clientWidth, typeof el.clientHeight,
+            typeof el.clientTop, typeof el.clientLeft].join(',');
+    }), 'ok:number,number,number,number');
+
+    // ── D. getBoundingClientRect ─────────────────────────────────────────────
+    eq('D1 it answers a DOMRect', safe(function () {
+        return Object.prototype.toString.call(el.getBoundingClientRect());
+    }), 'ok:[object DOMRect]');
+    eq('D2 the DOMRect carries the eight fields', safe(function () {
+        var r = el.getBoundingClientRect();
+        return [r.width, r.height, r.top, r.left, r.right, r.bottom].join(',');
+    }), 'ok:1008,0,8,8,1016,8');
+    eq('D3 toJSON is a function', safe(function () {
+        return typeof el.getBoundingClientRect().toJSON;
+    }), 'ok:function');
+    eq('D4 getClientRects answers a list', safe(function () {
+        return el.getClientRects().length;
+    }), 'ok:1');
+
+    // ── E. offset geometry ───────────────────────────────────────────────────
+    eq('E1 offsetParent is the body', safe(function () {
+        return Object.prototype.toString.call(el.offsetParent);
+    }), 'ok:[object HTMLBodyElement]');
+    eq('E2 the offset reads are all numbers', safe(function () {
+        return [typeof el.offsetTop, typeof el.offsetLeft,
+            typeof el.offsetWidth, typeof el.offsetHeight].join(',');
+    }), 'ok:number,number,number,number');
+
+    // ── F. checkVisibility ───────────────────────────────────────────────────
+    eq('F1 checkVisibility is a function', typeof el.checkVisibility, 'function');
+    eq('F2 a visible element checks true', String(el.checkVisibility()), 'true');
+    eq('F3 it takes an options bag', String(el.checkVisibility({ checkVisibilityCSS: true })), 'true');
+
+    // ── G. the document/window scroll surface ────────────────────────────────
+    eq('G1 document.scrollingElement is the html', safe(function () {
+        return document.scrollingElement === document.documentElement;
+    }), 'ok:true');
+    eq('G2 window scroll reads are numbers', safe(function () {
+        return [typeof window.scrollX, typeof window.scrollY,
+            typeof window.pageXOffset].join(',');
+    }), 'ok:number,number,number');
+    eq('G3 window.scrollX defaults to 0', String(window.scrollX), '0');
+
+    // ── H. a scroll container clamps and persists its scrollTop ──────────────
+    // CSSOM View §6.3.1: a box only scrolls within its own overflow.
+    el.innerHTML = '<div style="height:3000px"></div>';
+    void el.scrollHeight;
+    eq('H1 a plain div is not a scroll container', safe(function () {
+        el.scrollTop = 100; return el.scrollTop;
+    }), 'ok:0');
+    el.style.overflow = 'auto';
+    el.style.height = '100px';
+    void el.scrollHeight;
+    eq('H2 a scroller reports a scrollable overflow', safe(function () {
+        return [el.scrollHeight, el.clientHeight].join(',');
+    }), 'ok:3000,100');
+    eq('H3 the scrollTop a scroller is given persists', safe(function () {
+        el.scrollTop = 100; return el.scrollTop;
+    }), 'ok:100');
+    el.innerHTML = '';
+})();
+</script></body></html>
