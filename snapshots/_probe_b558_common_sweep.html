@@ -1,0 +1,36 @@
+<!doctype html><html><head><style>
+  .g1 { background: linear-gradient(to right, red, blue); }
+  .g2 { background: radial-gradient(circle, red, blue); }
+  .g3 { background: conic-gradient(red, blue); }
+  .s1 { box-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+  .s2 { text-shadow: 1px 1px 2px red; }
+  .bd { border: 2px solid red; border-radius: 8px; }
+  .op { opacity: 0.5; }
+  .tr { transform: scale(1.5); }
+  .fl { display: flex; flex-direction: column; }
+  .gr { display: grid; grid-template-columns: 1fr 1fr; }
+</style></head><body>
+<div class="g1" id="g1">g1</div><div class="g2" id="g2">g2</div>
+<div class="g3" id="g3">g3</div><div class="s1" id="s1">s1</div>
+<div class="s2" id="s2">s2</div><div class="bd" id="bd">bd</div>
+<div class="op" id="op">op</div><div class="tr" id="tr">tr</div>
+<div class="fl" id="fl">fl</div><div class="gr" id="gr">gr</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('g1','background-image');
+g('g2','background-image');
+g('g3','background-image');
+g('s1','box-shadow');
+g('s2','text-shadow');
+g('bd','border-radius');
+g('op','opacity');
+g('tr','transform');
+g('fl','display');
+g('fl','flex-direction');
+g('gr','display');
+g('gr','grid-template-columns');
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
