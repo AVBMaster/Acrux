@@ -4137,11 +4137,16 @@ public class JavaScriptEngine : IDisposable
                         throw new TypeError('Failed to execute ' + formDataQuote('clone') + ' on '
                             + formDataQuote('Request') + ': Illegal invocation');
                     }
-                    return new Request(state.url, { method: state.method, headers: state.headers,
-                        body: state.stream ? state.stream : state.text, mode: state.mode,
+                    // A body is only forwarded when the request actually carries one: the
+                    // constructor refuses a body on a method that cannot carry one (measured).
+                    var init = { method: state.method, headers: state.headers,
+                        mode: state.mode,
                         credentials: state.credentials, referrerPolicy: state.referrerPolicy,
                         integrity: state.integrity, keepalive: state.keepalive,
-                        redirect: state.redirect, signal: state.signal });
+                        redirect: state.redirect, signal: state.signal };
+                    if (state.stream) init.body = state.stream;
+                    else if (state.text) init.body = state.text;
+                    return new Request(state.url, init);
                 }
             });
             Object.defineProperty(Response.prototype, Symbol.toStringTag,

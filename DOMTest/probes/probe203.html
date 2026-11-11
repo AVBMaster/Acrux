@@ -1,0 +1,86 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Headers CRUD ──────────────────────────────────────────────────────
+    eq('A1 Headers.set then get', safe(function () {
+        var h = new Headers(); h.set('Content-Type', 'text/plain'); return h.get('content-type');
+    }), 'ok:text/plain');
+    eq('A2 Headers.append combines with a comma', safe(function () {
+        var h = new Headers(); h.append('X', 'a'); h.append('X', 'b'); return h.get('x');
+    }), 'ok:a, b');
+    eq('A3 Headers.has is case-insensitive', safe(function () {
+        var h = new Headers(); h.set('X-Foo', '1'); return h.has('x-foo');
+    }), 'ok:true');
+    eq('A4 Headers.delete removes the header', safe(function () {
+        var h = new Headers(); h.set('X', '1'); h.delete('x'); return h.has('X');
+    }), 'ok:false');
+    eq('A5 Headers constructor from an object', safe(function () {
+        var h = new Headers({ 'A': '1', 'B': '2' }); return h.get('a') + ',' + h.get('b');
+    }), 'ok:1,2');
+    eq('A6 Headers forEach visits name and value', safe(function () {
+        var h = new Headers(); h.set('X', '9'); var got;
+        h.forEach(function (v, k) { got = k + ':' + v; }); return got;
+    }), 'ok:x:9');
+    eq('A7 Headers.entries is iterable', safe(function () {
+        var h = new Headers({ 'X': '1' }); var n = 0;
+        for (var e of h.entries()) n++; return n;
+    }), 'ok:1');
+
+    // ── B. Request ───────────────────────────────────────────────────────────
+    eq('B1 Request.url normalises the address', safe(function () {
+        return new Request('https://example.com/a').url;
+    }), 'ok:https://example.com/a');
+    eq('B2 Request.method defaults to GET', safe(function () {
+        return new Request('https://example.com').method;
+    }), 'ok:GET');
+    eq('B3 Request.method honours the init', safe(function () {
+        return new Request('https://example.com', { method: 'POST' }).method;
+    }), 'ok:POST');
+    eq('B4 Request.headers answers a Headers', safe(function () {
+        return new Request('https://example.com').headers instanceof Headers;
+    }), 'ok:true');
+    eq('B5 Request.clone answers a Request', safe(function () {
+        return new Request('https://example.com').clone() instanceof Request;
+    }), 'ok:true');
+
+    // ── C. Response ──────────────────────────────────────────────────────────
+    eq('C1 Response.status honours the init', safe(function () {
+        return new Response('', { status: 404 }).status;
+    }), 'ok:404');
+    eq('C2 Response.statusText honours the init', safe(function () {
+        return new Response('', { statusText: 'Not Found' }).statusText;
+    }), 'ok:Not Found');
+    eq('C3 Response.headers answers a Headers', safe(function () {
+        return new Response().headers instanceof Headers;
+    }), 'ok:true');
+    eq('C4 Response.ok is false for 404', safe(function () {
+        return new Response('', { status: 404 }).ok;
+    }), 'ok:false');
+    eq('C5 Response headers can be set via init', safe(function () {
+        return new Response('', { headers: { 'X-A': '1' } }).headers.get('x-a');
+    }), 'ok:1');
+
+    // ── D. fetch entry ───────────────────────────────────────────────────────
+    eq('D1 fetch answers a promise', safe(function () {
+        return fetch('https://example.com') instanceof Promise;
+    }), 'ok:true');
+    eq('D2 fetch accepts a Request object', safe(function () {
+        return fetch(new Request('https://example.com')) instanceof Promise;
+    }), 'ok:true');
+
+    // ── E. data: URL fetch resolves a body ───────────────────────────────────
+    fetch('data:text/plain,hello')
+        .then(function (r) { return r.text(); })
+        .then(function (t) { eq('E1 fetch of a data: URL resolves the body', t, 'hello'); },
+            function (e) { eq('E1 fetch of a data: URL resolves the body', 'rejected:' + (e && e.name), 'hello'); });
+})();
+</script></body></html>
