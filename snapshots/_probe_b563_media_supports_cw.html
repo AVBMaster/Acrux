@@ -1,0 +1,35 @@
+<!doctype html><html><head><style>
+  @media (min-width: 100px) { .mq1 { color: red; } }
+  @media (orientation: landscape) { .mq2 { color: green; } }
+  @supports (display: flex) { .sp1 { display: flex; } }
+  @supports not (display: bogus) { .sp2 { color: blue; } }
+  @layer base { .ly { color: purple; } }
+  .cw1 { all: unset; color: red; }
+  .cw2 { color: inherit; }
+  .cw3 { width: initial; }
+  .cw4 { width: unset; }
+  .cw5 { width: revert; }
+</style></head><body>
+<div class="mq1" id="mq1">mq1</div>
+<div class="mq2" id="mq2">mq2</div>
+<div class="sp1" id="sp1">sp1</div>
+<div class="sp2" id="sp2">sp2</div>
+<div class="ly" id="ly">ly</div>
+<div class="cw1" id="cw1">cw1</div>
+<div class="cw2" id="cw2" style="color:red">cw2</div>
+<div class="cw3" id="cw3">cw3</div>
+<div class="cw4" id="cw4">cw4</div>
+<div class="cw5" id="cw5">cw5</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('mq1','color'); g('mq2','color');
+g('sp1','display'); g('sp2','color'); g('ly','color');
+g('cw1','color'); g('cw2','color');
+g('cw3','width'); g('cw4','width'); g('cw5','width');
+out.push('supports @media='+CSS.supports('color','red'));
+out.push('supports @supports='+CSS.supports('display','flex'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
