@@ -17521,6 +17521,18 @@ public class JavaScriptEngine : IDisposable
                     });
                     level('MediaStream', 'EventTarget');
                     level('MediaStreamTrack', 'EventTarget');
+                    // MediaStream §4: the members a page reads off a stream the engine constructs.
+                    // The stream carries no tracks (the engine captures nothing), so the getters
+                    // answer the empty shape and the active flag stays false.
+                    var mediaStream = levels.MediaStream;
+                    read(mediaStream, 'id', function () { return ''; });
+                    read(mediaStream, 'active', function () { return false; });
+                    ['getTracks', 'getAudioTracks', 'getVideoTracks'].forEach(function (name) {
+                        method(mediaStream, name, function () { return []; });
+                    });
+                    ['addTrack', 'removeTrack', 'clone'].forEach(function (name) {
+                        method(mediaStream, name, function () { return undefined; });
+                    });
                     // The navigator's own calls: the badge, the protocol handler and the ad-auction
                     // surface, answered the way the reference answers a context that is not secure.
                     var nav = levels.Navigator;
@@ -19060,6 +19072,12 @@ public class JavaScriptEngine : IDisposable
                     ['ServiceWorker', 'EventTarget', { r: { scriptURL: '', state: 'activated',
                         onstatechange: null }, q: { postMessage: 1 },
                         s: 'the engine registered no service worker.' }],
+                    ['ServiceWorkerRegistration', 'EventTarget', { r: { installing: null,
+                        waiting: null, active: null, scope: '', updateViaCache: 'none',
+                        onupdatefound: null },
+                        p: { unregister: 0, update: 0, getNotifications: 0,
+                            showNotification: 1 },
+                        s: 'the engine registered no service worker.' }],
                     ['Client', 'EventTarget', { r: { frameId: '', id: '', type: 'window',
                         url: '' } }],
                     ['Clients', null, { r: { }, p: { matchAll: 0, openWindow: 1, claim: 0 },
@@ -19087,6 +19105,9 @@ public class JavaScriptEngine : IDisposable
                         options: null, keys: null }, p: { unsubscribe: 0, toJSON: 0 } }],
                     ['PushSubscriptionOptions', null, { r: { userVisibleOnly: true,
                         applicationServerKey: null } }],
+                    ['PushMessageData', null, { r: { },
+                        p: { arrayBuffer: 0, blob: 0, json: 0, text: 0 },
+                        s: 'the engine delivers no push message.' }],
                     ['SyncManager', null, { r: { }, p: { register: 1, getTags: 0 },
                         s: 'the engine synchronises nothing in the background.' }],
                     ['PeriodicSyncManager', null, { r: { }, p: { register: 1, getTags: 0 },
@@ -19558,7 +19579,8 @@ public class JavaScriptEngine : IDisposable
                     ['BluetoothRemoteGATTCharacteristic', 0], ['BluetoothRemoteGATTDescriptor', 0],
                     ['BluetoothCharacteristicProperties', 0],
                     ['IdleDetector', 0], ['ReportBody', 0], ['DeprecationReportBody', 0],
-                    ['Report', 0]]
+                    ['Report', 0],
+                    ['ServiceWorkerRegistration', 0], ['MediaStream', 0], ['PushMessageData', 0]]
                     .forEach(function (row) { buildable(row[0], row[1]); });
 
                 // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit
@@ -19644,6 +19666,37 @@ public class JavaScriptEngine : IDisposable
                     window.MediaSource.isTypeSupported = function isTypeSupported() {
                         return false;
                     };
+                }
+                if (typeof window.MediaRecorder === 'function') {
+                    // MediaRecorder.isTypeSupported (MediaStream Recording §4): the engine records no
+                    // media, so no MIME type is one it can record and each answers false.
+                    window.MediaRecorder.isTypeSupported = function isTypeSupported() {
+                        return false;
+                    };
+                }
+                // Push API §3: the registration a page reaches through the container carries a
+                // pushManager, whose subscribe/getSubscription/permissionState answer the requests a
+                // page makes. The engine has no push service, so each refuses rather than resolving.
+                if (typeof window.ServiceWorkerRegistration === 'function') {
+                    var swrProto = window.ServiceWorkerRegistration.prototype;
+                    if (swrProto && !('pushManager' in swrProto)) {
+                        Object.defineProperty(swrProto, 'pushManager', {
+                            configurable: true, enumerable: true,
+                            get: function () {
+                                if (!this.__acruxPushManager) {
+                                    var made = window.PushManager
+                                        ? Object.create(window.PushManager.prototype) : { };
+                                    Object.defineProperty(made, '__acruxRegistration',
+                                        { value: this, enumerable: false, configurable: true,
+                                            writable: true });
+                                    Object.defineProperty(this, '__acruxPushManager',
+                                        { value: made, enumerable: false, configurable: true,
+                                            writable: true });
+                                }
+                                return this.__acruxPushManager;
+                            }
+                        });
+                    }
                 }
                 if (typeof window.ImageDecoder === 'function') {
                     window.ImageDecoder.isTypeSupported = function isTypeSupported() {

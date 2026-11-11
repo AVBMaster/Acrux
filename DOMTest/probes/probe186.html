@@ -1,0 +1,104 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function hasAll(obj, names) {
+        var missing = names.filter(function (n) { return !(n in obj); });
+        return missing.length === 0 ? 'none' : missing.join('|');
+    }
+
+    // ── A. Notification ──────────────────────────────────────────────────────
+    eq('A1 Notification static permission', typeof Notification.permission, 'string');
+    eq('A2 Notification static requestPermission', typeof Notification.requestPermission, 'function');
+    eq('A3 Notification static maxActions', typeof Notification.maxActions, 'number');
+    eq('A4 a Notification instance carries its members', safe(function () {
+        var n = new Notification('t');
+        return hasAll(n, ['title', 'body', 'icon', 'tag', 'close', 'onclick']);
+    }), 'ok:none');
+
+    // ── B/C. Push ────────────────────────────────────────────────────────────
+    eq('B1 ServiceWorkerRegistration is constructible', safe(function () {
+        return new ServiceWorkerRegistration() instanceof ServiceWorkerRegistration;
+    }), 'ok:true');
+    eq('B2 a registration carries pushManager', safe(function () {
+        var reg = new ServiceWorkerRegistration();
+        return typeof reg.pushManager;
+    }), 'ok:object');
+    eq('B3 pushManager carries subscribe/getSubscription/permissionState', safe(function () {
+        var reg = new ServiceWorkerRegistration();
+        return hasAll(reg.pushManager, ['subscribe', 'getSubscription', 'permissionState']);
+    }), 'ok:none');
+    eq('B4 a registration carries its reads and methods', safe(function () {
+        var reg = new ServiceWorkerRegistration();
+        return hasAll(reg, ['installing', 'waiting', 'active', 'scope', 'unregister', 'update']);
+    }), 'ok:none');
+    eq('C1 PushSubscription is a constructor', typeof PushSubscription, 'function');
+    eq('C2 PushMessageData is a constructor', typeof PushMessageData, 'function');
+    eq('C3 PushManager and its options are constructors', safe(function () {
+        return [typeof PushManager, typeof PushSubscriptionOptions].join(',');
+    }), 'ok:function,function');
+
+    // ── D. MediaRecorder ─────────────────────────────────────────────────────
+    eq('D1 MediaRecorder.isTypeSupported is a static function', typeof MediaRecorder.isTypeSupported, 'function');
+    eq('D2 isTypeSupported refuses a type the engine cannot record', safe(function () {
+        return MediaRecorder.isTypeSupported('video/webm; codecs=vp8');
+    }), 'ok:false');
+    eq('D3 a MediaRecorder carries its methods and reads', safe(function () {
+        var r = new MediaRecorder(new MediaStream());
+        return hasAll(r, ['start', 'stop', 'pause', 'resume', 'state', 'stream',
+            'ondataavailable']);
+    }), 'ok:none');
+    eq('D4 a fresh recorder begins inactive', safe(function () {
+        return new MediaRecorder(new MediaStream()).state;
+    }), 'ok:inactive');
+
+    // ── E. MediaStream ───────────────────────────────────────────────────────
+    eq('E1 a MediaStream is constructible', safe(function () {
+        return new MediaStream() instanceof MediaStream;
+    }), 'ok:true');
+    eq('E2 a MediaStream carries its members', safe(function () {
+        var s = new MediaStream();
+        return hasAll(s, ['id', 'getTracks', 'getAudioTracks', 'getVideoTracks',
+            'addTrack', 'removeTrack', 'active']);
+    }), 'ok:none');
+
+    // ── F. WebTransport ──────────────────────────────────────────────────────
+    eq('F1 a WebTransport carries its members', safe(function () {
+        var t = new WebTransport('https://example.com');
+        return hasAll(t, ['ready', 'closed', 'datagrams', 'close']);
+    }), 'ok:none');
+
+    // ── G. AudioContext ──────────────────────────────────────────────────────
+    eq('G1 AudioContext factory methods', safe(function () {
+        var ctx = new AudioContext();
+        return hasAll(ctx, ['destination', 'sampleRate', 'currentTime', 'state',
+            'createGain', 'createOscillator', 'resume', 'close']);
+    }), 'ok:none');
+    eq('G2 createGain answers a GainNode', safe(function () {
+        return Object.prototype.toString.call(new AudioContext().createGain());
+    }), 'ok:[object GainNode]');
+    eq('G3 GainNode.gain is an AudioParam', safe(function () {
+        return Object.prototype.toString.call(new AudioContext().createGain().gain);
+    }), 'ok:[object AudioParam]');
+    eq('G4 AudioParam carries value and the ramps', safe(function () {
+        var p = new AudioContext().createGain().gain;
+        return hasAll(p, ['value', 'setValueAtTime', 'linearRampToValueAtTime',
+            'exponentialRampToValueAtTime', 'cancelScheduledValues']);
+    }), 'ok:none');
+
+    // ── H. ImageDecoder ──────────────────────────────────────────────────────
+    eq('H1 ImageDecoder.isTypeSupported is a static function', typeof ImageDecoder.isTypeSupported, 'function');
+    eq('H2 an ImageDecoder carries its members', safe(function () {
+        var blob = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+        var d = new ImageDecoder({ data: blob, type: 'image/png' });
+        return hasAll(d, ['completed', 'decode', 'tracks', 'type']);
+    }), 'ok:none');
+})();
+</script></body></html>
