@@ -1631,7 +1631,13 @@ public static class EchoedProperties
                     contain = true;
                 }
                 var said = new List<string> { angle };
-                if (size != null && !(contain && size == "closest-side")) said.Add(size);
+                // 'closest-side' is the default ray size the reference engine always elides
+                // (measured: 'ray(45deg closest-side)' reads back 'ray(45deg)', 'ray(45deg
+                // farthest-side)' keeps its size, 'ray(45deg contain)' keeps 'contain', and
+                // 'ray(45deg closest-side contain)' — which the grammar refuses — reads
+                // 'ray(45deg contain)' via this same path). The other three size words are not
+                // defaults, so they survive.
+                if (size != null && size != "closest-side") said.Add(size);
                 if (contain) said.Add("contain");
                 canonical = "ray(" + string.Join(" ", said) + ")";
                 return true;

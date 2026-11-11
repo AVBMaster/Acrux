@@ -1,0 +1,30 @@
+<!doctype html><html><head><style>
+  .o1 { offset-path: path("M 0 0 L 100 100"); }
+  .o2 { offset-path: path("M 0 0 L 100 100"); offset-distance: 50%; }
+  .o3 { offset-path: ray(45deg closest-side); }
+  .o4 { offset-path: circle(50px at 25px 25px); }
+  .o5 { offset-rotate: 0deg; }
+  .o6 { offset-anchor: center; }
+</style></head><body>
+<div class="o1" id="o1">o1</div>
+<div class="o2" id="o2">o2</div>
+<div class="o3" id="o3">o3</div>
+<div class="o4" id="o4">o4</div>
+<div class="o5" id="o5">o5</div>
+<div class="o6" id="o6">o6</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  try { out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+  catch(err){ out.push(id+' '+p+' ERR '+err.message); } }
+g('o1','offset-path');
+g('o2','offset-path'); g('o2','offset-distance');
+g('o3','offset-path');
+g('o4','offset-path');
+g('o5','offset-rotate');
+g('o6','offset-anchor');
+out.push('supports offset-path='+CSS.supports('offset-path','path("M 0 0")'));
+out.push('supports ray='+CSS.supports('offset-path','ray(45deg closest-side)'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>

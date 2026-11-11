@@ -1,0 +1,19 @@
+<!doctype html><html><head><style>
+  .r1 { offset-path: ray(45deg closest-side); }
+  .r2 { offset-path: ray(45deg farthest-side); }
+  .r3 { offset-path: ray(45deg closest-corner); }
+  .r4 { offset-path: ray(45deg farthest-corner); }
+  .r5 { offset-path: ray(45deg); }
+  .r6 { offset-path: ray(45deg contain); }
+</style></head><body>
+<div class="r1" id="r1">r1</div><div class="r2" id="r2">r2</div>
+<div class="r3" id="r3">r3</div><div class="r4" id="r4">r4</div>
+<div class="r5" id="r5">r5</div><div class="r6" id="r6">r6</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+['r1','r2','r3','r4','r5','r6'].forEach(id=>{
+  out.push(id+' offset-path='+JSON.stringify(getComputedStyle(document.getElementById(id)).getPropertyValue('offset-path')));
+});
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
