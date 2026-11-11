@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* container-type + @container */
+#cw{container-type:inline-size;container-name:card;width:200px;border:1px solid #000;padding:4px}
+#cw>div{background:#eef;margin:2px 0}
+@container card (min-width:150px){#cw>div{color:red}}
+@container card (max-width:100px){#cw>div{color:blue}}
+/* container-type size */
+#cs{container-type:size;width:200px;height:100px;border:1px solid #333}
+#cs>div{background:#dfd}
+@container (min-width:150px){#cs>div{font-weight:bold}}
+/* container without name */
+#cn{container-type:inline-size;width:180px;border:1px solid #666}
+#cn>p{background:#fdf}
+@container (min-width:150px){#cn>p{color:green}}
+/* container-name only */
+#cn2{container-name:main;width:200px;border:1px solid #999}
+/* containment */
+#ct1{contain:layout;width:100px;height:40px;background:#fef}
+#ct2{contain:paint;width:100px;height:40px;background:#eff}
+#ct3{contain:content;width:100px;height:40px;background:#fef}
+#ct4{contain:size;width:100px;background:#fef}
+/* content-visibility */
+#cv1{content-visibility:auto;width:100px;height:40px;background:#eef;contain-intrinsic-size:100px 40px}
+#cv2{content-visibility:hidden;width:100px;height:40px;background:#ffe}
+</style></head><body>
+<div id=cw><div>card-child</div></div>
+<div id=cs><div>size-child</div></div>
+<div id=cn><p>noname-child</p></div>
+<div id=cn2>nameonly</div>
+<div id=ct1>layout</div>
+<div id=ct2>paint</div>
+<div id=ct3>content</div>
+<div id=ct4>size</div>
+<div id=cv1>cvauto</div>
+<div id=cv2>cvhidden</div>
+<script>
+const ids=["cw","cs","cn","cn2","ct1","ct2","ct3","ct4","cv1","cv2"];
+const g=id=>{const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+ const ct=s.containerType||"-",cn=s.containerName||"-";
+ return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+" ct="+ct+" cn="+cn+" contain="+s.contain+" cv="+s.contentVisibility;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>
