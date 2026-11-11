@@ -1,0 +1,39 @@
+<!doctype html><html><head><style>
+  table { border-collapse: collapse; width: 200px; }
+  td, th { border: 1px solid black; padding: 2px; }
+  caption { caption-side: top; }
+  .tbl { table-layout: fixed; }
+  :root { --accent: red; --size: 20px; }
+  .usevar { color: var(--accent); width: var(--size); }
+  .usevar2 { color: var(--undefined, blue); }
+  .pe::before { content: "B:"; color: green; }
+  .pe::after { content: "A:"; }
+  .pe::first-line { color: purple; }
+</style></head><body>
+<table class="tbl" id="tbl">
+  <caption id="cap">cap</caption>
+  <tr><th id="th">h</th></tr>
+  <tr><td id="td">d</td></tr>
+</table>
+<div class="usevar" id="uv">uv</div>
+<div class="usevar2" id="uv2">uv2</div>
+<div class="pe" id="pe">pe</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('tbl','border-collapse');
+g('tbl','table-layout');
+g('cap','caption-side');
+g('uv','color');
+g('uv','width');
+g('uv2','color');
+const pe=getComputedStyle(document.getElementById('pe'),'::before');
+out.push('pe::before content='+JSON.stringify(pe.content));
+const peA=getComputedStyle(document.getElementById('pe'),'::after');
+out.push('pe::after content='+JSON.stringify(peA.content));
+out.push('supports var='+CSS.supports('color','var(--x)'));
+out.push('media width>=200='+matchMedia('(min-width: 200px)').matches);
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
