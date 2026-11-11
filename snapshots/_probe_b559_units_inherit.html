@@ -1,0 +1,36 @@
+<!doctype html><html><head><style>
+  .u1 { width: 10rem; }
+  .u2 { width: 10em; }
+  .u3 { width: 50%; }
+  .u4 { width: 10vw; }
+  .u5 { width: 10vh; }
+  .u6 { width: calc(100px + 2rem); }
+  .u7 { width: 5ex; }
+  .u8 { width: 10ch; }
+  .z1 { position: absolute; z-index: 10; }
+  .z2 { position: absolute; z-index: auto; }
+  .inh { color: red; }
+  .inh-child { color: inherit; }
+</style></head><body>
+<div id="root" style="font-size:16px">
+<div class="u1" id="u1">u1</div>
+<div class="u2" id="u2">u2</div>
+<div class="u3" id="u3">u3</div>
+<div class="u4" id="u4">u4</div>
+<div class="u6" id="u6">u6</div>
+<div class="inh" id="inh">inh<span class="inh-child" id="inhc">child</span></div>
+<div style="position:relative;height:50px">
+<div class="z1" id="z1">z1</div><div class="z2" id="z2">z2</div>
+</div>
+<pre id="rec"></pre>
+<script>
+const out=[];
+function g(id,p){ const e=document.getElementById(id);
+  out.push(id+' '+p+'='+JSON.stringify(getComputedStyle(e).getPropertyValue(p))); }
+g('u1','width'); g('u2','width'); g('u4','width'); g('u6','width');
+g('inh','color'); g('inhc','color');
+g('z1','z-index'); g('z2','z-index');
+out.push('supports rem='+CSS.supports('width','10rem'));
+out.push('supports calc='+CSS.supports('width','calc(100px + 2rem)'));
+document.getElementById('rec').textContent=out.join('\n');
+</script></body></html>
