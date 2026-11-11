@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><body><div id="root"><ul id="list"><li>1</li><li>2</li></ul></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function addLi() {
+        var li = document.createElement('li'); li.textContent = 'new';
+        document.getElementById('list').appendChild(li);
+        return li;
+    }
+
+    // ── A. querySelectorAll is STATIC ────────────────────────────────────────
+    eq('A1 querySelectorAll before add', document.querySelectorAll('li').length, '2');
+    var qsa = document.querySelectorAll('li');
+    addLi();
+    eq('A2 querySelectorAll is unchanged after add (static)', qsa.length, '2');
+    eq('A3 a fresh querySelectorAll sees the new li', document.querySelectorAll('li').length, '3');
+    document.getElementById('list').lastChild.remove();
+    eq('A4 querySelectorAll is unchanged after remove (static)', qsa.length, '2');
+
+    // ── B. getElementsByTagName is LIVE ──────────────────────────────────────
+    var byTag = document.getElementsByTagName('li');
+    eq('B1 getElementsByTagName before add', byTag.length, '2');
+    addLi();
+    eq('B2 getElementsByTagName is updated after add (live)', byTag.length, '3');
+    document.getElementById('list').lastChild.remove();
+    eq('B3 getElementsByTagName is updated after remove (live)', byTag.length, '2');
+
+    // ── C. getElementsByClassName is LIVE ────────────────────────────────────
+    var byClass = document.getElementById('list').getElementsByClassName('sel');
+    eq('C1 getElementsByClassName before', byClass.length, '0');
+    var li = addLi(); li.className = 'sel';
+    eq('C2 getElementsByClassName is updated after add (live)', byClass.length, '1');
+    li.className = '';
+    eq('C3 getElementsByClassName is updated after class change (live)', byClass.length, '0');
+    li.remove();
+
+    // ── D. childNodes is LIVE ────────────────────────────────────────────────
+    var list = document.getElementById('list');
+    var kids = list.childNodes;
+    eq('D1 childNodes before add', kids.length, '2');
+    addLi();
+    eq('D2 childNodes is updated after add (live)', kids.length, '3');
+    list.lastChild.remove();
+    eq('D3 childNodes is updated after remove (live)', kids.length, '2');
+
+    // ── E. children is LIVE ──────────────────────────────────────────────────
+    var elems = list.children;
+    eq('E1 children before add', elems.length, '2');
+    addLi();
+    eq('E2 children is updated after add (live)', elems.length, '3');
+    list.lastChild.remove();
+    eq('E3 children is updated after remove (live)', elems.length, '2');
+
+    // ── F. both kinds are still iterable / indexable ─────────────────────────
+    eq('F1 a static querySelectorAll is indexable', document.querySelectorAll('li')[0].textContent, '1');
+    eq('F2 a live getElementsByTagName is indexable', document.getElementsByTagName('li')[0].textContent, '1');
+    eq('F3 both support item()', safe(function () {
+        return document.querySelectorAll('li').item(0).textContent + ',' +
+            document.getElementsByTagName('li').item(0).textContent;
+    }), 'ok:1,1');
+    eq('F4 querySelectorAll has forEach but getElementsByTagName does not', safe(function () {
+        var a = 0; document.querySelectorAll('li').forEach(function () { a++; });
+        return a + ',' + (typeof document.getElementsByTagName('li').forEach);
+    }), 'ok:2,object');
+})();
+</script></body></html>
