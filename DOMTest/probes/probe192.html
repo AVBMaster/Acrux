@@ -1,0 +1,146 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Prototype chain and property lookup ───────────────────────────────
+    eq('A1 property lookup walks the chain', safe(function () {
+        var base = { greet: function () { return 'hi'; } };
+        var o = Object.create(base); return o.greet();
+    }), 'ok:hi');
+    eq('A2 shadowing an inherited property', safe(function () {
+        var base = { x: 1 }; var o = Object.create(base); o.x = 2;
+        return o.x + ',' + base.x;
+    }), 'ok:2,1');
+    eq('A3 deleting an own prop reveals the inherited one', safe(function () {
+        var base = { x: 1 }; var o = Object.create(base); o.x = 2; delete o.x; return o.x;
+    }), 'ok:1');
+    eq('A4 hasOwnProperty ignores the chain', safe(function () {
+        var base = { x: 1 }; var o = Object.create(base);
+        return o.hasOwnProperty('x') + ',' + ('x' in o);
+    }), 'ok:false,true');
+    eq('A5 getPrototypeOf walks a two-level chain', safe(function () {
+        var a = {}; var b = Object.create(a); var c = Object.create(b);
+        return (Object.getPrototypeOf(c) === b) + ',' + (Object.getPrototypeOf(b) === a);
+    }), 'ok:true,true');
+    eq('A6 setting __proto__ changes the chain', safe(function () {
+        var o = {}; var p = { inherited: 1 }; o.__proto__ = p; return o.inherited;
+    }), 'ok:1');
+
+    // ── B. Property descriptors ──────────────────────────────────────────────
+    eq('B1 a data descriptor reports value/writable', safe(function () {
+        var d = Object.getOwnPropertyDescriptor({ a: 1 }, 'a');
+        return d.value + ',' + d.writable + ',' + d.enumerable + ',' + d.configurable;
+    }), 'ok:1,true,true,true');
+    eq('B2 defineProperty writable:false blocks assignment', safe(function () {
+        var o = {}; Object.defineProperty(o, 'x', { value: 5, writable: false });
+        o.x = 9; return o.x;
+    }), 'ok:5');
+    eq('B3 enumerable:false hides from Object.keys', safe(function () {
+        var o = {}; Object.defineProperty(o, 'hidden', { value: 1, enumerable: false });
+        return Object.keys(o).length;
+    }), 'ok:0');
+    eq('B4 configurable:false blocks delete', safe(function () {
+        var o = {}; Object.defineProperty(o, 'x', { value: 1, configurable: false });
+        delete o.x; return 'x' in o;
+    }), 'ok:true');
+    eq('B5 a getter-only descriptor has no set', safe(function () {
+        var o = {}; Object.defineProperty(o, 'x', { get: function () { return 7; } });
+        var d = Object.getOwnPropertyDescriptor(o, 'x');
+        return typeof d.get + ',' + d.set + ',' + d.value;
+    }), 'ok:function,undefined,undefined');
+
+    // ── C. Enumeration variants ──────────────────────────────────────────────
+    eq('C1 Object.keys skips inherited and non-enumerable', safe(function () {
+        var base = Object.create({}, { inherited: { value: 1, enumerable: true } });
+        var o = Object.create(base); o.own = 2;
+        Object.defineProperty(o, 'hidden', { value: 3, enumerable: false });
+        return Object.keys(o).join(',');
+    }), 'ok:own');
+    eq('C2 for-in includes inherited enumerable', safe(function () {
+        var base = { inherited: 1 }; var o = Object.create(base); o.own = 2;
+        var s = ''; for (var k in o) s += k; return s;
+    }), 'ok:owninherited');
+    eq('C3 getOwnPropertyNames includes non-enumerable', safe(function () {
+        var o = {}; Object.defineProperty(o, 'h', { value: 1, enumerable: false });
+        return Object.getOwnPropertyNames(o).join(',');
+    }), 'ok:h');
+    eq('C4 Symbol keys appear in ownKeys but not keys', safe(function () {
+        var s = Symbol('s'); var o = { a: 1 }; o[s] = 2;
+        return Object.keys(o).join(',') + '|' + Reflect.ownKeys(o).length;
+    }), 'ok:a|2');
+    eq('C5 Object.assign copies enumerable own (incl symbols)', safe(function () {
+        var s = Symbol('s'); var src = {}; src[s] = 1; src.a = 2;
+        var dst = Object.assign({}, src); return dst.a + ',' + dst[s];
+    }), 'ok:2,1');
+
+    // ── D. delete and the in operator ────────────────────────────────────────
+    eq('D1 delete removes an own configurable prop', safe(function () {
+        var o = { x: 1 }; delete o.x; return 'x' in o;
+    }), 'ok:false');
+    eq('D2 delete cannot remove from a frozen object', safe(function () {
+        var o = Object.freeze({ x: 1 }); delete o.x; return 'x' in o;
+    }), 'ok:true');
+    eq('D3 delete returns true for a missing prop', safe(function () {
+        var o = {}; return delete o.nope;
+    }), 'ok:true');
+    eq('D4 in sees inherited properties', safe(function () {
+        var o = Object.create({ inherited: 1 }); return 'inherited' in o;
+    }), 'ok:true');
+    eq('D5 in sees non-enumerable properties', safe(function () {
+        var o = {}; Object.defineProperty(o, 'h', { value: 1, enumerable: false });
+        return 'h' in o;
+    }), 'ok:true');
+
+    // ── E. Extensibility: seal / freeze / preventExtensions ──────────────────
+    eq('E1 Object.preventExtensions blocks new props', safe(function () {
+        var o = Object.preventExtensions({ a: 1 }); o.b = 2; return 'b' in o;
+    }), 'ok:false');
+    eq('E2 Object.isExtensible / isSealed / isFrozen', safe(function () {
+        var o = {}; Object.seal(o);
+        return Object.isExtensible(o) + ',' + Object.isSealed(o) + ',' + Object.isFrozen(o);
+    }), 'ok:false,true,true');
+    eq('E3 freeze keeps existing writable data readable', safe(function () {
+        var o = Object.freeze({ a: 1 }); return o.a;
+    }), 'ok:1');
+    eq('E4 a frozen array cannot grow', safe(function () {
+        var a = Object.freeze([1, 2]); a.push(3); return a.length;
+    }).slice(0, 3), 'ERR');
+
+    // ── F. Private class fields and methods ──────────────────────────────────
+    eq('F1 private class field is invisible outside', safe(function () {
+        class C { #secret = 1; getPublic() { return 'x' in this; } }
+        var c = new C(); return c.getPublic();
+    }), 'ok:false');
+    eq('F2 a private method is callable inside the class', safe(function () {
+        class C { #double(n) { return n * 2; } run() { return this.#double(5); } }
+        return new C().run();
+    }), 'ok:10');
+    eq('F3 a private field does not appear as an own property', safe(function () {
+        class C { #s = 1; hasOwn() { return Object.hasOwnProperty.call(this, '#s'); }
+                  keyCount() { return Object.keys(this).length; } }
+        var c = new C(); return c.hasOwn() + ',' + c.keyCount();
+    }), 'ok:false,0');
+
+    // ── G. JSON and spread respect descriptors ───────────────────────────────
+    eq('G1 JSON.stringify skips non-enumerable', safe(function () {
+        var o = { a: 1 }; Object.defineProperty(o, 'h', { value: 2, enumerable: false });
+        return JSON.stringify(o);
+    }), 'ok:{"a":1}');
+    eq('G2 spread copies enumerable own props', safe(function () {
+        var base = { inherited: 1 }; var o = Object.create(base); o.own = 2;
+        return JSON.stringify({ ...o });
+    }), 'ok:{"own":2}');
+    eq('G3 Object.assign invokes getters on the source', safe(function () {
+        var src = {}; Object.defineProperty(src, 'g', { get: function () { return 9; }, enumerable: true });
+        return Object.assign({}, src).g;
+    }), 'ok:9');
+})();
+</script></body></html>
