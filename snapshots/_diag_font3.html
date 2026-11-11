@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{margin:0}
+#f1{font:italic bold 16px/1.5 Georgia,serif}
+#f1b{font-style:italic;font-weight:bold;font-size:16px;line-height:1.5;font-family:Georgia,serif}
+</style></head><body><meta charset=utf-8>
+<div id=f1>shorthand</div><div id=f1b>longhand</div>
+<script>
+const g=id=>{const s=getComputedStyle(document.getElementById(id));return id+":st="+s.fontStyle+" w="+s.fontWeight+" sz="+s.fontSize+" lh="+s.lineHeight+" fam="+s.fontFamily;};
+document.body.appendChild(document.createTextNode(g("f1")+" ## "+g("f1b")));
+</script></body></html>

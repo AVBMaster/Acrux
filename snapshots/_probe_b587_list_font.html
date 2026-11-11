@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* list-style */
+#l1{list-style:square inside}
+#l2{list-style:none;padding-left:0}
+#l3{list-style-type:lower-roman}
+#l4{list-style-position:outside}
+/* counters */
+#ct{counter-reset:sec}
+#ct h3::before{counter-increment:sec;content:"Section " counter(sec) ": "}
+/* counter nested */
+#cn{counter-reset:item}
+#cn li::before{counter-increment:item;content:counter(item) ". "}
+/* font-face + font-family */
+@font-face{font-family:MyFont;src:local("Arial")}
+#ff{font-family:MyFont,fantasy}
+/* font shorthand */
+#fs{font:italic bold 16px/1.5 Georgia,serif}
+/* font-variant */
+#fv{font-variant:small-caps}
+/* font-weight numeric */
+#fw{font-weight:550}
+/* text-rendering */
+#tr{text-rendering:optimizeLegibility}
+/* direction + unicode-bidi */
+#dir{direction:rtl;unicode-bidi:bidi-override}
+</style></head><body><meta charset=utf-8>
+<ul id=l1><li>square</li></ul>
+<ul id=l2><li>none</li></ul>
+<ol id=l3><li>roman</li></ol>
+<ul id=l4><li>outside</li></ul>
+<div id=ct><h3>heading</h3></div>
+<ol id=cn><li>a</li><li>b</li></ol>
+<div id=ff>fontface</div>
+<div id=fs>fontshorthand</div>
+<div id=fv>smallcaps</div>
+<div id=fw>weight550</div>
+<div id=tr>rendering</div>
+<div id=dir>bidi</div>
+<script>
+const ids=["l1","l2","l3","l4","ct","cn","ff","fs","fv","fw","tr","dir"];
+const g=id=>{const s=getComputedStyle(document.getElementById(id));
+ return id+":ls="+s.listStyleType+"|lp="+s.listStylePosition+"|ff="+s.fontFamily+"|fs="+s.fontStyle+s.fontWeight+"|fv="+s.fontVariant+"|tr="+s.textRendering+"|dir="+s.direction;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>
