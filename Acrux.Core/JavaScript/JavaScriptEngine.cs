@@ -2971,6 +2971,21 @@ public class JavaScriptEngine : IDisposable
             window.WritableStreamDefaultWriter = WritableStreamDefaultWriter;
             window.WritableStreamDefaultController = WritableStreamDefaultController;
             window.TransformStream = TransformStream;
+            // TransformStream §4.4: the transformer's transform callback is handed a
+            // TransformStreamDefaultController. The engine passes the readable's own default
+            // controller (its enqueue/close/error are the same three operations the
+            // TransformStreamDefaultController delegates to), so the class is the name a page
+            // feature-tests for and it refuses construction the way the other stream classes do.
+            function TransformStreamDefaultController() {
+                throw new TypeError('Failed to construct '
+                    + formDataQuote('TransformStreamDefaultController') + ': Illegal constructor');
+            }
+            TransformStreamDefaultController.prototype.enqueue = ReadableStreamDefaultController.prototype.enqueue;
+            TransformStreamDefaultController.prototype.close = ReadableStreamDefaultController.prototype.close;
+            TransformStreamDefaultController.prototype.error = ReadableStreamDefaultController.prototype.error;
+            Object.defineProperty(TransformStreamDefaultController.prototype, Symbol.toStringTag,
+                { value: 'TransformStreamDefaultController', configurable: true });
+            window.TransformStreamDefaultController = TransformStreamDefaultController;
 
             // ── Blob and File (File API §4.1) ──────────────────────────────────
             // A blob holds bytes, not a string it happens to print: each part is normalised to a byte
@@ -18013,6 +18028,9 @@ public class JavaScriptEngine : IDisposable
                 // what streaming means.
                 (function () {
                     var encoderLevel = level('TextEncoderStream', null);
+                    // Streams §4: an encoder stream always speaks UTF-8, so 'encoding' answers the
+                    // fixed name the same way a TextEncoder does.
+                    slotRead(encoderLevel, 'TextEncoderStream', 'encoding', 'utf-8');
                     window.TextEncoderStream = function TextEncoderStream() {
                         var made = new TransformStream({
                             transform: function (chunk, controller) {

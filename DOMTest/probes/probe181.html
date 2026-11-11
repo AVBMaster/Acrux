@@ -1,0 +1,110 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. CompressionStream / DecompressionStream ───────────────────────────
+    eq('A1 CompressionStream is a function', typeof CompressionStream, 'function');
+    eq('A2 DecompressionStream is a function', typeof DecompressionStream, 'function');
+    eq('A3 a gzip stream has readable and writable sides', safe(function () {
+        var cs = new CompressionStream('gzip');
+        return [cs.readable instanceof ReadableStream, cs.writable instanceof WritableStream].join(',');
+    }), 'ok:true,true');
+    eq('A4 an unknown format is refused', safe(function () {
+        new CompressionStream('bogus'); return 'made';
+    }).slice(0, 15), 'ERR:TypeError:F');
+    eq('A5 deflate decompression has both sides', safe(function () {
+        var ds = new DecompressionStream('deflate');
+        return [ds.readable instanceof ReadableStream, ds.writable instanceof WritableStream].join(',');
+    }), 'ok:true,true');
+    eq('A6 the format list is gzip, deflate, deflate-raw', safe(function () {
+        var out = '';
+        ['gzip', 'deflate', 'deflate-raw'].forEach(function (f) {
+            out += (new CompressionStream(f) instanceof CompressionStream) + ',';
+        });
+        return out;
+    }), 'ok:true,true,true,');
+
+    // ── B. TextEncoderStream / TextDecoderStream ─────────────────────────────
+    eq('B1 TextEncoderStream is a function', typeof TextEncoderStream, 'function');
+    eq('B2 TextDecoderStream is a function', typeof TextDecoderStream, 'function');
+    eq('B3 an encoder stream has both sides', safe(function () {
+        var tes = new TextEncoderStream();
+        return [tes.readable instanceof ReadableStream, tes.writable instanceof WritableStream].join(',');
+    }), 'ok:true,true');
+    eq('B4 an encoder stream always speaks utf-8', new TextEncoderStream().encoding, 'utf-8');
+    eq('B5 a decoder stream defaults to utf-8', new TextDecoderStream().encoding, 'utf-8');
+    eq('B6 a decoder stream names the encoding it was given', new TextDecoderStream('utf-8').encoding, 'utf-8');
+
+    // ── C. ReadableStream ────────────────────────────────────────────────────
+    eq('C1 a pushed stream is a ReadableStream', safe(function () {
+        var rs = new ReadableStream({ start: function (c) { c.enqueue('a'); c.close(); } });
+        return rs instanceof ReadableStream;
+    }), 'ok:true');
+    eq('C2 an empty stream is not locked', safe(function () {
+        var rs = new ReadableStream({ start: function (c) { c.close(); } });
+        return [rs.locked, typeof rs.cancel, typeof rs.pipeThrough, typeof rs.pipeTo,
+            typeof rs.tee].join(',');
+    }), 'ok:false,function,function,function,function');
+    eq('C3 getReader locks the stream', safe(function () {
+        var rs = new ReadableStream({ start: function (c) { c.close(); } });
+        var reader = rs.getReader();
+        return [reader instanceof ReadableStreamDefaultReader, rs.locked].join(',');
+    }), 'ok:true,true');
+    eq('C4 the default reader and controller are constructors', safe(function () {
+        return [typeof ReadableStreamDefaultReader, typeof ReadableStreamDefaultController].join(',');
+    }), 'ok:function,function');
+
+    // ── D. WritableStream ────────────────────────────────────────────────────
+    eq('D1 WritableStream is a function', typeof WritableStream, 'function');
+    eq('D2 a fresh writable is not locked', safe(function () {
+        var ws = new WritableStream({ write: function () { } });
+        return [ws instanceof WritableStream, ws.locked, typeof ws.getWriter].join(',');
+    }), 'ok:true,false,function');
+    eq('D3 the writer carries write/close/abort/releaseLock', safe(function () {
+        var w = new WritableStream({ write: function () { } }).getWriter();
+        return [typeof w.write, typeof w.close, typeof w.abort, typeof w.releaseLock].join(',');
+    }), 'ok:function,function,function,function');
+    eq('D4 the writable writer and controller are constructors', safe(function () {
+        return [typeof WritableStreamDefaultWriter, typeof WritableStreamDefaultController].join(',');
+    }), 'ok:function,function');
+
+    // ── E. TransformStream ───────────────────────────────────────────────────
+    eq('E1 TransformStream is a function', typeof TransformStream, 'function');
+    eq('E2 a transform stream has both sides', safe(function () {
+        var ts = new TransformStream({ transform: function (chunk, ctrl) { ctrl.enqueue(chunk); } });
+        return [ts.readable instanceof ReadableStream, ts.writable instanceof WritableStream].join(',');
+    }), 'ok:true,true');
+    eq('E3 TransformStreamDefaultController is a constructor', typeof TransformStreamDefaultController, 'function');
+    eq('E4 it is not constructible', safe(function () {
+        new TransformStreamDefaultController(); return 'made';
+    }).slice(0, 15), 'ERR:TypeError:F');
+
+    // ── F. Blob.stream / text / arrayBuffer ──────────────────────────────────
+    eq('F1 Blob.stream() answers a ReadableStream', safe(function () {
+        return new Blob(['abc']).stream() instanceof ReadableStream;
+    }), 'ok:true');
+    eq('F2 Blob.text() answers a promise', safe(function () {
+        return new Blob(['x']).text() instanceof Promise;
+    }), 'ok:true');
+    eq('F3 Blob.arrayBuffer() answers a promise', safe(function () {
+        return new Blob(['x']).arrayBuffer() instanceof Promise;
+    }), 'ok:true');
+    eq('F4 stream is on the Blob prototype', typeof Blob.prototype.stream, 'function');
+
+    // ── G. BroadcastChannel ──────────────────────────────────────────────────
+    eq('G1 BroadcastChannel is a function', typeof BroadcastChannel, 'function');
+    eq('G2 a channel carries its name and the two methods', safe(function () {
+        var bc = new BroadcastChannel('ch');
+        return [bc.name, typeof bc.postMessage, typeof bc.close].join(',');
+    }), 'ok:ch,function,function');
+    eq('G3 a fresh channel has no onmessage', String(new BroadcastChannel('ch2').onmessage), 'null');
+})();
+</script></body></html>
