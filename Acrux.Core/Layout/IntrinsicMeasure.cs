@@ -18,6 +18,11 @@ public static class IntrinsicMeasure
     private static bool IsMeasuring(Element element)
         => _probing != null && _probing.Contains(element);
 
+    /// <summary>True while |element| is inside a throwaway measuring pass. Layout that
+    /// publishes a computed result the CSSOM reads (grid track sizes) must not overwrite
+    /// the real one with the degenerate sizes a probe's narrow constraint resolves.</summary>
+    public static bool IsProbing(Element element) => IsMeasuring(element);
+
     private static void ProbeEnter(Element element) => (_probing ??= new HashSet<Element>()).Add(element);
 
     /// <summary>SKTypeface instances are disposed by the paint side once a run is

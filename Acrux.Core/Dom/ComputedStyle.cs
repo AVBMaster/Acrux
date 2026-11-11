@@ -2018,6 +2018,7 @@ private System.Collections.Generic.List<AppliedTextDecoration>? _appliedTextDeco
             AlignSelfCssText = AlignSelfCssText,
             PlaceContent = PlaceContent, PlaceItems = PlaceItems, PlaceSelf = PlaceSelf,
             GridTemplateColumns = GridTemplateColumns, GridTemplateRows = GridTemplateRows, GridTemplateAreas = GridTemplateAreas,
+            GridUsedColumnSizes = GridUsedColumnSizes, GridUsedRowSizes = GridUsedRowSizes,
             GridAutoColumns = GridAutoColumns, GridAutoRows = GridAutoRows, GridAutoFlow = GridAutoFlow,
             GridColumnStart = GridColumnStart, GridColumnEnd = GridColumnEnd,
             GridRowStart = GridRowStart, GridRowEnd = GridRowEnd,

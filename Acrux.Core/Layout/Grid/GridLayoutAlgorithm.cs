@@ -126,6 +126,11 @@ public class GridLayoutAlgorithm
         float columnGap, float rowGap)
     {
         if (_containerStyle == null) return;
+        // An intrinsic-measure probe lays the grid out at a degenerate width to get
+        // the container's own min/max-content size; the track list that pass resolves
+        // (a '1fr' collapses to nothing at 1px) is not the one the real layout gave,
+        // so it must not overwrite it — getComputedStyle reads these sizes.
+        if (Acrux.Core.Layout.IntrinsicMeasure.IsProbing(container)) return;
         var usedColumns = UsedTrackSizes(columns, columnGap);
         var usedRows = UsedTrackSizes(rows, rowGap);
         // Loose text is an anonymous grid item, so a grid that holds only text still has one

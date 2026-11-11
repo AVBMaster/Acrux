@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+#g1{display:grid;grid-template-columns:100px 1fr;width:300px;height:80px}
+#g2{display:grid;grid-template-columns:repeat(3,1fr);width:300px;height:60px}
+#g3{display:grid;grid-template-columns:1fr 2fr;width:300px;height:60px}
+#g4{display:grid;grid-template-columns:50px 100px 150px;width:300px;height:60px}
+#g1>div,#g2>div,#g3>div,#g4>div{background:#cde}
+</style></head><body>
+<div id=g1><div>a</div><div>b</div></div>
+<div id=g2><div>1</div><div>2</div><div>3</div></div>
+<div id=g3><div>1</div><div>2</div></div>
+<div id=g4><div>x</div><div>y</div><div>z</div></div>
+<div id=o></div>
+<script>
+const out=[];
+["g1","g2","g3","g4"].forEach(id=>{
+  const e=document.getElementById(id);
+  out.push(id+".cols=["+getComputedStyle(e).gridTemplateColumns+"]");
+  const cw=[...e.children].map(c=>Math.round(c.getBoundingClientRect().width));
+  out.push(id+".childw=["+cw.join(",")+"]");
+});
+document.getElementById("o").textContent=out.join(" | ");
+</script></body></html>

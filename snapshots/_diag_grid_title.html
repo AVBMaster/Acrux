@@ -1,0 +1,9 @@
+<!doctype html><html><head><style>body{font:20px monospace;white-space:pre}
+#g1{display:grid;grid-template-columns:100px 1fr;width:300px;height:80px}
+#g4{display:grid;grid-template-columns:50px 100px 150px;width:300px;height:60px}
+</style></head><body>
+<div id=g1><div>a</div><div>b</div></div>
+<div id=g4><div>x</div><div>y</div><div>z</div></div>
+<script>
+document.body.appendChild(document.createTextNode("A="+getComputedStyle(document.getElementById("g1")).gridTemplateColumns+"#B="+getComputedStyle(document.getElementById("g4")).gridTemplateColumns));
+</script></body></html>

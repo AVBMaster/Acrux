@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+#g1{display:grid;grid-template-columns:100px 1fr;width:300px;height:80px}
+#g1>div{background:#cde}
+#g2{display:grid;grid-template-columns:repeat(3,1fr);width:300px;height:60px}
+#g2>div{background:#cec}
+#g3{display:grid;grid-template-columns:1fr 2fr;width:300px;height:60px}
+#g3>div{background:#fcc}
+#g4{display:grid;grid-template-rows:40px 1fr;width:200px;height:120px}
+#g4>div{background:#ddf}
+</style></head><body>
+<div id=g1><div>a</div><div>b</div></div>
+<div id=g2><div>1</div><div>2</div><div>3</div></div>
+<div id=g3><div>1</div><div>2</div></div>
+<div id=g4><div>r1</div><div>r2</div></div>
+<div id=o></div>
+<script>
+const out=[];
+["g1","g2","g3","g4"].forEach(id=>{
+  const e=document.getElementById(id);
+  const cs=getComputedStyle(e);
+  out.push(id+".cols="+cs.gridTemplateColumns);
+  out.push(id+".rows="+cs.gridTemplateRows);
+  // first child width
+  out.push(id+".c0w="+Math.round(e.children[0].getBoundingClientRect().width));
+});
+document.getElementById("o").textContent=out.join(" | ");
+</script></body></html>
