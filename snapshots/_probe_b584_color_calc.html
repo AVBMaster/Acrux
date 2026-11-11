@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* rgb/hsl new syntax with slash alpha */
+#c1{color:rgb(255 128 0 / 0.5);height:20px}
+#c2{color:hsl(120 100% 50% / 0.3);height:20px}
+/* color-mix */
+#c3{color:color-mix(in srgb,red,blue);height:20px}
+#c4{color:color-mix(in oklab,red 30%,blue);height:20px}
+/* clamp/min/max */
+#c5{width:clamp(40px,10vw,80px);height:20px;background:#eef}
+#c6{width:min(100px,60px);height:20px;background:#efe}
+#c7{width:max(30px,20px);height:20px;background:#ffe}
+/* calc nested */
+#c8{width:calc(calc(10px + 5px) * 2);height:20px;background:#fef}
+#c9{width:calc(50% - 10px);height:20px;background:#cef;position:absolute}
+/* color keywords + system */
+#ca{color:rebeccapurple;height:20px}
+#cb{color:transparent;background:#eee;height:20px}
+/* color function notations */
+#cc{color:rgb(255,0,0);height:20px}
+#cd{color:#f008;height:20px}
+/* currentColor */
+#ce{color:red;border:2px solid currentColor;width:60px;height:20px}
+</style></head><body>
+<div id=c1>c1</div><div id=c2>c2</div><div id=c3>c3</div><div id=c4>c4</div>
+<div id=c5>c5</div><div id=c6>c6</div><div id=c7>c7</div><div id=c8>c8</div>
+<div id=c9>c9</div><div id=ca>ca</div><div id=cb>cb</div><div id=cc>cc</div>
+<div id=cd>cd</div><div id=ce>ce</div>
+<script>
+const ids=["c1","c2","c3","c4","c5","c6","c7","c8","c9","ca","cb","cc","cd","ce"];
+const hex=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return c;
+ const p=m[1].split(/[,\s\/]+/).filter(x=>x).map(Number);
+ const a=p.length>3&&p[3]<1?Math.round(p[3]*255):255;
+ return "#"+p.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,"0")).join("")+(a<255?a.toString(16):"");};
+const g=id=>{const e=document.getElementById(id);const s=getComputedStyle(e);
+ const w=id.match(/^c[5-9]$/)?(" w="+Math.round(e.getBoundingClientRect().width)):"";
+ return id+"="+hex(s.color)+w;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>
