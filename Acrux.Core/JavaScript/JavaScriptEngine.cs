@@ -10036,6 +10036,68 @@ public class JavaScriptEngine : IDisposable
                 };
                 var wakeLock = Object.create(wakeLockProto);
 
+                // Media Session §2: the session the page reaches through navigator.mediaSession. The
+                // engine plays no media, so the playback state stays 'paused' and the metadata is null
+                // until a page sets it; the action handlers a page registers are kept per session and
+                // the object graph the page reads is the interface's.
+                var mediaSessionProto = refusedInterface('MediaSession', null);
+                var MEDIA_ACTIONS = ['play', 'pause', 'seekbackward', 'seekforward', 'seekto',
+                    'stop', 'previoustrack', 'nexttrack', 'skipad', 'enterpictureinpicture',
+                    'leavepictureinpicture', 'togglecamera', 'togglemicrophone', 'hangup'];
+                var MEDIA_SESSION_STATE = new WeakMap();
+                function mediaState(self) {
+                    var held = MEDIA_SESSION_STATE.get(self);
+                    if (!held) {
+                        held = { playbackState: 'paused', handlers: { }, metadata: null };
+                        MEDIA_SESSION_STATE.set(self, held);
+                    }
+                    return held;
+                }
+                member(mediaSessionProto, 'setActionHandler', function setActionHandler(action, handler) {
+                    var state = mediaState(this);
+                    var wanted = String(action === undefined ? '' : action);
+                    if (MEDIA_ACTIONS.indexOf(wanted) < 0) {
+                        throw new TypeError('Failed to execute ' + formDataQuote('setActionHandler')
+                            + ' on ' + formDataQuote('MediaSession') + ': ' + formDataQuote(wanted)
+                            + ' is not a supported action.');
+                    }
+                    state.handlers[wanted] = typeof handler === 'function' ? handler : null;
+                });
+                member(mediaSessionProto, 'clearActionHandler', function clearActionHandler(action) {
+                    var state = mediaState(this);
+                    state.handlers[String(action === undefined ? '' : action)] = null;
+                });
+                member(mediaSessionProto, 'setMicrophoneActive', function setMicrophoneActive(active) {
+                    mediaState(this);
+                    return Promise.resolve(undefined);
+                });
+                member(mediaSessionProto, 'setCameraActive', function setCameraActive(active) {
+                    mediaState(this);
+                    return Promise.resolve(undefined);
+                });
+                bomAttribute('MediaSession', 'playbackState',
+                    function () { return mediaState(this).playbackState; },
+                    function (value) { mediaState(this).playbackState = String(value); });
+                bomAttribute('MediaSession', 'metadata',
+                    function () { return mediaState(this).metadata; },
+                    function (value) { mediaState(this).metadata = value; });
+                var mediaSession = Object.create(mediaSessionProto);
+
+                // Media Session §3: the metadata a page hangs on the session — a MediaMetadata holds
+                // the five fields the interface names, defaulting to the empty string.
+                var MediaMetadata = function MediaMetadata(init) {
+                    var bag = (init && typeof init === 'object') ? init : { };
+                    this.title = bag.title !== undefined ? String(bag.title) : '';
+                    this.artist = bag.artist !== undefined ? String(bag.artist) : '';
+                    this.album = bag.album !== undefined ? String(bag.album) : '';
+                    this.artwork = bag.artwork !== undefined ? bag.artwork : [];
+                };
+                Object.defineProperty(MediaMetadata.prototype, 'constructor',
+                    { value: MediaMetadata, writable: true, configurable: true });
+                Object.defineProperty(MediaMetadata.prototype, Symbol.toStringTag,
+                    { value: 'MediaMetadata', configurable: true });
+                window.MediaMetadata = MediaMetadata;
+
                 // Keyboard Map §2: the layout the engine can read is the empty map, and a request to
                 // take the hardware keys succeeds without holding anything.
                 function KeyboardLayoutMap() {
@@ -10495,6 +10557,10 @@ public class JavaScriptEngine : IDisposable
                 accessor('Navigator', 'mimeTypes', function () { return mimeTypeArray; });
                 accessor('Navigator', 'mediaDevices', function () { return mediaDevices; });
                 accessor('Navigator', 'wakeLock', function () { return wakeLock; });
+                accessor('Navigator', 'mediaSession', function () {
+                    bomSelf(this, 'Navigator');
+                    return mediaSession;
+                });
                 accessor('Navigator', 'keyboard', function () { return keyboard; });
                 accessor('Navigator', 'userActivation', function () { return userActivation; });
                 accessor('Navigator', 'scheduling', function () { return scheduling; });
@@ -10636,7 +10702,7 @@ public class JavaScriptEngine : IDisposable
                 // (navigator.gpu)' is '[object GPU]'). The reads the interfaces above already answer
                 // keep the object they were given.
                 var DEVICE_READS = [['gpu', 'GPU', false], ['hid', 'HID', true], ['ink', 'Ink', true],
-                    ['mediaSession', 'MediaSession', false], ['serial', 'Serial', true],
+                    ['serial', 'Serial', true],
                     ['usb', 'USB', true], ['virtualKeyboard', 'VirtualKeyboard', true],
                     ['xr', 'XRSystem', true], ['storageBuckets', 'StorageBucketManager', false],
                     ['login', 'NavigatorLogin', false], ['managed', 'NavigatorManagedData', false],

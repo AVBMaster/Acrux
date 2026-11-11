@@ -1,0 +1,96 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. Wake Lock (§3) ────────────────────────────────────────────────────
+    eq('A1 navigator.wakeLock is an object', typeof navigator.wakeLock, 'object');
+    eq('A2 it brands itself', Object.prototype.toString.call(navigator.wakeLock), '[object WakeLock]');
+    eq('A3 request is a function', typeof navigator.wakeLock.request, 'function');
+    eq('A4 WakeLock is a constructor', typeof WakeLock, 'function');
+    eq('A5 WakeLockSentinel is a constructor', typeof WakeLockSentinel, 'function');
+    eq('A6 request(screen) answers a promise', safe(function () {
+        return navigator.wakeLock.request('screen') instanceof Promise;
+    }), 'ok:true');
+
+    // ── B. Battery Manager (§5) ──────────────────────────────────────────────
+    eq('B1 getBattery is a function', typeof navigator.getBattery, 'function');
+    eq('B2 getBattery() answers a promise', safe(function () {
+        return navigator.getBattery() instanceof Promise;
+    }), 'ok:true');
+    eq('B3 BatteryManager is a constructor', typeof BatteryManager, 'function');
+
+    // ── C. Network Information (§6) ──────────────────────────────────────────
+    eq('C1 navigator.connection is an object', typeof navigator.connection, 'object');
+    eq('C2 it brands itself', Object.prototype.toString.call(navigator.connection), '[object NetworkInformation]');
+    eq('C3 the connection reports an effective type', safe(function () {
+        var c = navigator.connection; return c ? typeof c.effectiveType : 'none';
+    }), 'ok:string');
+    eq('C4 NetworkInformation is a constructor', typeof NetworkInformation, 'function');
+
+    // ── D. Gamepad (Gamepad §1) ──────────────────────────────────────────────
+    eq('D1 getGamepads is a function', typeof navigator.getGamepads, 'function');
+    eq('D2 getGamepads() answers an array', safe(function () {
+        return Array.isArray(navigator.getGamepads());
+    }), 'ok:true');
+    eq('D3 Gamepad is a constructor', typeof Gamepad, 'function');
+    eq('D4 GamepadButton is a constructor', typeof GamepadButton, 'function');
+    eq('D5 GamepadEvent is a constructor', typeof GamepadEvent, 'function');
+
+    // ── E. Media Session (§2, §3) ────────────────────────────────────────────
+    eq('E1 navigator.mediaSession is an object', typeof navigator.mediaSession, 'object');
+    eq('E2 it brands itself', Object.prototype.toString.call(navigator.mediaSession), '[object MediaSession]');
+    eq('E3 setActionHandler is a function', typeof navigator.mediaSession.setActionHandler, 'function');
+    eq('E4 playbackState defaults to paused', navigator.mediaSession.playbackState, 'paused');
+    eq('E5 metadata defaults to null', String(navigator.mediaSession.metadata), 'null');
+    eq('E6 MediaSession is a constructor', typeof MediaSession, 'function');
+    eq('E7 MediaMetadata is a constructor', typeof MediaMetadata, 'function');
+    eq('E8 a MediaMetadata holds the fields a page sets', safe(function () {
+        var m = new MediaMetadata({ title: 'T', artist: 'A', album: 'L' });
+        return [m.title, m.artist, m.album].join(',');
+    }), 'ok:T,A,L');
+    eq('E9 a MediaMetadata defaults its fields', safe(function () {
+        var m = new MediaMetadata(); return [m.title, Array.isArray(m.artwork)].join(',');
+    }), 'ok:,true');
+    eq('E10 setting the playback state reads back', safe(function () {
+        navigator.mediaSession.playbackState = 'playing';
+        return navigator.mediaSession.playbackState;
+    }), 'ok:playing');
+    eq('E11 an unknown action is refused', safe(function () {
+        navigator.mediaSession.setActionHandler('nosuchaction', function () { });
+        return 'set';
+    }).slice(0, 16), 'ERR:TypeError:Fa');
+
+    // ── F. Payment Request ───────────────────────────────────────────────────
+    eq('F1 PaymentRequest is a constructor', typeof PaymentRequest, 'function');
+
+    // ── G. User Activation (§2) ──────────────────────────────────────────────
+    eq('G1 navigator.userActivation brands itself', Object.prototype.toString.call(navigator.userActivation), '[object UserActivation]');
+    eq('G2 a fresh document has no activation', safe(function () {
+        return [navigator.userActivation.hasBeenActive, navigator.userActivation.isActive].join(',');
+    }), 'ok:false,false');
+    eq('G3 UserActivation is a constructor', typeof UserActivation, 'function');
+
+    // ── H. Scheduling (§2) ───────────────────────────────────────────────────
+    eq('H1 scheduler is an object', typeof scheduler, 'object');
+    eq('H2 postTask is a function', typeof scheduler.postTask, 'function');
+    eq('H3 Scheduler is a constructor', typeof Scheduler, 'function');
+
+    // ── I. Credentials Management ────────────────────────────────────────────
+    eq('I1 navigator.credentials brands itself', Object.prototype.toString.call(navigator.credentials), '[object CredentialsContainer]');
+    eq('I2 CredentialsContainer is a constructor', typeof CredentialsContainer, 'function');
+
+    // ── J. the observers the checklist names ─────────────────────────────────
+    eq('J1 PerformanceObserver is a constructor', typeof PerformanceObserver, 'function');
+    eq('J2 ResizeObserver is a constructor', typeof ResizeObserver, 'function');
+    eq('J3 IntersectionObserver is a constructor', typeof IntersectionObserver, 'function');
+    eq('J4 ReportingObserver is a constructor', typeof ReportingObserver, 'function');
+})();
+</script></body></html>
