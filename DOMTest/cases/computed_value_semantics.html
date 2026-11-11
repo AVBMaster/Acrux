@@ -1,0 +1,110 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function cs(el, prop) { return getComputedStyle(el).getPropertyValue(prop).trim(); }
+    function mk(style) {
+        var d = document.createElement('div');
+        d.setAttribute('style', style);
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. colour computed values ────────────────────────────────────────────
+    eq('A1 hex colour computes to rgb()', (function () {
+        var el = mk('color: #ff0000'); var v = cs(el, 'color'); el.remove(); return v;
+    })(), 'rgb(255, 0, 0)');
+    eq('A2 named colour computes to rgb()', (function () {
+        var el = mk('color: red'); var v = cs(el, 'color'); el.remove(); return v;
+    })(), 'rgb(255, 0, 0)');
+    eq('A3 rgba with alpha is preserved', (function () {
+        var el = mk('color: rgba(10, 20, 30, 0.5)'); var v = cs(el, 'color'); el.remove(); return v;
+    })(), 'rgba(10, 20, 30, 0.5)');
+    eq('A4 background-color transparent by default', (function () {
+        var el = mk('background-color: transparent'); var v = cs(el, 'background-color'); el.remove(); return v;
+    })(), 'rgba(0, 0, 0, 0)');
+
+    // ── B. length units resolve to px ────────────────────────────────────────
+    eq('B1 px length round-trips', (function () {
+        var el = mk('width: 100px'); var v = cs(el, 'width'); el.remove(); return v;
+    })(), '100px');
+    eq('B2 em resolves against the parent font-size', (function () {
+        var parent = document.getElementById('root'); parent.style.fontSize = '20px';
+        var el = mk('width: 2em'); var v = cs(el, 'width'); el.remove();
+        parent.style.fontSize = ''; return v;
+    })(), '40px');
+    eq('B3 percentage resolves against the containing block width', (function () {
+        var parent = document.getElementById('root'); parent.style.width = '400px';
+        var el = mk('width: 50%'); var v = cs(el, 'width'); el.remove();
+        parent.style.width = ''; return v;
+    })(), '200px');
+    eq('B4 border-width default is 0px', (function () {
+        var el = mk(''); var v = cs(el, 'border-width'); el.remove(); return v;
+    })(), '0px');
+    eq('B5 border-width defaults to medium (3px) when style is solid', (function () {
+        var el = mk('border-style: solid'); var v = cs(el, 'border-width'); el.remove(); return v;
+    })(), '3px');
+
+    // ── C. shorthand expansion ───────────────────────────────────────────────
+    eq('C1 margin shorthand expands to four longhands', (function () {
+        var el = mk('margin: 1px 2px 3px 4px'); var s = getComputedStyle(el);
+        var v = [s.marginTop, s.marginRight, s.marginBottom, s.marginLeft].join(','); el.remove(); return v;
+    })(), '1px,2px,3px,4px');
+    eq('C2 border shorthand expands to width/style/colour', (function () {
+        var el = mk('border: 1px solid red'); var s = getComputedStyle(el);
+        var v = [s.borderTopWidth, s.borderTopStyle, s.borderTopColor].join(','); el.remove(); return v;
+    })(), '1px,solid,rgb(255, 0, 0)');
+    eq('C3 font shorthand sets size and family', (function () {
+        var el = mk('font: 12px serif'); var s = getComputedStyle(el);
+        var v = [s.fontSize, s.fontFamily].join(','); el.remove(); return v;
+    })(), '12px,serif');
+
+    // ── D. inheritance ───────────────────────────────────────────────────────
+    eq('D1 colour inherits to a child', (function () {
+        var parent = document.getElementById('root'); parent.style.color = 'blue';
+        var child = document.createElement('span'); parent.appendChild(child);
+        var v = cs(child, 'color'); child.remove(); parent.style.color = ''; return v;
+    })(), 'rgb(0, 0, 255)');
+    eq('D2 margin does not inherit', (function () {
+        var parent = document.getElementById('root'); parent.style.margin = '10px';
+        var child = document.createElement('span'); parent.appendChild(child);
+        var v = cs(child, 'margin-top'); child.remove(); parent.style.margin = ''; return v;
+    })(), '0px');
+    eq('D3 font-size inherits', (function () {
+        var parent = document.getElementById('root'); parent.style.fontSize = '30px';
+        var child = document.createElement('span'); parent.appendChild(child);
+        var v = cs(child, 'font-size'); child.remove(); parent.style.fontSize = ''; return v;
+    })(), '30px');
+
+    // ── E. display / layout computed values ──────────────────────────────────
+    eq('E1 display:none yields empty geometry', (function () {
+        var el = mk('display: none; width: 100px; height: 50px');
+        var s = getComputedStyle(el); var v = s.display + ',' + el.offsetWidth + ',' + el.offsetHeight;
+        el.remove(); return v;
+    })(), 'none,0,0');
+    eq('E2 display:block on a div', (function () {
+        var el = mk('display: block'); var v = cs(el, 'display'); el.remove(); return v;
+    })(), 'block');
+    eq('E3 position:static by default', (function () {
+        var el = mk(''); var v = cs(el, 'position'); el.remove(); return v;
+    })(), 'static');
+    eq('E4 box-sizing default is content-box', (function () {
+        var el = mk(''); var v = cs(el, 'box-sizing'); el.remove(); return v;
+    })(), 'content-box');
+
+    // ── F. getComputedStyle shape ────────────────────────────────────────────
+    eq('F1 getComputedStyle returns an object', (function () {
+        var el = mk(''); var t = typeof getComputedStyle(el); el.remove(); return t;
+    })(), 'object');
+    eq('F2 getPropertyValue for an unset custom property is empty', (function () {
+        var el = mk(''); var v = cs(el, '--nope'); el.remove(); return v;
+    })(), '');
+    eq('F3 getComputedStyle on a detached element answers empty', (function () {
+        var el = document.createElement('div'); el.style.color = 'red';
+        return cs(el, 'color');
+    })(), '');
+})();
+</script></body></html>
