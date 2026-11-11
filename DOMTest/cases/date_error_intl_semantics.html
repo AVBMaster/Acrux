@@ -1,0 +1,133 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Date construction and getters ────────────────────────────────────
+    eq('A1 Date from components (month is 0-based)', safe(function () {
+        var d = new Date(2021, 0, 15); return d.getFullYear() + ',' + d.getMonth() + ',' + d.getDate();
+    }), 'ok:2021,0,15');
+    eq('A2 Date.parse ISO string', safe(function () {
+        var d = new Date('2021-06-15T10:20:30Z'); return d.getUTCFullYear() + ',' + d.getUTCMonth();
+    }), 'ok:2021,5');
+    eq('A3 Date.UTC + getTime', safe(function () {
+        return new Date(Date.UTC(1970, 0, 1)).getTime();
+    }), 'ok:0');
+    eq('A4 Date.now is a number', safe(function () {
+        return typeof Date.now();
+    }), 'ok:number');
+    eq('A5 Date.prototype.getTimezoneOffset returns a number', safe(function () {
+        return typeof new Date().getTimezoneOffset();
+    }), 'ok:number');
+    eq('A6 Date.prototype.toISOString format', safe(function () {
+        return new Date(Date.UTC(2021, 0, 2, 3, 4, 5)).toISOString();
+    }), 'ok:2021-01-02T03:04:05.000Z');
+    eq('A7 Date.prototype.getUTCDay (Thu=4 for 1970-01-01)', safe(function () {
+        return new Date(Date.UTC(1970, 0, 1)).getUTCDay();
+    }), 'ok:4');
+    eq('A8 Date.prototype.setDate normalizes overflow', safe(function () {
+        var d = new Date(2021, 0, 31); d.setDate(32); return d.getMonth();
+    }), 'ok:1');
+    eq('A9 invalid date is NaN', safe(function () {
+        return isNaN(new Date('not a date').getTime());
+    }), 'ok:true');
+    eq('A10 Date.prototype.setHours chains', safe(function () {
+        var d = new Date(2021, 0, 1); d.setHours(5, 6, 7);
+        return [d.getHours(), d.getMinutes(), d.getSeconds()].join(',');
+    }), 'ok:5,6,7');
+
+    // ── B. Error types ───────────────────────────────────────────────────────
+    eq('B1 Error message + name', safe(function () {
+        var e = new Error('boom'); return e.name + ',' + e.message;
+    }), 'ok:Error,boom');
+    eq('B2 TypeError instanceof Error', safe(function () {
+        var e = new TypeError('t'); return (e instanceof TypeError) + ',' + (e instanceof Error);
+    }), 'ok:true,true');
+    eq('B3 RangeError / SyntaxError / URIError names', safe(function () {
+        return [new RangeError().name, new SyntaxError().name, new URIError().name].join(',');
+    }), 'ok:RangeError,SyntaxError,URIError');
+    eq('B4 EvalError name', safe(function () {
+        return new EvalError().name;
+    }), 'ok:EvalError');
+    eq('B5 error .stack is a string', safe(function () {
+        return typeof new Error().stack;
+    }), 'ok:string');
+    eq('B6 throwing a non-Error value is caught', safe(function () {
+        try { throw 'string'; } catch (e) { return typeof e; }
+    }), 'ok:string');
+    eq('B7 DOMException carries name + code', safe(function () {
+        var e = new DOMException('m', 'AbortError'); return e.name + ',' + e.message;
+    }), 'ok:AbortError,m');
+
+    // ── C. Type coercions ────────────────────────────────────────────────────
+    eq('C1 String() / Number() / Boolean()', safe(function () {
+        return String(1) + ',' + Number('5') + ',' + Boolean('') + ',' + Boolean('0');
+    }), 'ok:1,5,false,true');
+    eq('C2 parseInt radix + parseFloat', safe(function () {
+        return parseInt('0x1f', 16) + ',' + parseInt('12abc') + ',' + parseFloat('3.14xyz');
+    }), 'ok:31,12,3.14');
+    eq('C3 unary + coerces to number', safe(function () {
+        return +'42' + ',' + +'' + ',' + +null;
+    }), 'ok:42,0,0');
+    eq('C4 template of an object calls toString', safe(function () {
+        return `${{ toString: function () { return 'str'; } }}`;
+    }), 'ok:str');
+    eq('C5 valueOf vs toString in arithmetic', safe(function () {
+        var o = { valueOf: function () { return 3; }, toString: function () { return 's'; } };
+        return o * 2;
+    }), 'ok:6');
+    eq('C6 typeof the six kinds', safe(function () {
+        return [typeof 1, typeof 's', typeof true, typeof undefined, typeof null, typeof {}].join(',');
+    }), 'ok:number,string,boolean,undefined,object,object');
+    eq('C7 NaN !== NaN but Object.is catches it', safe(function () {
+        return (NaN === NaN) + ',' + Object.is(NaN, NaN);
+    }), 'ok:false,true');
+
+    // ── D. Intl (may be limited) ─────────────────────────────────────────────
+    eq('D1 Intl exists', safe(function () {
+        return typeof Intl;
+    }), 'ok:object');
+    eq('D2 Intl.DateTimeFormat is a constructor', safe(function () {
+        return typeof Intl.DateTimeFormat;
+    }), 'ok:function');
+    eq('D3 Intl.NumberFormat is a constructor', safe(function () {
+        return typeof Intl.NumberFormat;
+    }), 'ok:function');
+    eq('D4 Intl.Collator is a constructor', safe(function () {
+        return typeof Intl.Collator;
+    }), 'ok:function');
+    eq('D5 Intl.DateTimeFormat().format answers a string', safe(function () {
+        return typeof new Intl.DateTimeFormat('en-US').format(new Date(2021, 0, 1));
+    }), 'ok:string');
+    eq('D6 Intl.NumberFormat().format answers a string', safe(function () {
+        return typeof new Intl.NumberFormat('en-US').format(1234.5);
+    }), 'ok:string');
+
+    // ── E. GlobalThis / eval / strict ────────────────────────────────────────
+    eq('E1 globalThis is the global object', safe(function () {
+        return globalThis === window;
+    }), 'ok:true');
+    eq('E2 eval evaluates an expression', safe(function () {
+        return eval('1 + 2');
+    }), 'ok:3');
+    eq('E3 undefined is not writable', safe(function () {
+        var saved = undefined; undefined = 5; return undefined;
+    }), 'ok:undefined');
+    eq('E4 isFinite / isNaN coerce', safe(function () {
+        return isFinite('5') + ',' + isNaN('x');
+    }), 'ok:true,true');
+    eq('E5 encodeURIComponent / decodeURIComponent round-trip', safe(function () {
+        return decodeURIComponent(encodeURIComponent('a b&c'));
+    }), 'ok:a b&c');
+    eq('E6 escape / unescape are present (legacy)', safe(function () {
+        return typeof escape + ',' + typeof unescape;
+    }), 'ok:function,function');
+})();
+</script></body></html>
