@@ -19297,6 +19297,36 @@ public class JavaScriptEngine : IDisposable
                         repetitionCount: 0, frameCount: 0 } }],
                     ['ImageTrackList', null, { r: { length: 0, animated: false, defaultTrack: 0 },
                         o: { get: 1 } }],
+                    // WebCodecs §2-§8: the codec, frame and chunk interfaces a page that encodes or
+                    // decodes media names. The engine does not run a codec, so each carries the reads
+                    // and the operations the specification gives it, and the work is refused.
+                    ['VideoEncoder', 'EventTarget', { r: { state: 'unconfigured', encodeQueueSize: 0,
+                        ondequeue: null }, q: { configure: 1, encode: 1, flush: 0, close: 0, reset: 0 },
+                        s: 'the engine encodes no video.' }],
+                    ['VideoDecoder', 'EventTarget', { r: { state: 'unconfigured', decodeQueueSize: 0,
+                        ondequeue: null }, q: { configure: 1, decode: 1, flush: 0, close: 0, reset: 0 },
+                        s: 'the engine decodes no video.' }],
+                    ['AudioEncoder', 'EventTarget', { r: { state: 'unconfigured', encodeQueueSize: 0,
+                        ondequeue: null }, q: { configure: 1, encode: 1, flush: 0, close: 0, reset: 0 },
+                        s: 'the engine encodes no audio.' }],
+                    ['AudioDecoder', 'EventTarget', { r: { state: 'unconfigured', decodeQueueSize: 0,
+                        ondequeue: null }, q: { configure: 1, decode: 1, flush: 0, close: 0, reset: 0 },
+                        s: 'the engine decodes no audio.' }],
+                    ['VideoFrame', null, { r: { format: null, width: 0, height: 0,
+                        codedWidth: 0, codedHeight: 0, displayWidth: 0, displayHeight: 0,
+                        duration: null, timestamp: null },
+                        q: { close: 0, clone: 0 },
+                        s: 'the engine holds no video frame.' }],
+                    ['AudioFrame', null, { r: { format: null, sampleRate: 0,
+                        numberOfFrames: 0, numberOfChannels: 0, duration: null, timestamp: null },
+                        q: { close: 0, clone: 0 },
+                        s: 'the engine holds no audio frame.' }],
+                    ['EncodedVideoChunk', null, { r: { type: 'key', timestamp: 0, duration: null,
+                        byteLength: 0 }, s: 'the engine holds no encoded video chunk.' }],
+                    ['EncodedAudioChunk', null, { r: { type: 'key', timestamp: 0, duration: null,
+                        byteLength: 0 }, s: 'the engine holds no encoded audio chunk.' }],
+                    ['VideoColorSpace', null, { r: { primaries: null, transfer: null,
+                        matrix: null, fullRange: false }, s: 'the engine holds no colour space.' }],
                     ['WebTransport', null, { r: { closed: null, ready: null,
                         cceReceived: null, serverCertificate: null,
                         bidirectionalStreams: null, unidirectionalStreams: null,
@@ -19466,7 +19496,10 @@ public class JavaScriptEngine : IDisposable
                     ['AnimationPlaybackEvent', 1], ['WebTransport', 1], ['ImageDecoder', 1],
                     ['AudioWorkletNode', 1], ['MediaStreamAudioSourceNode', 1],
                     ['MediaRecorder', 0], ['SpeechSynthesisVoice', 0], ['RTCDTMFSender', 0],
-                    ['TrackEvent', 1]]
+                    ['TrackEvent', 1],
+                    ['VideoEncoder', 0], ['VideoDecoder', 0], ['AudioEncoder', 0],
+                    ['AudioDecoder', 0], ['VideoFrame', 0], ['AudioFrame', 0],
+                    ['VideoColorSpace', 0]]
                     .forEach(function (row) { buildable(row[0], row[1]); });
 
                 // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit

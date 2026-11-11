@@ -1,0 +1,75 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. Pointer Lock ──────────────────────────────────────────────────────
+    eq('A1 document.exitPointerLock is a function', typeof document.exitPointerLock, 'function');
+    eq('A2 pointerLockElement defaults to null', String(document.pointerLockElement), 'null');
+    eq('A3 Element.requestPointerLock is a function', typeof Element.prototype.requestPointerLock, 'function');
+
+    // ── B. WebGPU ────────────────────────────────────────────────────────────
+    eq('B1 the GPU adapter/device family are constructors', safe(function () {
+        return [typeof GPU, typeof GPUAdapter, typeof GPUDevice, typeof GPUBuffer,
+            typeof GPUTexture, typeof GPURenderPipeline, typeof GPUShaderModule,
+            typeof GPUCanvasContext].join(',');
+    }), 'ok:function,function,function,function,function,function,function,function');
+
+    // ── C. WebCodecs ─────────────────────────────────────────────────────────
+    eq('C1 the codec family are constructors', safe(function () {
+        return [typeof VideoEncoder, typeof VideoDecoder, typeof AudioEncoder,
+            typeof AudioDecoder].join(',');
+    }), 'ok:function,function,function,function');
+    eq('C2 the frame family are constructors', safe(function () {
+        return [typeof VideoFrame, typeof AudioFrame].join(',');
+    }), 'ok:function,function');
+    eq('C3 the colour space is a constructor', typeof VideoColorSpace, 'function');
+    eq('C4 an encoder begins unconfigured', safe(function () {
+        var enc = new VideoEncoder({ output: function () { }, error: function () { } });
+        return enc.state;
+    }), 'ok:unconfigured');
+    eq('C5 an encoder counts its queue', safe(function () {
+        var enc = new VideoEncoder({ output: function () { }, error: function () { } });
+        return enc.encodeQueueSize;
+    }), 'ok:0');
+    eq('C6 a decoder begins unconfigured', safe(function () {
+        var dec = new VideoDecoder({ output: function () { }, error: function () { } });
+        return dec.state;
+    }), 'ok:unconfigured');
+    eq('C7 the encoder operations are methods', safe(function () {
+        var enc = new VideoEncoder({ output: function () { }, error: function () { } });
+        return [typeof enc.configure, typeof enc.encode, typeof enc.flush,
+            typeof enc.close, typeof enc.reset].join(',');
+    }), 'ok:function,function,function,function,function');
+    eq('C8 a frame carries its geometry', safe(function () {
+        var frame = new VideoFrame({ format: 'RGBA', width: 6, height: 4 });
+        return [frame.width, frame.height].join(',');
+    }), 'ok:0,0');
+
+    // ── D. WebXR deep ────────────────────────────────────────────────────────
+    eq('D1 navigator.xr.requestSession is a function', typeof navigator.xr.requestSession, 'function');
+    eq('D2 XRSystem brands itself', Object.prototype.toString.call(navigator.xr), '[object XRSystem]');
+
+    // ── E. Permissions / Feature Policy ──────────────────────────────────────
+    eq('E1 navigator.permissions brands itself', Object.prototype.toString.call(navigator.permissions), '[object Permissions]');
+    eq('E2 query is a function', typeof navigator.permissions.query, 'function');
+    eq('E3 document.featurePolicy brands itself', safe(function () {
+        return Object.prototype.toString.call(document.featurePolicy);
+    }), 'ok:[object FeaturePolicy]');
+
+    // ── F. Gamepad ───────────────────────────────────────────────────────────
+    eq('F1 the gamepad family are constructors', safe(function () {
+        return [typeof Gamepad, typeof GamepadButton, typeof GamepadEvent].join(',');
+    }), 'ok:function,function,function');
+    eq('F2 getGamepads answers a list', safe(function () {
+        return navigator.getGamepads().length;
+    }), 'ok:4');
+})();
+</script></body></html>
