@@ -1,0 +1,112 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function ctx() {
+        var c = document.createElement('canvas');
+        c.width = 20; c.height = 10;
+        return c.getContext('2d');
+    }
+
+    // ── A. getImageData / putImageData ───────────────────────────────────────
+    eq('A1 getImageData answers an ImageData', safe(function () {
+        return Object.prototype.toString.call(ctx().getImageData(0, 0, 2, 2));
+    }), 'ok:[object ImageData]');
+    eq('A2 getImageData width/height match the request', safe(function () {
+        var d = ctx().getImageData(0, 0, 3, 5); return d.width + ',' + d.height;
+    }), 'ok:3,5');
+    eq('A3 ImageData.data is a Uint8ClampedArray', safe(function () {
+        return ctx().getImageData(0, 0, 1, 1).data instanceof Uint8ClampedArray;
+    }), 'ok:true');
+    eq('A4 a fresh ImageData is all zeros (transparent black)', safe(function () {
+        var d = ctx().getImageData(0, 0, 1, 1);
+        return d.data[0] + ',' + d.data[1] + ',' + d.data[2] + ',' + d.data[3];
+    }), 'ok:0,0,0,0');
+    eq('A5 putImageData writes pixels that getImageData reads back', safe(function () {
+        var x = ctx();
+        var d = x.createImageData(1, 1);
+        d.data[0] = 10; d.data[1] = 20; d.data[2] = 30; d.data[3] = 255;
+        x.putImageData(d, 0, 0);
+        var back = x.getImageData(0, 0, 1, 1);
+        return back.data[0] + ',' + back.data[1] + ',' + back.data[2] + ',' + back.data[3];
+    }), 'ok:10,20,30,255');
+    eq('A6 createImageData answers an all-zero ImageData', safe(function () {
+        var d = ctx().createImageData(2, 2);
+        return d.width + ',' + d.height + ',' + d.data.length;
+    }), 'ok:2,2,16');
+
+    // ── B. line dash ─────────────────────────────────────────────────────────
+    eq('B1 setLineDash/getLineDash round-trip', safe(function () {
+        var x = ctx(); x.setLineDash([5, 10]); return x.getLineDash().join(',');
+    }), 'ok:5,10');
+    eq('B2 default line dash is empty', safe(function () {
+        return ctx().getLineDash().length;
+    }), 'ok:0');
+    eq('C1 lineDashOffset defaults to 0', safe(function () {
+        return ctx().lineDashOffset;
+    }), 'ok:0');
+
+    // ── C. shadow properties ─────────────────────────────────────────────────
+    eq('D1 shadowBlur defaults to 0', safe(function () {
+        return ctx().shadowBlur;
+    }), 'ok:0');
+    eq('D2 shadowColor defaults to transparent black', safe(function () {
+        return ctx().shadowColor;
+    }), 'ok:rgba(0, 0, 0, 0)');
+    eq('D3 shadowOffsetX/Y default to 0', safe(function () {
+        var x = ctx(); return x.shadowOffsetX + ',' + x.shadowOffsetY;
+    }), 'ok:0,0');
+    eq('D4 shadowOffsetX is settable', safe(function () {
+        var x = ctx(); x.shadowOffsetX = 5; return x.shadowOffsetX;
+    }), 'ok:5');
+
+    // ── D. composite operations ──────────────────────────────────────────────
+    eq('E1 globalCompositeOperation accepts source-in', safe(function () {
+        var x = ctx(); x.globalCompositeOperation = 'source-in'; return x.globalCompositeOperation;
+    }), 'ok:source-in');
+    eq('E2 globalCompositeOperation accepts lighter', safe(function () {
+        var x = ctx(); x.globalCompositeOperation = 'lighter'; return x.globalCompositeOperation;
+    }), 'ok:lighter');
+
+    // ── F. more state properties ─────────────────────────────────────────────
+    eq('F1 imageSmoothingEnabled defaults true', safe(function () {
+        return ctx().imageSmoothingEnabled;
+    }), 'ok:true');
+    eq('F2 imageSmoothingQuality defaults low', safe(function () {
+        return ctx().imageSmoothingQuality;
+    }), 'ok:low');
+    eq('F3 filter defaults to none', safe(function () {
+        return ctx().filter;
+    }), 'ok:none');
+    eq('F4 direction defaults to inherit', safe(function () {
+        return ctx().direction;
+    }), 'ok:inherit');
+    eq('F5 fontKerning defaults to normal', safe(function () {
+        return ctx().fontKerning;
+    }), 'ok:normal');
+    eq('F6 lineWidth is settable and read back', safe(function () {
+        var x = ctx(); x.lineWidth = 7; return x.lineWidth;
+    }), 'ok:7');
+    eq('F7 miterLimit defaults to 10', safe(function () {
+        return ctx().miterLimit;
+    }), 'ok:10');
+    eq('F8 lineJoin defaults to miter', safe(function () {
+        return ctx().lineJoin;
+    }), 'ok:miter');
+
+    // ── G. fillText / strokeText accept maxwidth ─────────────────────────────
+    eq('G1 fillText with maxWidth', safe(function () {
+        ctx().fillText('x', 0, 0, 50); return 'ok';
+    }), 'ok:ok');
+    eq('G2 strokeText with maxWidth', safe(function () {
+        ctx().strokeText('x', 0, 0, 50); return 'ok';
+    }), 'ok:ok');
+})();
+</script></body></html>

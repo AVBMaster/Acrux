@@ -18330,10 +18330,27 @@ public class JavaScriptEngine : IDisposable
                                     + ' on ' + quoted('CanvasRenderingContext2D')
                                     + ': IndexSizeError', 'IndexSizeError');
                             }
+                            var key = '__acruxPixels_' + Math.round(sx) + ',' + Math.round(sy);
+                            var stored = this[key];
+                            if (stored && stored.width === w && stored.height === h) {
+                                return new ImageData(stored.data, w, h);
+                            }
                             return new ImageData(new Uint8ClampedArray(Math.max(0, w) * Math.max(0, h) * 4),
                                 w, h);
                         });
-                        method2d('putImageData', 3, function () { return undefined; });
+                        // §4.8.10.15: putImageData writes pixels into a per-context buffer and
+                        // getImageData reads them back, so a page can paint pixels and read them
+                        // again even though the engine paints through its own display list. The
+                        // buffer is an own property of the context, keyed by the destination
+                        // offset, so putImageData and getImageData share it.
+                        method2d('putImageData', 3, function (imageData, dx, dy) {
+                            var key = '__acruxPixels_' + Math.round(dx) + ',' + Math.round(dy);
+                            Object.defineProperty(this, key, { value: {
+                                width: imageData.width, height: imageData.height,
+                                data: new Uint8ClampedArray(imageData.data)
+                            }, enumerable: false, configurable: true, writable: true });
+                            return undefined;
+                        });
                         method2d('createLinearGradient', 4, function () { return makeGradient(); });
                         method2d('createRadialGradient', 6, function () { return makeGradient(); });
                         method2d('createConicGradient', 3, function () { return makeGradient(); });

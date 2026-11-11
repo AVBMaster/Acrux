@@ -125,9 +125,11 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     }
     private double _globalAlpha = 1.0;
     public string GlobalCompositeOperation { get; set; } = "source-over";
-    public string? Filter { get; set; }
+    public string? Filter { get; set; } = "none";
     public bool ImageSmoothingEnabled { get; set; } = true;
-    public ImageSmoothingQuality ImageSmoothingQuality { get; set; } = ImageSmoothingQuality.Low;
+    // ImageSmoothingQuality is exposed as a string ('low'/'medium'/'high'), not the enum ordinal
+    // the CLR would marshal (measured: the reference reads 'low').
+    public string ImageSmoothingQuality { get; set; } = "low";
     public double ShadowOffsetX { get; set; }
     public double ShadowOffsetY { get; set; }
     public double ShadowBlur { get; set; }
@@ -136,14 +138,13 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     public string LineJoin { get; set; } = "miter";
     public double LineWidth { get; set; } = 1.0;
     public double MiterLimit { get; set; } = 10.0;
-    public double[] LineDashOffset { get; set; } = Array.Empty<double>();
-    public double LineDashOffsetStart { get; set; }
+    public double LineDashOffset { get; set; } = 0;
     public string Font { get; set; } = "10px sans-serif";
     public string TextAlign { get; set; } = "start";
     public string TextBaseline { get; set; } = "alphabetic";
     public string Direction { get; set; } = "inherit";
     public string LetterSpacing { get; set; } = "normal";
-    public string FontKerning { get; set; } = "auto";
+    public string FontKerning { get; set; } = "normal";
     public string FontStretch { get; set; } = "normal";
     public string FontVariantCaps { get; set; } = "normal";
     public string TextRendering { get; set; } = "auto";
@@ -224,8 +225,9 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     // ImageData, gradient and pattern objects the page reads through.
 
     // Line styles
-    public double GetLineDash() => 0;
-    public void SetLineDash(double[] segments) { }
+    private double[] _lineDash = Array.Empty<double>();
+    public double[] GetLineDash() => _lineDash;
+    public void SetLineDash(double[] segments) => _lineDash = segments ?? Array.Empty<double>();
 
     // Image smoothing
     // (properties above)
@@ -374,8 +376,6 @@ public class WebGLRenderingContext : Acrux.Core.JavaScript.IDomPrototypeHost
 public interface CanvasImageSource { }
 
 public class CanvasElement : CanvasImageSource { }
-
-public enum ImageSmoothingQuality { Low, Medium, High }
 
 public class Pattern
 {
