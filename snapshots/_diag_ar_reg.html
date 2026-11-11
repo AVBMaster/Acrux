@@ -1,0 +1,18 @@
+<!doctype html><html><head><style>
+/* forward direction (width->height) must still work */
+#w1{aspect-ratio:2/1;width:100px}
+#w2{aspect-ratio:16/9;width:180px}
+/* no aspect-ratio: auto height block still fills width, height from content */
+#w3{width:200px}
+/* auto width + auto height + aspect-ratio: shrink-to-fit not forced */
+#w4{aspect-ratio:2/1;display:inline-block}
+/* aspect-ratio + min-height still transfers */
+#w5{aspect-ratio:2/1;width:100px;min-height:80px}
+</style></head><body>
+<div id=w1>a</div><div id=w2>b</div><div id=w3>some text content here</div>
+<span id=w4>c</span><div id=w5>d</div>
+<div id=o></div>
+<script>
+const g=(id)=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height);};
+document.getElementById("o").textContent=["w1","w2","w3","w4","w5"].map(g).join(" ");
+</script></body></html>

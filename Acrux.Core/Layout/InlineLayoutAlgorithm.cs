@@ -171,6 +171,13 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         {
             float contentInline = Math.Max(0, Builder.InlineSize - bp.HorizontalSum);
             float arBlock = contentInline / Style.AspectRatio + bp.VerticalSum;
+            // A shrink-to-fit box's own content is a floor on its block size: the
+            // width was derived from the content, so the height cannot drop below
+            // what the content needs without it overflowing (measured: an
+            // inline-block with aspect-ratio and auto width+height gives the
+            // content height, not the ratio-derived one that would clip the text).
+            if (Space.IsShrinkToFit && Style.Width is null or AutoLength)
+                arBlock = Math.Max(arBlock, intrinsicBlock);
             float clampedBlock = Math.Clamp(arBlock, minB, maxB);
             Builder.BlockSize = clampedBlock;
             Builder.IntrinsicBlockSize = arBlock;

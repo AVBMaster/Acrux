@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+.t{border:1px solid #99a;margin:4px 0;background:#f8f8ff}
+/* grid */
+#g1{display:grid;grid-template-columns:100px 1fr;grid-template-rows:40px 60px;gap:5px}
+#g1>div{background:#cde}
+/* grid item spanning */
+#g2{display:grid;grid-template-columns:repeat(3,1fr);height:80px}
+#g2>div:first-child{grid-column:span 2;background:#cec}
+/* table */
+#tb{border-collapse:collapse;width:200px}
+#tb td{border:1px solid #000;padding:3px}
+/* flex shrink */
+#fx{display:flex;width:200px}
+#fx>div{flex:1 1 auto;width:150px;background:#eec}
+/* flex grow */
+#fg{display:flex;width:300px}
+#fg>div{flex-grow:1}
+/* transform-origin + rotate */
+#tr{width:60px;height:40px;background:#fcc;transform:rotate(45deg);transform-origin:top left}
+/* background-attachment fixed + local */
+#bg{width:150px;height:80px;overflow:auto;background:url(data:image/gif;base64,R0lGODlhAQABAIAAAGgAAP///yH5BAAAAAAALAAAAAABAAEAAAIBRAA7) no-repeat;background-attachment:local}
+/* box-sizing border-box with padding */
+#bs{box-sizing:border-box;width:100px;height:50px;padding:10px;border:5px solid #000;background:#ddf}
+/* object-fit contain on sized img-div */
+#of{width:80px;height:40px;object-fit:contain}
+/* position sticky */
+#ps{position:sticky;top:10px;background:#dfd}
+/* vertical-align in inline-block */
+#va{display:inline-block;width:30px;height:20px;background:#fcd;vertical-align:middle}
+/* line-height unitless inheritance */
+#lh{line-height:1.5;font-size:20px}
+#lh>span{font-size:10px}
+</style></head><body>
+<div class=t id=g1><div>1</div><div>2</div><div>3</div><div>4</div></div>
+<div class=t id=g2><div>a</div><div>b</div></div>
+<table class=t id=tb><tr><td>x</td><td>y</td></tr></table>
+<div class=t id=fx><div>1</div><div>2</div></div>
+<div class=t id=fg><div style="background:#ecc">A</div><div style="background:#cce">B</div></div>
+<div class=t id=tr>rot</div>
+<div class=t id=bg>scroll content here<br><br><br>more</div>
+<div class=t id=bs>bs</div>
+<div class=t><img id=of src="data:image/gif;base64,R0lGODlhAQABAIAAAOnp6f///yH5BAAAAAAALAAAAAABAAEAAAIBRAA7"></div>
+<div class=t style="height:60px">sticky below<div id=ps>ps</div></div>
+<div class=t>va<span id=va></span>va</div>
+<div class=t id=lh>LH <span>child</span></div>
+<div id=o></div>
+<script>
+const g=(id)=>{const e=document.getElementById(id);const r=e.getBoundingClientRect();return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.top);};
+const out=["g1","g2","fx","fg","tr","bs","of","ps","va","lh"].map(g);
+out.push("g1col="+getComputedStyle(document.getElementById("g1")).gridTemplateColumns);
+out.push("fxw="+Math.round(document.getElementById("fx").children[0].getBoundingClientRect().width));
+out.push("fgw="+Math.round(document.getElementById("fg").children[0].getBoundingClientRect().width));
+out.push("bscontent="+Math.round(document.getElementById("bs").clientWidth));
+out.push("lh="+getComputedStyle(document.getElementById("lh").querySelector("span")).lineHeight);
+document.getElementById("o").textContent=out.join(" | ");
+</script></body></html>
