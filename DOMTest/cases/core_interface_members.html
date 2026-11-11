@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function hasAll(obj, names) {
+        var missing = names.filter(function (n) { return !(n in obj); });
+        return missing.length === 0 ? 'none' : missing.join('|');
+    }
+
+    // ── A. AbortSignal / AbortController deep ────────────────────────────────
+    eq('A1 an AbortController carries signal and abort', safe(function () {
+        var c = new AbortController();
+        return hasAll(c, ['signal', 'abort']);
+    }), 'ok:none');
+    eq('A2 an AbortSignal carries its members', safe(function () {
+        var s = new AbortController().signal;
+        return hasAll(s, ['aborted', 'reason', 'throwIfAborted', 'addEventListener']);
+    }), 'ok:none');
+
+    // ── B. Headers / Request / Response deep ─────────────────────────────────
+    eq('B1 a Headers carries its members', safe(function () {
+        var h = new Headers();
+        return hasAll(h, ['append', 'delete', 'get', 'has', 'set', 'forEach', 'entries']);
+    }), 'ok:none');
+    eq('B2 a Request carries its members', safe(function () {
+        var r = new Request('https://example.com');
+        return hasAll(r, ['method', 'url', 'headers', 'clone', 'text', 'json']);
+    }), 'ok:none');
+    eq('B3 a Response carries its members', safe(function () {
+        var r = new Response();
+        return hasAll(r, ['ok', 'status', 'statusText', 'headers', 'text', 'json', 'clone']);
+    }), 'ok:none');
+
+    // ── C. URL / URLSearchParams deep ────────────────────────────────────────
+    eq('C1 a URL carries its members', safe(function () {
+        var u = new URL('https://example.com/p?q=1');
+        return hasAll(u, ['href', 'origin', 'protocol', 'pathname', 'search', 'searchParams',
+            'hash', 'toString', 'toJSON']);
+    }), 'ok:none');
+    eq('C2 URLSearchParams carries its members', safe(function () {
+        var p = new URLSearchParams('a=1&b=2');
+        return hasAll(p, ['get', 'set', 'has', 'delete', 'forEach', 'toString', 'entries']);
+    }), 'ok:none');
+
+    // ── D. Blob / File deep ──────────────────────────────────────────────────
+    eq('D1 a Blob carries its members', safe(function () {
+        var b = new Blob(['x']);
+        return hasAll(b, ['size', 'type', 'text', 'arrayBuffer', 'stream', 'slice']);
+    }), 'ok:none');
+    eq('D2 a File carries name and lastModified', safe(function () {
+        var f = new File(['x'], 'a.txt');
+        return hasAll(f, ['name', 'lastModified', 'size', 'type', 'text']);
+    }), 'ok:none');
+
+    // ── E. DOMException / Error deep ─────────────────────────────────────────
+    eq('E1 a DOMException carries name/message/code', safe(function () {
+        var e = new DOMException('m', 'AbortError');
+        return hasAll(e, ['name', 'message', 'code']);
+    }), 'ok:none');
+
+    // ── F. FormData deep ─────────────────────────────────────────────────────
+    eq('F1 a FormData carries its members', safe(function () {
+        var f = new FormData();
+        return hasAll(f, ['append', 'delete', 'get', 'getAll', 'has', 'set', 'forEach',
+            'entries']);
+    }), 'ok:none');
+
+    // ── G. WebSocket deep ────────────────────────────────────────────────────
+    eq('G1 WebSocket static constants', safe(function () {
+        return [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED].join(',');
+    }), 'ok:0,1,2,3');
+    eq('H1 a WebSocket carries its members', safe(function () {
+        var w = new WebSocket('wss://example.com');
+        return hasAll(w, ['send', 'close', 'readyState', 'bufferedAmount', 'onopen',
+            'onmessage', 'onclose', 'onerror']);
+    }), 'ok:none');
+
+    // ── I. crypto deep ───────────────────────────────────────────────────────
+    eq('I1 crypto carries getRandomValues and subtle', safe(function () {
+        return hasAll(crypto, ['getRandomValues', 'subtle', 'randomUUID']);
+    }), 'ok:none');
+    eq('I2 crypto.subtle carries its operations', safe(function () {
+        return hasAll(crypto.subtle, ['encrypt', 'decrypt', 'sign', 'verify', 'digest',
+            'generateKey', 'importKey', 'exportKey']);
+    }), 'ok:none');
+
+    // ── J. performance deep ──────────────────────────────────────────────────
+    eq('J1 performance carries its members', safe(function () {
+        return hasAll(performance, ['now', 'mark', 'measure', 'getEntries',
+            'getEntriesByType', 'getEntriesByName', 'clearMarks', 'clearMeasures',
+            'timeOrigin']);
+    }), 'ok:none');
+})();
+</script></body></html>
