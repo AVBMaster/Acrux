@@ -1,0 +1,82 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. Cache Storage ─────────────────────────────────────────────────────
+    eq('A1 caches is an object', typeof caches, 'object');
+    eq('A2 it brands itself', Object.prototype.toString.call(caches), '[object CacheStorage]');
+    eq('A3 the storage methods are functions', safe(function () {
+        return [typeof caches.open, typeof caches.match, typeof caches.delete,
+            typeof caches.keys].join(',');
+    }), 'ok:function,function,function,function');
+    eq('A4 Cache and CacheStorage are constructors', safe(function () {
+        return [typeof Cache, typeof CacheStorage].join(',');
+    }), 'ok:function,function');
+    eq('A5 window.caches is the same object', window.caches === caches, true);
+
+    // ── B. WebVTT ────────────────────────────────────────────────────────────
+    eq('B1 VTTCue is a constructor', typeof VTTCue, 'function');
+    eq('B2 a VTTCue carries its timing and text', safe(function () {
+        var cue = new VTTCue(1.5, 3.5, 'hello');
+        return [cue.startTime, cue.endTime, cue.text].join(',');
+    }), 'ok:1.5,3.5,hello');
+    eq('B3 a VTTCue defaults its id and pauseOnExit', safe(function () {
+        var cue = new VTTCue(0, 2, 't');
+        return [cue.id, cue.pauseOnExit].join(',');
+    }), 'ok:,false');
+    eq('B4 a VTTCue is an instance of VTTCue', safe(function () {
+        return new VTTCue(0, 1, 'x') instanceof VTTCue;
+    }), 'ok:true');
+    eq('B5 fewer than three arguments is refused', safe(function () {
+        new VTTCue(0, 1); return 'made';
+    }).slice(0, 15), 'ERR:TypeError:F');
+    eq('C1 TrackEvent is a constructor', typeof TrackEvent, 'function');
+    eq('D1 the track interfaces are constructors', safe(function () {
+        return [typeof TextTrack, typeof TextTrackCue, typeof TextTrackCueList,
+            typeof TextTrackList, typeof HTMLTrackElement].join(',');
+    }), 'ok:function,function,function,function,function');
+
+    // ── E. Generic Sensor ────────────────────────────────────────────────────
+    eq('E1 the sensor family is constructors', safe(function () {
+        return [typeof Sensor, typeof Accelerometer, typeof Gyroscope,
+            typeof Magnetometer, typeof AmbientLightSensor,
+            typeof AbsoluteOrientationSensor, typeof RelativeOrientationSensor,
+            typeof LinearAccelerationSensor].join(',');
+    }), 'ok:function,function,function,function,function,function,function,function');
+    eq('E2 SensorErrorEvent is a constructor', typeof SensorErrorEvent, 'function');
+
+    // ── F. File System Access ────────────────────────────────────────────────
+    eq('F1 the pickers are functions', safe(function () {
+        return [typeof showOpenFilePicker, typeof showSaveFilePicker,
+            typeof showDirectoryPicker].join(',');
+    }), 'ok:function,function,function');
+    eq('F2 the file system family is constructors', safe(function () {
+        return [typeof FileSystemHandle, typeof FileSystemFileHandle,
+            typeof FileSystemDirectoryHandle, typeof FileSystemWritableFileStream].join(',');
+    }), 'ok:function,function,function,function');
+
+    // ── G. Bluetooth / USB / Serial / HID ────────────────────────────────────
+    eq('G1 the short-range interfaces are constructors', safe(function () {
+        return [typeof Bluetooth, typeof BluetoothDevice, typeof USB, typeof USBDevice,
+            typeof Serial, typeof HID].join(',');
+    }), 'ok:function,function,function,function,function,function');
+    eq('G2 navigator.usb brands itself', Object.prototype.toString.call(navigator.usb), '[object USB]');
+    eq('G3 navigator.serial brands itself', Object.prototype.toString.call(navigator.serial), '[object Serial]');
+    eq('G4 navigator.hid brands itself', Object.prototype.toString.call(navigator.hid), '[object HID]');
+
+    // ── H. StorageManager ────────────────────────────────────────────────────
+    eq('H1 navigator.storage brands itself', Object.prototype.toString.call(navigator.storage), '[object StorageManager]');
+    eq('H2 estimate and persist are functions', safe(function () {
+        return [typeof navigator.storage.estimate, typeof navigator.storage.persist].join(',');
+    }), 'ok:function,function');
+    eq('H3 StorageManager is a constructor', typeof StorageManager, 'function');
+})();
+</script></body></html>

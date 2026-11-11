@@ -18470,6 +18470,31 @@ public class JavaScriptEngine : IDisposable
                 // ── HTML §4.8.10.16 and DOM §4.6: the lists a page indexes ───────
                 (function () {
                     var cue = level('TextTrackCue', 'EventTarget');
+                    // WebVTT §4.1: VTTCue is the cue the page builds directly, and the constructor
+                    // carries the start time, the end time and the text as its own members rather
+                    // than discarding them the way a generic constructor does.
+                    window.VTTCue = function VTTCue(startTime, endTime, text) {
+                        if (arguments.length < 3) {
+                            throw new TypeError('Failed to construct ' + quoted('VTTCue') + ': '
+                                + '3 arguments required, but only ' + arguments.length + ' present.');
+                        }
+                        var made = Object.create(window.VTTCue.prototype);
+                        // The cue level carries getter-only accessors for these names, so an own
+                        // property has to be defined to shadow them — a plain assignment would hit the
+                        // getter-only member and silently fail.
+                        Object.defineProperty(made, 'startTime',
+                            { value: Number(startTime) || 0, writable: true, configurable: true, enumerable: true });
+                        Object.defineProperty(made, 'endTime',
+                            { value: Number(endTime) || 0, writable: true, configurable: true, enumerable: true });
+                        Object.defineProperty(made, 'text',
+                            { value: text === undefined ? '' : String(text), writable: true, configurable: true, enumerable: true });
+                        return made;
+                    };
+                    window.VTTCue.prototype = cue;
+                    try {
+                        Object.defineProperty(cue, 'constructor',
+                            { value: window.VTTCue, writable: true, configurable: true });
+                    } catch (e) { }
                     ['id', 'text'].forEach(function (name) { slotRead(cue, 'TextTrackCue', name, ''); });
                     ['startTime', 'endTime'].forEach(function (name) {
                         slotRead(cue, 'TextTrackCue', name, 0);
@@ -19230,6 +19255,14 @@ public class JavaScriptEngine : IDisposable
                         s: 'the engine records no media.' }],
                     ['SpeechSynthesisVoice', null, { r: { voiceURI: '', name: '', lang: '',
                         localService: false, default: false }, s: 'the engine speaks no voice.' }],
+                    // WebVTT §4.1, HTML §4.8.10.16: VTTCue is the cue the page builds directly; it
+                    // carries the timing and the text, and TrackEvent carries the track it wraps.
+                    ['VTTCue', 'TextTrackCue', { r: { region: null, vertical: '', snapToLines: true,
+                        line: 'auto', position: 'auto', size: 100, align: 'center' },
+                        p: { getCueAsHTML: 0 },
+                        s: 'the engine renders no cue track.' }],
+                    ['TrackEvent', 'Event', { r: { track: null },
+                        s: 'the engine dispatches no track event.' }],
                     ['RTCRtpReceiver', null, { r: { track: null, transport: null,
                         rtcpTransport: null }, p: { getParameters: 0, getCapabilities: 0 },
                         s: 'the engine receives no media.' }],
@@ -19432,7 +19465,8 @@ public class JavaScriptEngine : IDisposable
                     ['MediaKeyMessageEvent', 1], ['FontFaceSetLoadEvent', 1],
                     ['AnimationPlaybackEvent', 1], ['WebTransport', 1], ['ImageDecoder', 1],
                     ['AudioWorkletNode', 1], ['MediaStreamAudioSourceNode', 1],
-                    ['MediaRecorder', 0], ['SpeechSynthesisVoice', 0], ['RTCDTMFSender', 0]]
+                    ['MediaRecorder', 0], ['SpeechSynthesisVoice', 0], ['RTCDTMFSender', 0],
+                    ['TrackEvent', 1]]
                     .forEach(function (row) { buildable(row[0], row[1]); });
 
                 // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit
