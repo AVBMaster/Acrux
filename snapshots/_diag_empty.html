@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset=utf-8><style>body{font:14px monospace}</style></head><body>
+<div id=a></div>
+<div id=b></div>
+<div id=c>text</div>
+<div id=d>   </div>
+<div id=e><!--c--></div>
+<script>
+const q=sel=>{try{return sel+"="+document.querySelectorAll(sel).length;}catch(e){return sel+"=ERR:"+e.message;}};
+const sels=["#a:empty","#b:empty","#c:empty","#d:empty","#e:empty","div:empty"];
+document.body.appendChild(document.createElement("div")).textContent=sels.map(q).join("#");
+</script></body></html>

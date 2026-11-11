@@ -249,7 +249,13 @@ public class SelectorChecker
             CssPseudoType.NthOfType => MatchNthOfType(selector.Argument, element, false),
             CssPseudoType.NthLastOfType => MatchNthOfType(selector.Argument, element, true),
             CssPseudoType.Root => element.Parent is Document,
-            CssPseudoType.Empty => element.Children.Count == 0 && string.IsNullOrEmpty(element.TextContent),
+            // An element is :empty when it has no children that carry content — element or
+            // text nodes. Comments and processing instructions do not count as content
+            // (CSS Selectors 4 §4.2: the reference engine matches ':empty' on an element
+            // holding only a comment), and a whitespace-only text node still makes it
+            // non-empty (measured: '<div>   </div>' is not :empty).
+            CssPseudoType.Empty => !element.Children.Any(c =>
+                c is Element || c.NodeType == NodeType.Text),
             CssPseudoType.Link => element.TagName == "A" && element.HasAttribute("href"),
             CssPseudoType.Visited => element.TagName == "A" && element.HasAttribute("href"),
             CssPseudoType.AnyLink => element.TagName == "A" && element.HasAttribute("href"),

@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+li:nth-child(2){background:#fdd}
+li:nth-child(odd){color:red}
+li:not(.x){border:1px solid #000}
+li:is(.y){font-weight:bold}
+div:has(p){background:#dfd}
+:lang(en){color:blue}
+/* counter + attr content */
+#cb::before{content:counter(c) ". "}
+#cb{counter-reset:c}
+#ci{counter-increment:c}
+#at::after{content:"[" attr(data-x) "]"}
+#ctr::before{content:counters(c2,"."); }
+/* nth-of-type */
+p:nth-of-type(3){background:#eef}
+/* empty + first/last child */
+#ec:empty::after{content:"EMPTY"}
+/* sibling combinators */
+#sib + div{color:green}
+#sib ~ div{border:1px solid #999}
+</style></head><body>
+<ul>
+<li class=y>a</li>
+<li>b</li>
+<li class=x>c</li>
+<li>d</li>
+</ul>
+<div id=has1><p>has-p</p></div>
+<div id=has2>no-p</div>
+<div lang=en>en text</div>
+<div id=cb>counter</div>
+<div id=at data-x=hello>attr</div>
+<p>one</p><p>two</p><p>three</p>
+<div id=ec></div>
+<div id=sib>sib</div>
+<div>next</div>
+<div>after</div>
+<script>
+const q=(sel)=>{try{return sel+"="+document.querySelectorAll(sel).length;}catch(e){return sel+"=ERR";}};
+const sels=["li:nth-child(2)","li:nth-child(odd)","li:not(.x)","li:is(.y)","div:has(p)",":lang(en)","p:nth-of-type(3)","#ec:empty","#sib+div","#sib~div"];
+document.body.appendChild(document.createElement("div")).textContent=sels.map(q).join("#");
+</script></body></html>
