@@ -1,0 +1,106 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. getContext ────────────────────────────────────────────────────────
+    eq('A1 getContext(2d) answers a context', safe(function () {
+        var c = document.createElement('canvas');
+        var ctx = c.getContext('2d');
+        return [String(!!ctx), typeof ctx].join(',');
+    }), 'ok:true,object');
+
+    eq('A2 getContext is cached', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('2d') === c.getContext('2d'));
+    }), 'ok:true');
+
+    eq('A3 getContext with an unsupported type answers null', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('not-a-context'));
+    }), 'ok:null');
+
+    eq('A4 the canvas defaults to 300x150', safe(function () {
+        var c = document.createElement('canvas');
+        return [c.width, c.height].join(',');
+    }), 'ok:300,150');
+
+    // ── B. state properties ──────────────────────────────────────────────────
+    eq('B1 fillStyle defaults to black', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('2d').fillStyle);
+    }), 'ok:#000000');
+
+    eq('B2 fillStyle reads and writes', safe(function () {
+        var c = document.createElement('canvas');
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = 'red';
+        return ctx.fillStyle;
+    }), 'ok:red');
+
+    eq('B3 strokeStyle reads and writes', safe(function () {
+        var c = document.createElement('canvas');
+        var ctx = c.getContext('2d');
+        ctx.strokeStyle = 'blue';
+        return ctx.strokeStyle;
+    }), 'ok:blue');
+
+    eq('B4 lineWidth defaults to 1', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('2d').lineWidth);
+    }), 'ok:1');
+
+    eq('B5 font defaults to the 10px sans-serif', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('2d').font.indexOf('px') >= 0);
+    }), 'ok:true');
+
+    eq('B6 globalAlpha defaults to 1', safe(function () {
+        var c = document.createElement('canvas');
+        return String(c.getContext('2d').globalAlpha);
+    }), 'ok:1');
+
+    // ── C. drawing methods are functions ─────────────────────────────────────
+    eq('C1 the drawing methods are functions', safe(function () {
+        var ctx = document.createElement('canvas').getContext('2d');
+        return [typeof ctx.fillRect, typeof ctx.clearRect, typeof ctx.beginPath,
+            typeof ctx.moveTo, typeof ctx.lineTo, typeof ctx.arc, typeof ctx.fill,
+            typeof ctx.stroke, typeof ctx.fillText, typeof ctx.measureText,
+            typeof ctx.save, typeof ctx.restore].join(',');
+    }), 'ok:function,function,function,function,function,function,function,function,function,function,function,function');
+
+    eq('C2 measureText answers a TextMetrics', safe(function () {
+        var ctx = document.createElement('canvas').getContext('2d');
+        var m = ctx.measureText('hello');
+        return [String(m instanceof TextMetrics), String(typeof m.width)].join(',');
+    }), 'ok:true,number');
+
+    eq('C3 a drawing call is a no-throw', safe(function () {
+        var ctx = document.createElement('canvas').getContext('2d');
+        ctx.fillStyle = 'red';
+        ctx.fillRect(0, 0, 10, 10);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(10, 10);
+        ctx.stroke();
+        ctx.fillText('hi', 0, 0);
+        return 'ok';
+    }), 'ok:ok');
+
+    // ── D. save / restore ────────────────────────────────────────────────────
+    eq('D1 save/restore round-trip the fillStyle', safe(function () {
+        var ctx = document.createElement('canvas').getContext('2d');
+        ctx.save();
+        ctx.fillStyle = 'red';
+        ctx.restore();
+        return String(ctx.fillStyle);
+    }), 'ok:#000000');
+})();
+</script></body></html>

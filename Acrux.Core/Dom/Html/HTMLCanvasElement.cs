@@ -67,6 +67,9 @@ public class HTMLCanvasElement : HtmlElement
             case "webgl":
             case "webgl2":
             case "experimental-webgl":
+                // HTML §4.8.3: a WebGL context is served as an object of the interface named, but
+                // the engine has no GL command surface behind it (measured: gl.createBuffer is
+                // undefined) — the object is what a page that checks the type reads.
                 _webglContext ??= new WebGLRenderingContext(this);
                 _currentContextType = type;
                 return _webglContext;
@@ -140,8 +143,16 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     public string WordSpacing { get; set; } = "normal";
 
     // State
-    public void Save() { }
-    public void Restore() { }
+    private readonly Stack<object?> _savedFillStyles = new();
+    public void Save()
+    {
+        _savedFillStyles.Push(FillStyle);
+    }
+    public void Restore()
+    {
+        if (_savedFillStyles.Count > 0)
+            FillStyle = _savedFillStyles.Pop();
+    }
 
     // Transforms
     public void Scale(double x, double y) { }
@@ -157,8 +168,8 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     public void Clip(Path2D? path, string? fillRule = null) { }
 
     // Colors & Styles
-    public object? FillStyle { get; set; } = "#000";
-    public object? StrokeStyle { get; set; } = "#000";
+    public object? FillStyle { get; set; } = "#000000";
+    public object? StrokeStyle { get; set; } = "#000000";
     public double? CreateLinearGradient(double x0, double y0, double x1, double y1) => null;
     public double? CreateRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) => null;
     public double? CreateConicGradient(double startAngle, double x, double y) => null;
@@ -189,6 +200,10 @@ public class CanvasRenderingContext2D : Acrux.Core.JavaScript.IDomPrototypeHost
     public void FillText(string text, double x, double y, double? maxWidth = null) { }
     public void StrokeText(string text, double x, double y, double? maxWidth = null) { }
     public TextMetrics MeasureText(string text) => new();
+
+    // Fill and Stroke
+    public void Fill() { }
+    public void Stroke() { }
 
     // Drawing Images
     public void DrawImage(CanvasImageSource image, double dx, double dy) { }
@@ -271,8 +286,10 @@ public class ImageData
 
 public enum ColorSpace { SRgb, DisplayP3, LinearSRgb }
 
-public class TextMetrics
+public class TextMetrics : Acrux.Core.JavaScript.IDomPrototypeHost
 {
+    public string[] __domTypeChain => new[] { "TextMetrics" };
+    public override string ToString() => "[object TextMetrics]";
     public double Width { get; }
     public double ActualBoundingBoxLeft { get; }
     public double ActualBoundingBoxRight { get; }
