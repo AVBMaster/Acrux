@@ -1,0 +1,171 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function el(tag, style) {
+        var d = document.createElement(tag || 'div');
+        if (style) d.setAttribute('style', style);
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. Event dispatch: bubbling and capture ──────────────────────────────
+    eq('A1 click bubbles to an ancestor', (function () {
+        var parent = el('div'); var child = document.createElement('span');
+        parent.appendChild(child);
+        var heard = false;
+        parent.addEventListener('click', function () { heard = true; });
+        child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        parent.remove(); return heard;
+    })(), 'true');
+    eq('A2 capture listener fires before bubble listener', (function () {
+        var parent = el('div'); var child = document.createElement('span');
+        parent.appendChild(child);
+        var order = [];
+        parent.addEventListener('click', function () { order.push('bubble'); }, false);
+        parent.addEventListener('click', function () { order.push('capture'); }, true);
+        child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        parent.remove(); return order.join(',');
+    })(), 'capture,bubble');
+    eq('A3 stopPropagation stops bubbling', (function () {
+        var parent = el('div'); var child = document.createElement('span');
+        parent.appendChild(child);
+        var parentHeard = false;
+        child.addEventListener('click', function (e) { e.stopPropagation(); });
+        parent.addEventListener('click', function () { parentHeard = true; });
+        child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        parent.remove(); return parentHeard;
+    })(), 'false');
+    eq('A4 preventDefault sets defaultPrevented', (function () {
+        var d = el('div');
+        d.addEventListener('click', function (e) { e.preventDefault(); });
+        var ev = new MouseEvent('click', { cancelable: true });
+        d.dispatchEvent(ev);
+        d.remove(); return ev.defaultPrevented;
+    })(), 'true');
+    eq('A5 a non-bubbling event does not reach the parent', (function () {
+        var parent = el('div'); var child = document.createElement('span');
+        parent.appendChild(child);
+        var heard = false;
+        parent.addEventListener('custom', function () { heard = true; });
+        child.dispatchEvent(new CustomEvent('custom'));
+        parent.remove(); return heard;
+    })(), 'false');
+    eq('A6 event.target is the dispatching element', (function () {
+        var d = el('div'); var heard;
+        d.addEventListener('click', function (e) { heard = e.target === d; });
+        d.dispatchEvent(new MouseEvent('click'));
+        d.remove(); return heard;
+    })(), 'true');
+    eq('A7 currentTarget is the listener owner', (function () {
+        var parent = el('div'); var child = document.createElement('span');
+        parent.appendChild(child);
+        var heard;
+        parent.addEventListener('click', function (e) { heard = e.currentTarget === parent; });
+        child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        parent.remove(); return heard;
+    })(), 'true');
+
+    // ── B. CustomEvent detail ────────────────────────────────────────────────
+    eq('B1 CustomEvent carries detail', (function () {
+        var d = el('div'); var got;
+        d.addEventListener('ping', function (e) { got = e.detail; });
+        d.dispatchEvent(new CustomEvent('ping', { detail: { n: 7 } }));
+        d.remove(); return got.n;
+    })(), '7');
+    eq('B2 CustomEvent detail defaults to null', (function () {
+        var d = el('div'); var got;
+        d.addEventListener('ping', function (e) { got = e.detail; });
+        d.dispatchEvent(new CustomEvent('ping'));
+        d.remove(); return got;
+    })(), 'null');
+
+    // ── C. removeEventListener / once ────────────────────────────────────────
+    eq('C1 removeEventListener stops the listener', (function () {
+        var d = el('div'); var n = 0;
+        function h() { n++; }
+        d.addEventListener('click', h);
+        d.dispatchEvent(new MouseEvent('click'));
+        d.removeEventListener('click', h);
+        d.dispatchEvent(new MouseEvent('click'));
+        d.remove(); return n;
+    })(), '1');
+    eq('C2 once fires a single time', (function () {
+        var d = el('div'); var n = 0;
+        d.addEventListener('click', function () { n++; }, { once: true });
+        d.dispatchEvent(new MouseEvent('click'));
+        d.dispatchEvent(new MouseEvent('click'));
+        d.remove(); return n;
+    })(), '1');
+
+    // ── D. DOM manipulation: tree structure ──────────────────────────────────
+    eq('D1 appendChild adds a child and updates childNodes', (function () {
+        var p = el('div'); var c = document.createElement('span');
+        p.appendChild(c);
+        var n = p.childNodes.length; p.remove(); return n;
+    })(), '1');
+    eq('D2 removeChild detaches the node', (function () {
+        var p = el('div'); var c = document.createElement('span');
+        p.appendChild(c); p.removeChild(c);
+        var n = p.childNodes.length; p.remove(); return n;
+    })(), '0');
+    eq('D3 appendChild moves an existing child to the end', (function () {
+        var p = el('div'); var a = document.createElement('span'); var b = document.createElement('span');
+        p.appendChild(a); p.appendChild(b); p.appendChild(a);
+        var last = p.lastChild === a; p.remove(); return last;
+    })(), 'true');
+    eq('D4 insertBefore inserts at the given position', (function () {
+        var p = el('div'); var a = document.createElement('span'); var b = document.createElement('span');
+        p.appendChild(a); p.insertBefore(b, a);
+        var first = p.firstChild === b; p.remove(); return first;
+    })(), 'true');
+    eq('D5 replaceChild swaps the node', (function () {
+        var p = el('div'); var a = document.createElement('span'); var b = document.createElement('span');
+        p.appendChild(a); p.replaceChild(b, a);
+        var hasB = p.firstChild === b && !p.contains(a); p.remove(); return hasB;
+    })(), 'true');
+
+    // ── E. textContent vs innerHTML ──────────────────────────────────────────
+    eq('E1 textContent reads raw text without tags', (function () {
+        var d = el('div'); d.innerHTML = '<b>hi</b>';
+        var t = d.textContent; d.remove(); return t;
+    })(), 'hi');
+    eq('E2 innerHTML parses markup into elements', (function () {
+        var d = el('div'); d.innerHTML = '<b>hi</b>';
+        var tag = d.firstChild.tagName; d.remove(); return tag;
+    })(), 'B');
+    eq('E3 setting textContent escapes markup', (function () {
+        var d = el('div'); d.textContent = '<b>hi</b>';
+        var tag = d.firstChild.tagName; d.remove(); return tag;
+    })(), 'undefined');
+    eq('E4 innerHTML with nested elements', (function () {
+        var d = el('div'); d.innerHTML = '<p>a</p><p>b</p>';
+        var n = d.children.length; d.remove(); return n;
+    })(), '2');
+
+    // ── F. node identity and cloning ─────────────────────────────────────────
+    eq('F1 appendChild of the same node keeps identity', (function () {
+        var p = el('div'); var c = document.createElement('span');
+        p.appendChild(c); var same = p.firstChild === c; p.remove(); return same;
+    })(), 'true');
+    eq('F2 cloneNode(false) does not copy children', (function () {
+        var p = el('div'); p.innerHTML = '<b>x</b>';
+        var c = p.cloneNode(false); var n = c.childNodes.length; p.remove(); c.remove(); return n;
+    })(), '0');
+    eq('F3 cloneNode(true) copies children', (function () {
+        var p = el('div'); p.innerHTML = '<b>x</b>';
+        var c = p.cloneNode(true); var n = c.childNodes.length; p.remove(); c.remove(); return n;
+    })(), '1');
+    eq('F4 a cloned node is not the same object', (function () {
+        var p = el('div'); var c = p.cloneNode(false);
+        var same = c === p; p.remove(); c.remove(); return same;
+    })(), 'false');
+})();
+</script></body></html>
