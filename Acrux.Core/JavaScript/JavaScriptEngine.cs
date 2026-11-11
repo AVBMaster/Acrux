@@ -19220,6 +19220,16 @@ public class JavaScriptEngine : IDisposable
                         p: { replaceTrack: 1, setParameters: 1, getParameters: 0,
                             setStreams: 0, getCapabilities: 0 },
                         s: 'the engine sends no media.' }],
+                    ['RTCDTMFSender', null, { r: { toneBuffer: '', canInsertDTMF: false },
+                        q: { insertDTMF: 1 },
+                        s: 'the engine sends no DTMF.' }],
+                    ['MediaRecorder', 'EventTarget', { r: { stream: null, mimeType: '',
+                        state: 'inactive', audioBitsPerSecond: 0, videoBitsPerSecond: 0,
+                        ondataavailable: null, onerror: null, onstart: null, onstop: null },
+                        q: { start: 0, stop: 0, pause: 0, resume: 0 },
+                        s: 'the engine records no media.' }],
+                    ['SpeechSynthesisVoice', null, { r: { voiceURI: '', name: '', lang: '',
+                        localService: false, default: false }, s: 'the engine speaks no voice.' }],
                     ['RTCRtpReceiver', null, { r: { track: null, transport: null,
                         rtcpTransport: null }, p: { getParameters: 0, getCapabilities: 0 },
                         s: 'the engine receives no media.' }],
@@ -19421,7 +19431,8 @@ public class JavaScriptEngine : IDisposable
                     ['PushEvent', 1], ['SyncEvent', 1], ['GamepadEvent', 1],
                     ['MediaKeyMessageEvent', 1], ['FontFaceSetLoadEvent', 1],
                     ['AnimationPlaybackEvent', 1], ['WebTransport', 1], ['ImageDecoder', 1],
-                    ['AudioWorkletNode', 1], ['MediaStreamAudioSourceNode', 1]]
+                    ['AudioWorkletNode', 1], ['MediaStreamAudioSourceNode', 1],
+                    ['MediaRecorder', 0], ['SpeechSynthesisVoice', 0], ['RTCDTMFSender', 0]]
                     .forEach(function (row) { buildable(row[0], row[1]); });
 
                 // CSSOM Typed OM §2.3, §4.2: a keyword carries the word it was built with and a unit
@@ -19573,6 +19584,40 @@ public class JavaScriptEngine : IDisposable
                     Object.defineProperty(window, 'indexedDB', {
                         value: Object.create(levels.IDBFactory), writable: false, enumerable: true,
                         configurable: false });
+                }
+                // Service Workers §3: the container the navigator hands out is a
+                // ServiceWorkerContainer, so once its level is built the plain container stands on
+                // it and brands itself the way a page's feature test reads.
+                if (levels.ServiceWorkerContainer && navigator.serviceWorker
+                        && Object.getPrototypeOf(navigator.serviceWorker) === Object.prototype) {
+                    try {
+                        Object.setPrototypeOf(navigator.serviceWorker, levels.ServiceWorkerContainer);
+                    } catch (e) { }
+                }
+                // Indexed Database §4.3: the factory's open and deleteDatabase answer an
+                // IDBOpenDBRequest — the request the page attaches success/error to — and that request
+                // is thenable. The engine has no database engine behind it, so the request it hands
+                // back is an IDBOpenDBRequest that refuses with NotSupportedError rather than one
+                // that never settles.
+                if (levels.IDBFactory && levels.IDBOpenDBRequest
+                        && window.indexedDB && !levels.IDBFactory.__idbOpenPinned) {
+                    try {
+                        var idbRequest = function () {
+                            var request = Object.create(levels.IDBOpenDBRequest);
+                            var refusal = new DOMException('The engine has no database to open.',
+                                'NotSupportedError');
+                            request.then = function (onFulfilled, onRejected) {
+                                return Promise.reject(refusal).then(onFulfilled, onRejected);
+                            };
+                            request.catch = function (onRejected) {
+                                return Promise.reject(refusal).catch(onRejected);
+                            };
+                            return request;
+                        };
+                        levels.IDBFactory.open = idbRequest;
+                        levels.IDBFactory.deleteDatabase = idbRequest;
+                        levels.IDBFactory.__idbOpenPinned = true;
+                    } catch (e) { }
                 }
                 if (window.webkitURL === undefined && typeof window.URL === 'function') {
                     Object.defineProperty(window, 'webkitURL', { value: window.URL,

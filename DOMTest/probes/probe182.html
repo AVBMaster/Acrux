@@ -1,0 +1,90 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+
+    // ── A. Worker family ─────────────────────────────────────────────────────
+    eq('A1 Worker is a function', typeof Worker, 'function');
+    eq('A2 SharedWorker is a function', typeof SharedWorker, 'function');
+    eq('A3 ServiceWorker is a function', typeof ServiceWorker, 'function');
+    eq('A4 ServiceWorkerContainer is a function', typeof ServiceWorkerContainer, 'function');
+    eq('A5 the container brands itself', Object.prototype.toString.call(navigator.serviceWorker), '[object ServiceWorkerContainer]');
+    eq('A6 register is a function', typeof navigator.serviceWorker.register, 'function');
+    eq('A7 the controller defaults to null', String(navigator.serviceWorker.controller), 'null');
+    eq('A8 Worker has postMessage and terminate', safe(function () {
+        return [typeof Worker.prototype.postMessage, typeof Worker.prototype.terminate].join(',');
+    }), 'ok:function,function');
+    eq('A9 WorkerGlobalScope is a function', typeof WorkerGlobalScope, 'function');
+
+    // ── B. IndexedDB ─────────────────────────────────────────────────────────
+    eq('B1 indexedDB is an object', typeof indexedDB, 'object');
+    eq('B2 it brands itself', Object.prototype.toString.call(indexedDB), '[object IDBFactory]');
+    eq('B3 open is a function', typeof indexedDB.open, 'function');
+    eq('B4 deleteDatabase is a function', typeof indexedDB.deleteDatabase, 'function');
+    eq('B5 open answers an IDBOpenDBRequest', safe(function () {
+        return Object.prototype.toString.call(indexedDB.open('probe'));
+    }), 'ok:[object IDBOpenDBRequest]');
+    eq('B6 the open request is thenable and refuses', safe(function () {
+        var req = indexedDB.open('probe');
+        return [typeof req.then, req instanceof IDBOpenDBRequest].join(',');
+    }), 'ok:function,true');
+    eq('B7 the IDB interfaces are constructors', safe(function () {
+        return [typeof IDBDatabase, typeof IDBRequest, typeof IDBObjectStore,
+            typeof IDBTransaction, typeof IDBKeyRange, typeof IDBCursor,
+            typeof IDBVersionChangeEvent].join(',');
+    }), 'ok:function,function,function,function,function,function,function');
+
+    // ── C. Web Audio ─────────────────────────────────────────────────────────
+    eq('C1 AudioContext is a function', typeof AudioContext, 'function');
+    eq('C2 OfflineAudioContext is a function', typeof OfflineAudioContext, 'function');
+    eq('C3 the audio node family is constructors', safe(function () {
+        return [typeof AudioNode, typeof GainNode, typeof OscillatorNode,
+            typeof AudioBuffer, typeof AnalyserNode, typeof AudioParam].join(',');
+    }), 'ok:function,function,function,function,function,function');
+    eq('C4 the filter/panner family is constructors', safe(function () {
+        return [typeof BiquadFilterNode, typeof PannerNode, typeof StereoPannerNode,
+            typeof DynamicsCompressorNode, typeof ConvolverNode, typeof WaveShaperNode].join(',');
+    }), 'ok:function,function,function,function,function,function');
+    eq('C5 AudioWorkletNode and AudioWorklet are constructors', safe(function () {
+        return [typeof AudioWorkletNode, typeof AudioWorklet].join(',');
+    }), 'ok:function,function');
+
+    // ── D. MediaStream / WebRTC ──────────────────────────────────────────────
+    eq('D1 MediaRecorder is a constructor', typeof MediaRecorder, 'function');
+    eq('D2 the WebRTC family is constructors', safe(function () {
+        return [typeof RTCPeerConnection, typeof RTCSessionDescription,
+            typeof RTCIceCandidate, typeof RTCDataChannel, typeof RTCDTMFSender].join(',');
+    }), 'ok:function,function,function,function,function');
+    eq('D3 the media stream family is constructors', safe(function () {
+        return [typeof MediaStream, typeof MediaStreamTrack].join(',');
+    }), 'ok:function,function');
+
+    // ── E. MediaDevices ──────────────────────────────────────────────────────
+    eq('E1 mediaDevices brands itself', Object.prototype.toString.call(navigator.mediaDevices), '[object MediaDevices]');
+    eq('E2 enumerateDevices and getUserMedia are functions', safe(function () {
+        return [typeof navigator.mediaDevices.enumerateDevices,
+            typeof navigator.mediaDevices.getUserMedia].join(',');
+    }), 'ok:function,function');
+
+    // ── F. Speech ────────────────────────────────────────────────────────────
+    eq('F1 speechSynthesis is an object', typeof speechSynthesis, 'object');
+    eq('F2 SpeechSynthesisUtterance is a function', typeof SpeechSynthesisUtterance, 'function');
+    eq('F3 SpeechSynthesisVoice is a constructor', typeof SpeechSynthesisVoice, 'function');
+
+    // ── G. Storage buckets ───────────────────────────────────────────────────
+    eq('G1 storageBuckets brands itself', Object.prototype.toString.call(navigator.storageBuckets), '[object StorageBucketManager]');
+    eq('G2 StorageBucketManager is a constructor', typeof StorageBucketManager, 'function');
+
+    // ── H. XR / GPU ──────────────────────────────────────────────────────────
+    eq('H1 navigator.xr brands itself', Object.prototype.toString.call(navigator.xr), '[object XRSystem]');
+    eq('H2 isSessionSupported is a function', typeof navigator.xr.isSessionSupported, 'function');
+    eq('H3 navigator.gpu brands itself', Object.prototype.toString.call(navigator.gpu), '[object GPU]');
+})();
+</script></body></html>
