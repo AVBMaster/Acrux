@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:120px;height:50px;border:1px solid #999;font-size:12px;overflow:hidden}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function p(tag,html,prop){
+  const el=document.createElement("div");el.setAttribute("style",html);
+  document.body.appendChild(el);
+  const c=getComputedStyle(el);
+  const v=prop==="scrollWidth"?el.scrollWidth:c.getPropertyValue(prop);
+  out.push(["L",tag,prop+"="+v].join("~"));
+  el.remove();
+}
+// text rendering and overflow
+p("ws-pre-wrap","white-space:pre-wrap","whiteSpace");
+p("ws-break-spaces","white-space:break-spaces","whiteSpace");
+p("ov-wrap-anywhere","overflow-wrap:anywhere","overflowWrap");
+p("ov-wrap-break-word","overflow-wrap:break-word","overflowWrap");
+p("word-break-all","word-break:break-all","wordBreak");
+p("word-break-keep","word-break:keep-all","wordBreak");
+p("hyphens-manual","hyphens:manual","hyphens");
+p("hyphens-auto","hyphens:auto","hyphens");
+p("text-orient-up","writing-mode:vertical-rl;text-orientation:upright","textOrientation");
+p("text-orient-side","writing-mode:vertical-rl;text-orientation:sideways","textOrientation");
+p("line-break","line-break:strict","lineBreak");
+p("overflow-x","overflow-x:scroll","overflowX");
+p("overflow-y","overflow-y:hidden","overflowY");
+p("overscroll-x","overscroll-behavior-x:contain","overscrollBehaviorX");
+p("scroll-snap-type","scroll-snap-type:x mandatory","scrollSnapType");
+p("scrollbar-gutter","scrollbar-gutter:stable","scrollbarGutter");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

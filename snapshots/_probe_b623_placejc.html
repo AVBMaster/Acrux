@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.c{display:grid;width:100px;height:60px;border:1px solid #999}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function probe(desc,fn){
+  const host=document.createElement("div");host.className="c";
+  document.body.appendChild(host);
+  fn(host);
+  const stored=[];
+  for(let i=0;i<host.style.length;i++){const n=host.style.item(i);stored.push(n+"="+host.style.getPropertyValue(n));}
+  const g=n=>getComputedStyle(host).getPropertyValue(n);
+  out.push(["L",desc,"block=["+stored.join(";")+"]","comp_ac="+g("align-content"),"comp_jc="+g("justify-content"),"comp_pc="+g("place-content")].join("~"));
+  host.remove();
+}
+probe("jc-center",h=>h.style.setProperty("justify-content","center"));
+probe("ac-sb",h=>h.style.setProperty("align-content","space-between"));
+probe("place-content:sb-center",h=>h.style.setProperty("place-content","space-between center"));
+probe("place-content:sb-center!important",h=>h.setAttribute("style","place-content:space-between center"));
+probe("pc-sb-center-echo",h=>{h.style.setProperty("place-content","space-between center");h.setAttribute("style","place-content:space-between center");});
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function probe(disp){
+  const h=document.createElement("div");
+  h.style.display=disp;h.style.width="100px";h.style.height="60px";
+  document.body.appendChild(h);
+  h.style.setProperty("place-content","space-between center");
+  const g=n=>getComputedStyle(h).getPropertyValue(n);
+  out.push(["L",disp,"jc="+g("justify-content"),"pc="+g("place-content")].join("~"));
+  h.remove();
+}
+probe("grid");
+probe("flex");
+probe("block");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
