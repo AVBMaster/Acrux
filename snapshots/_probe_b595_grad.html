@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#t1:target{background:yellow}
+#s1{width:200px;height:40px;border:1px solid #000;background-image:linear-gradient(blue,white);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:24px}
+#s2{width:120px;height:40px;border:1px solid #000;background-image:conic-gradient(red,yellow,lime,blue,red);font-size:20px}
+#s3{width:120px;height:40px;border:1px solid #000;background-image:radial-gradient(circle at 30% 30%, red, blue);font-size:20px}
+#s4{width:120px;height:40px;border:1px solid #000;background:linear-gradient(to right,#f00 0%,#00f 100%);font-size:20px}
+#s5{width:120px;height:40px;border:1px solid #000;box-shadow:inset 0 0 10px red, 2px 2px 4px blue;font-size:20px}
+</style></head><body>
+<div id=out></div>
+<div id=t1>target-div</div>
+<div id=s1>clip-text</div>
+<div id=s2>conic</div>
+<div id=s3>radial</div>
+<div id=s4>linear</div>
+<div id=s5>shadow</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+const all=["t1","s1","s2","s3","s4","s5"];
+for(const id of all){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|"+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top)+"|bg="+(s.backgroundColor)+"|bgi="+(s.backgroundImage||"-").slice(0,24)+"|clip="+(s.backgroundClip||"-")+"|color="+(s.color));
+}
+row("L|SCOPED|"+(()=>{try{return document.querySelector(":scope > #out")?"found":"none";}catch(e){return "ERR";}})());
+</script></body></html>

@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#s1{width:120px;height:40px;border:1px solid #000;background-image:linear-gradient(blue,white);background-clip:text;color:transparent;font-size:24px}
+#s2{width:120px;height:40px;border:1px solid #000;background-image:conic-gradient(red,yellow,lime,blue,red);font-size:20px}
+#s3{width:120px;height:40px;border:1px solid #000;background-image:radial-gradient(circle at 30% 30%, red, blue);font-size:20px}
+#s4{width:120px;height:40px;border:1px solid #000;background:linear-gradient(to right,#f00 0%,#00f 100%);font-size:20px}
+#s5{width:120px;height:40px;border:1px solid #000;box-shadow:inset 0 0 10px red, 2px 2px 4px blue;font-size:20px}
+</style></head><body>
+<div id=out></div>
+<div id=s1>clip-text</div>
+<div id=s2>conic</div>
+<div id=s3>radial</div>
+<div id=s4>linear</div>
+<div id=s5>shadow</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["s1","s2","s3","s4","s5"]){const e=document.getElementById(id);row("L|"+id+"|here");}
+</script></body></html>

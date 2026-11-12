@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#inner{color:red}
+</style></head><body>
+<div id=parent><div id=inner>x</div></div>
+<div id=out></div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+// document.querySelector :scope = document root (html)
+row("L|dqs-scope-html|"+(()=>{try{return document.querySelector(":scope>body")?"body-child":"none";}catch(e){return "ERR:"+e.name;}})());
+row("L|dqs-scope-html2|"+(()=>{try{return document.querySelector(":scope>html")?"html-child":"none";}catch(e){return "ERR:"+e.name;}})());
+// element.querySelector :scope = that element
+const p=document.getElementById("parent");
+row("L|eq-scope-inner|"+(()=>{try{return p.querySelector(":scope>#inner")?"inner":"none";}catch(e){return "ERR:"+e.name;}})());
+row("L|eq-scope-other|"+(()=>{try{return p.querySelector(":scope>#out")?"out":"none";}catch(e){return "ERR:"+e.name;}})());
+// matches with :scope
+const inner=document.getElementById("inner");
+row("L|matches-scope|"+(()=>{try{return inner.matches(":scope>div")?"yes":"no";}catch(e){return "ERR:"+e.name;}})());
+// findAll scoped
+row("L|qsa-scope-count|"+(()=>{try{return p.querySelectorAll(":scope>div").length;}catch(e){return "ERR:"+e.name;}})());
+</script></body></html>
