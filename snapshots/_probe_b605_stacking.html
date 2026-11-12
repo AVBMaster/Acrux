@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.box{width:60px;height:40px;background:#eef;border:1px solid #000;display:inline-block;vertical-align:top}
+#p1{position:relative;z-index:2;background:#fcc}
+#p2{position:relative;z-index:-1;background:#cfc}
+#sc1{position:relative;z-index:0;background:#eef}
+#sc1 .child{position:absolute;z-index:5;background:#ccf;left:10px;top:10px}
+#cp1{width:60px;height:40px;background:red;clip-path:inset(10px 10px 10px 10px)}
+#cp2{width:60px;height:40px;background:blue;clip-path:circle(20px at 30px 20px)}
+#cp3{width:60px;height:40px;background:green;clip-path:polygon(0 0,100% 0,50% 100%)}
+#op1{width:60px;height:40px;background:rgba(255,0,0,0.5)}
+#bd1{width:60px;height:40px;background:yellow;border:3px dotted purple;border-radius:12px}
+#bd2{width:60px;height:40px;background:pink;border:4px dashed teal}
+</style></head><body>
+<div id=out></div>
+<div class="box" id=p1>p1</div>
+<div class="box" id=p2>p2</div>
+<div id="sc1">stack<div class="child">child</div></div>
+<div class="box" id=cp1>cp1</div>
+<div class="box" id=cp2>cp2</div>
+<div class="box" id=cp3>cp3</div>
+<div class="box" id=op1>op</div>
+<div class="box" id=bd1>bd1</div>
+<div class="box" id=bd2>bd2</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["p1","p2","cp1","cp2","cp3","op1","bd1","bd2"]){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|"+Math.round(r.width)+"x"+Math.round(r.height)+"|z="+(s.zIndex||"-")+"|clip="+(s.clipPath||"-").slice(0,20)+"|op="+(s.opacity||"-"));
+}
+</script></body></html>
