@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* overflow variants */
+#o1{overflow:hidden;width:60px;height:30px;background:#eef}
+#o2{overflow:scroll;width:60px;height:30px;background:#efe}
+#o3{overflow:auto;width:60px;height:30px;background:#ffe}
+#o4{overflow-x:auto;overflow-y:hidden;width:60px;height:30px;background:#fef}
+#o5{overflow:visible;width:60px;height:20px;background:#cef}
+/* scroll-behavior */
+#sb{scroll-behavior:smooth;overflow:auto;width:60px;height:30px;background:#ffc}
+/* overscroll */
+#os{overscroll-behavior:contain;overflow:auto;width:60px;height:30px;background:#fcf}
+/* scroll-snap */
+#ss{scroll-snap-type:y mandatory;overflow:auto;width:60px;height:60px;background:#cff}
+#ss>div{scroll-snap-align:start;height:30px;background:#ece}
+/* sticky in scroller */
+#sc{overflow:auto;width:80px;height:60px;background:#f8f8ff}
+#st{position:sticky;top:0;background:#dfd;height:20px}
+/* position fixed in transformed parent */
+#tp{transform:translate(0,0);width:80px;height:40px;background:#f8f}
+#fx{position:fixed;top:2px;left:2px;width:40px;height:20px;background:#fcf}
+</style></head><body><meta charset=utf-8>
+<div id=o1>hid</div><div id=o2>scr</div><div id=o3>auto</div><div id=o4>xy</div><div id=o5>vis</div>
+<div id=sb>smooth</div><div id=os>contain</div>
+<div id=ss><div>1</div><div>2</div></div>
+<div id=sc><div id=st>sticky</div><div>after</div></div>
+<div id=tp><div id=fx>fixed</div></div>
+<script>
+const ids=["o1","o2","o3","o4","o5","sb","os","ss","sc","tp"];
+const g=id=>{const s=getComputedStyle(document.getElementById(id));
+ return id+":ov="+s.overflow+"|ovx="+s.overflowX+"|ovy="+s.overflowY+"|sb="+s.scrollBehavior+"|osb="+s.overscrollBehavior+"|sst="+s.scrollSnapType+"|pos="+s.position;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join(" ## ");
+</script></body></html>
