@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#a1{width:200px;aspect-ratio:2/1;height:auto;background:#eef;border:1px solid #000}
+#a2{width:200px;aspect-ratio:1.5;height:auto;background:#efe;border:1px solid #000}
+#a3{height:80px;aspect-ratio:4/3;width:auto;background:#ffe;border:1px solid #000}
+#a4{width:120px;aspect-ratio:1;background:#fef;border:1px solid #000;display:inline-block}
+#a5{width:120px;min-height:60px;aspect-ratio:1;background:#eff;border:1px solid #000}
+</style></head><body>
+<div id=out></div>
+<div id=a1>a1</div>
+<div id=a2>a2</div>
+<div id=a3>a3</div>
+<div id=a4>a4</div>
+<div id=a5>a5</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["a1","a2","a3","a4","a5"]){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|"+Math.round(r.width)+"x"+Math.round(r.height)+"|ar="+(s.aspectRatio||"-"));
+}
+</script></body></html>
