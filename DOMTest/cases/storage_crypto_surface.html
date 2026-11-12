@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Storage ───────────────────────────────────────────────────────────
+    eq('A1 localStorage setItem/getItem round-trip', safe(function () {
+        localStorage.setItem('k', 'v'); var v = localStorage.getItem('k');
+        localStorage.removeItem('k'); return v;
+    }), 'ok:v');
+    eq('A2 localStorage getItem on a missing key is null', safe(function () {
+        return localStorage.getItem('nope');
+    }), 'ok:null');
+    eq('A3 localStorage key(i) enumerates', safe(function () {
+        localStorage.clear(); localStorage.setItem('a', '1'); localStorage.setItem('b', '2');
+        var v = localStorage.key(0); localStorage.clear(); return v;
+    }), 'ok:a');
+    eq('A4 localStorage.length reflects the count', safe(function () {
+        localStorage.clear(); localStorage.setItem('a', '1'); localStorage.setItem('b', '2');
+        var n = localStorage.length; localStorage.clear(); return n;
+    }), 'ok:2');
+    eq('A5 localStorage.removeItem removes', safe(function () {
+        localStorage.clear(); localStorage.setItem('a', '1'); localStorage.removeItem('a');
+        var v = localStorage.getItem('a'); return v;
+    }), 'ok:null');
+    eq('A6 localStorage.clear empties', safe(function () {
+        localStorage.setItem('a', '1'); localStorage.clear(); return localStorage.length;
+    }), 'ok:0');
+    eq('A7 sessionStorage is separate from localStorage', safe(function () {
+        sessionStorage.clear(); localStorage.clear();
+        sessionStorage.setItem('k', 's'); localStorage.setItem('k', 'l');
+        var v = sessionStorage.getItem('k') + ',' + localStorage.getItem('k');
+        sessionStorage.clear(); localStorage.clear(); return v;
+    }), 'ok:s,l');
+
+    // ── B. indexedDB ─────────────────────────────────────────────────────────
+    eq('B1 indexedDB.open answers an IDBOpenDBRequest', safe(function () {
+        return indexedDB.open('db') instanceof IDBOpenDBRequest;
+    }), 'ok:true');
+    eq('B2 IDBFactory.cmp exists', safe(function () {
+        return typeof indexedDB.cmp;
+    }), 'ok:function');
+    eq('B3 deleteDatabase answers an IDBOpenDBRequest', safe(function () {
+        return indexedDB.deleteDatabase('db') instanceof IDBOpenDBRequest;
+    }), 'ok:true');
+
+    // ── C. crypto ────────────────────────────────────────────────────────────
+    eq('C1 crypto.getRandomValues fills the array', safe(function () {
+        var a = new Uint8Array(8); crypto.getRandomValues(a);
+        return a.length === 8;
+    }), 'ok:true');
+    eq('C2 crypto.randomUUID is a function', safe(function () {
+        return typeof crypto.randomUUID;
+    }), 'ok:function');
+    eq('C3 crypto.subtle is an object', safe(function () {
+        return typeof crypto.subtle;
+    }), 'ok:object');
+    eq('C4 crypto.subtle.digest answers a promise', safe(function () {
+        return crypto.subtle.digest('SHA-256', new Uint8Array(0)) instanceof Promise;
+    }), 'ok:true');
+    eq('C5 crypto.subtle.encrypt/decrypt/generateKey/importKey/exportKey', safe(function () {
+        return ['encrypt', 'decrypt', 'generateKey', 'importKey', 'exportKey'].filter(
+            function (n) { return typeof crypto.subtle[n] !== 'function'; }).join('|');
+    }), 'ok:');
+})();
+</script></body></html>
