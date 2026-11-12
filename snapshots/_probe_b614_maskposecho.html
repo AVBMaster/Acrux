@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:50px;height:20px;background:#eef}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+const cases=[
+  ["mask-position","center"],
+  ["mask-position","top left"],
+  ["mask-position","5px 10px"],
+  ["background-position","center"],
+  ["background-position","top left"],
+];
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  el.style.setProperty(p,v);
+  const echo=el.style.getPropertyValue(p);
+  const comp=getComputedStyle(el).getPropertyValue(p);
+  out.push(["L",p+":"+v,"echo="+echo,"comp="+comp].join("~"));
+  el.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
