@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><body><div id="root">
+<div id="a" class="x y"><span id="b" class="z">t</span></div>
+<div id="c" class="x"><span id="d">u</span></div>
+<ul id="l"><li id="l1">1</li><li id="l2" class="m">2</li><li id="l3">3</li></ul>
+<div id="hidden">h</div>
+<input id="disabled" disabled>
+<input id="enabled">
+<input id="checked" type="checkbox" checked>
+<input id="unchecked" type="checkbox">
+<input id="readonly" readonly>
+<input id="writable">
+</div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function matches(id, sel) { return document.getElementById(id).matches(sel); }
+    function qsaCount(sel) { return document.querySelectorAll(sel).length; }
+
+    // ── A. :is() ─────────────────────────────────────────────────────────────
+    eq('A1 :is() matches a list', matches('b', ':is(#b, #c)'), 'true');
+    eq('A2 :is() non-match', matches('b', ':is(#c, #d)'), 'false');
+    eq('A3 :is() with descendant combinator', qsaCount(':is(#a, #c) span'), '2');
+    eq('A4 :is() forgives invalid selectors', matches('b', ':is(#b, :bad-thing)'), 'true');
+
+    // ── B. :where() ─────────────────────────────────────────────────────────
+    eq('B1 :where() matches', matches('b', ':where(#b, #c)'), 'true');
+    eq('B2 :where() non-match', matches('b', ':where(#c)'), 'false');
+
+    // ── C. :has() ───────────────────────────────────────────────────────────
+    eq('C1 :has() descendant', matches('a', ':has(span)'), 'true');
+    eq('C2 :has() matches a host with a nested span', matches('c', ':has(span)'), 'true');
+    eq('C3 :has() child combinator', matches('a', ':has(> span)'), 'true');
+    eq('C4 :has() does not match an element with no span', matches('b', ':has(span)'), 'false');
+    eq('C5 :has() counts matches', qsaCount('div:has(span)'), '3');
+
+    // ── D. :empty (built dynamically to avoid source whitespace) ─────────────
+    var emptyEl = document.createElement('div');
+    eq('D1 :empty matches an empty element', emptyEl.matches(':empty'), 'true');
+    emptyEl.appendChild(document.createTextNode(''));
+    eq('D2 :empty does not match an empty text node', emptyEl.matches(':empty'), 'false');
+    var withText = document.createElement('div');
+    withText.appendChild(document.createTextNode('x'));
+    eq('D3 :empty does not match an element with text', withText.matches(':empty'), 'false');
+
+    // ── E. form state pseudo-classes ─────────────────────────────────────────
+    eq('E1 :disabled matches', matches('disabled', ':disabled'), 'true');
+    eq('E2 :enabled matches', matches('enabled', ':enabled'), 'true');
+    eq('E3 :disabled does not match an enabled input', matches('enabled', ':disabled'), 'false');
+    eq('E4 :checked matches', matches('checked', ':checked'), 'true');
+    eq('E5 :checked does not match', matches('unchecked', ':checked'), 'false');
+    eq('E6 :default matches a checked checkbox', matches('checked', ':default'), 'true');
+    eq('E7 :read-only matches readonly', matches('readonly', ':read-only'), 'true');
+    eq('E8 :read-write matches writable', matches('writable', ':read-write'), 'true');
+
+    // ── F. :not() with a list and complex argument ───────────────────────────
+    eq('F1 :not() with a list', matches('l1', ':not(#l2, #l3)'), 'true');
+    eq('F2 :not() list non-match', matches('l2', ':not(#l2, #l3)'), 'false');
+    eq('F3 :not() with descendant', matches('b', ':not(#a span)'), 'false');
+})();
+</script></body></html>
