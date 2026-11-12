@@ -1,0 +1,105 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function attach(tag, attrs) {
+        var d = document.createElement(tag || 'input');
+        if (attrs) for (var k in attrs) d.setAttribute(k, attrs[k]);
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. input / change events ─────────────────────────────────────────────
+    eq('A1 dispatching input fires an input listener', (function () {
+        var i = attach('input'); var fired = false;
+        i.addEventListener('input', function () { fired = true; });
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        i.remove(); return fired;
+    })(), 'true');
+    eq('A2 input event bubbles to the form', (function () {
+        var f = document.createElement('form');
+        var i = document.createElement('input');
+        f.appendChild(i); document.getElementById('root').appendChild(f);
+        var heard = false;
+        f.addEventListener('input', function () { heard = true; });
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        f.remove(); return heard;
+    })(), 'true');
+    eq('A3 dispatching change fires a change listener', (function () {
+        var i = attach('input'); var fired = false;
+        i.addEventListener('change', function () { fired = true; });
+        i.dispatchEvent(new Event('change'));
+        i.remove(); return fired;
+    })(), 'true');
+    eq('A4 setting .value programmatically does not fire input', (function () {
+        var i = attach('input'); var fired = false;
+        i.addEventListener('input', function () { fired = true; });
+        i.value = 'x'; i.remove(); return fired;
+    })(), 'false');
+
+    // ── B. form validation ───────────────────────────────────────────────────
+    eq('B1 checkValidity on a required empty input is false', (function () {
+        var i = attach('input', { 'required': '' }); var v = i.checkValidity(); i.remove(); return v;
+    })(), 'false');
+    eq('B2 checkValidity on a filled required input is true', (function () {
+        var i = attach('input', { 'required': '' }); i.value = 'x';
+        var v = i.checkValidity(); i.remove(); return v;
+    })(), 'true');
+    eq('B3 validity.valueMissing reflects a missing required value', (function () {
+        var i = attach('input', { 'required': '' }); var v = i.validity.valueMissing; i.remove(); return v;
+    })(), 'true');
+    eq('B4 a non-required empty input is valid', (function () {
+        var i = attach('input'); var v = i.checkValidity(); i.remove(); return v;
+    })(), 'true');
+    eq('B5 type=email with an invalid value is invalid', (function () {
+        var i = attach('input', { 'type': 'email', 'required': '' }); i.value = 'not-an-email';
+        var v = i.checkValidity(); i.remove(); return v;
+    })(), 'false');
+    eq('B6 setCustomValidity marks the control invalid', (function () {
+        var i = attach('input'); i.setCustomValidity('bad');
+        var v = i.checkValidity(); i.remove(); return v;
+    })(), 'false');
+    eq('B7 setCustomValidity empty string clears it', (function () {
+        var i = attach('input'); i.setCustomValidity('bad'); i.setCustomValidity('');
+        var v = typeof i.checkValidity; i.remove(); return v;
+    })(), 'function');
+    eq('B8 validationMessage reads the custom message', (function () {
+        var i = attach('input'); i.setCustomValidity('my message');
+        var v = i.validationMessage; i.remove(); return v;
+    })(), 'my message');
+    eq('B9 reportValidity returns the validity', (function () {
+        var i = attach('input', { 'required': '' }); var v = i.reportValidity(); i.remove(); return v;
+    })(), 'false');
+
+    // ── C. validity flags ────────────────────────────────────────────────────
+    eq('C1 validity.typeMismatch for a bad email', (function () {
+        var i = attach('input', { 'type': 'email' }); i.value = 'bad';
+        var v = i.validity.typeMismatch; i.remove(); return v;
+    })(), 'true');
+    eq('C2 validity.valid is true when no constraint fails', (function () {
+        var i = attach('input'); i.value = 'x';
+        var v = i.validity.valid; i.remove(); return v;
+    })(), 'true');
+    eq('C3 willValidate is false for a disabled input', (function () {
+        var i = attach('input', { 'required': '', 'disabled': '' }); var v = i.willValidate; i.remove(); return v;
+    })(), 'false');
+    eq('C4 willValidate is true for an enabled required input', (function () {
+        var i = attach('input', { 'required': '' }); var v = i.willValidate; i.remove(); return v;
+    })(), 'true');
+
+    // ── D. form novalidate ───────────────────────────────────────────────────
+    eq('D1 a form with novalidate still exposes checkValidity on controls', (function () {
+        var f = document.createElement('form'); f.setAttribute('novalidate', '');
+        var i = document.createElement('input'); i.setAttribute('required', '');
+        f.appendChild(i); document.getElementById('root').appendChild(f);
+        var v = typeof i.checkValidity; f.remove(); return v;
+    })(), 'function');
+})();
+</script></body></html>
