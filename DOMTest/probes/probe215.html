@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><body><div id="root">
+<div id="a" class="x y"><span id="b" class="z">t</span></div>
+<div id="c" class="x"><span id="d">u</span></div>
+<ul id="l"><li id="l1">1</li><li id="l2" class="m">2</li><li id="l3">3</li></ul>
+</div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function matches(el, sel) { return el.matches(sel); }
+    function qs(sel) { return document.querySelector(sel) !== null; }
+    function qsaCount(sel) { return document.querySelectorAll(sel).length; }
+
+    // ── A. descendant / child / sibling combinators ──────────────────────────
+    eq('A1 descendant selector', qsaCount('#a span'), '1');
+    eq('A2 child combinator', qsaCount('#a > span'), '1');
+    eq('A3 descendant does not match a non-descendant', qsaCount('#c span#b'), '0');
+    eq('A4 adjacent sibling', qsaCount('#l1 + li'), '1');
+    eq('A5 general sibling', qsaCount('#l1 ~ li'), '2');
+
+    // ── B. attribute selectors ───────────────────────────────────────────────
+    eq('B1 attribute exists', qsaCount('[class]'), '4');
+    eq('B2 attribute equals', qsaCount('[data-k="2"]') >= 0, 'true');
+    eq('B3 attribute contains', matches(document.getElementById('a'), '[class~="x"]'), 'true');
+    eq('B4 attribute starts with', matches(document.getElementById('b'), '[id^="b"]'), 'true');
+    eq('B5 attribute ends with', matches(document.getElementById('b'), '[id$="b"]'), 'true');
+    eq('B6 attribute contains substring', matches(document.getElementById('a'), '[id*="a"]'), 'true');
+
+    // ── C. pseudo-classes ────────────────────────────────────────────────────
+    eq('C1 :first-child', matches(document.getElementById('l1'), ':first-child'), 'true');
+    eq('C2 :last-child', matches(document.getElementById('l3'), ':last-child'), 'true');
+    eq('C3 :nth-child(2)', matches(document.getElementById('l2'), ':nth-child(2)'), 'true');
+    eq('C4 :not()', matches(document.getElementById('l1'), ':not(.m)'), 'true');
+    eq('C5 :not() excludes the matching element', matches(document.getElementById('l2'), ':not(.m)'), 'false');
+    eq('C6 :root', matches(document.documentElement, ':root'), 'true');
+
+    // ── D. multiple selectors ────────────────────────────────────────────────
+    eq('D1 multiple selectors (comma)', qsaCount('#l1, #l2'), '2');
+    eq('D2 compound class selector', matches(document.getElementById('a'), '.x.y'), 'true');
+    eq('D3 compound class selector partial', matches(document.getElementById('a'), '.x.z'), 'false');
+    eq('D4 id selector', matches(document.getElementById('b'), '#b'), 'true');
+    eq('D5 tag selector', matches(document.getElementById('b'), 'span'), 'true');
+    eq('D6 universal selector', matches(document.getElementById('b'), '*'), 'true');
+})();
+</script></body></html>
