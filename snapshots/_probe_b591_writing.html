@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* writing-mode */
+#w1{writing-mode:horizontal-tb;width:60px;height:30px;background:#eef}
+#w2{writing-mode:vertical-rl;width:60px;height:30px;background:#efe}
+#w3{writing-mode:vertical-lr;width:60px;height:30px;background:#ffe}
+/* direction */
+#d1{direction:ltr;width:80px;height:20px;background:#eef}
+#d2{direction:rtl;width:80px;height:20px;background:#efe}
+/* logical margin/padding */
+#m1{margin-inline-start:10px;margin-inline-end:20px;width:40px;height:20px;background:#eef}
+#m2{margin-block-start:10px;margin-block-end:20px;width:40px;height:20px;background:#efe}
+#p1{padding-inline:5px 15px;width:40px;height:20px;background:#ffe}
+/* logical border */
+#b1{border-inline-start:3px solid red;width:40px;height:20px}
+#b2{border-block-end:3px solid blue;width:40px;height:20px}
+/* logical inset */
+#i1{position:absolute;inset-inline-start:10px;inset-block-start:5px;width:30px;height:20px;background:#fef}
+/* logical size */
+#s1{inline-size:50px;block-size:25px;background:#cef}
+/* text-align logical */
+#ta{text-align:start;width:80px;height:20px;background:#efe}
+#tb{text-align:end;width:80px;height:20px;background:#fef}
+/* unicode-bidi */
+#ub{direction:rtl;unicode-bidi:bidi-override;width:80px;height:20px;background:#cef}
+</style></head><body><meta charset=utf-8>
+<div id=w1>htb</div><div id=w2>vrl</div><div id=w3>vlr</div>
+<div id=d1>ltr</div><div id=d2>rtl</div>
+<div id=m1>m1</div><div id=m2>m2</div><div id=p1>p1</div>
+<div id=b1>b1</div><div id=b2>b2</div>
+<div style="position:relative;width:100px;height:40px;background:#f8f8ff"><div id=i1>i1</div></div>
+<div id=s1>s1</div><div id=ta>start</div><div id=tb>end</div><div id=ub>bidi</div>
+<script>
+const ids=["w1","w2","w3","d1","d2","m1","m2","p1","b1","b2","s1","ta","tb","ub"];
+const g=id=>{const s=getComputedStyle(document.getElementById(id));
+ return id+":wm="+s.writingMode+"|dir="+s.direction+"|mis="+s.marginInlineStart+"|pis="+s.paddingInlineStart+"|bis="+s.borderInlineStartWidth+"|is="+s.inlineSize+"|bs="+s.blockSize+"|ta="+s.textAlign+"|ub="+s.unicodeBidi;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join(" ## ");
+</script></body></html>

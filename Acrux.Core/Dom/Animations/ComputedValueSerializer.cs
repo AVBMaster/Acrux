@@ -152,15 +152,24 @@ public static class ComputedValueSerializer
             case "width": return style.ComputedSizeCss(style.Width, cut: true);
             case "height": return style.ComputedSizeCss(style.Height, cut: true);
             // The logical sizing pair answers with the physical side the writing mode selects
-            // (CSS Logical 1 §4.2) — which for the horizontal modes this engine lays out in is the
-            // inline axis = width and the block axis = height. Measured: 'block-size: 100px'
-            // computes '100px', where this engine had no case at all and answered the empty string.
-            case "inline-size": return style.ComputedSizeCss(style.Width, cut: true);
-            case "block-size": return style.ComputedSizeCss(style.Height, cut: true);
-            case "min-inline-size": return MinLengthText(style, style.MinWidth, cut: true);
-            case "min-block-size": return MinLengthText(style, style.MinHeight, cut: true);
-            case "max-inline-size": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
-            case "max-block-size": return style.MaxHeight != null ? LengthText(style, style.MaxHeight) : "none";
+            // (CSS Logical 1 §4.2) — the inline axis is the writing mode's inline direction and the
+            // block axis its block direction. In the horizontal modes this engine lays out those are
+            // width and height, but a vertical writing mode swaps them (measured: 'writing-mode:
+            // vertical-rl' with 'width:60px;height:30px' has inline-size 30px and block-size 60px).
+            case "inline-size": return VerticalWriting(style)
+                ? style.ComputedSizeCss(style.Height, cut: true)
+                : style.ComputedSizeCss(style.Width, cut: true);
+            case "block-size": return VerticalWriting(style)
+                ? style.ComputedSizeCss(style.Width, cut: true)
+                : style.ComputedSizeCss(style.Height, cut: true);
+            case "min-inline-size": return MinLengthText(style,
+                VerticalWriting(style) ? style.MinHeight : style.MinWidth, cut: true);
+            case "min-block-size": return MinLengthText(style,
+                VerticalWriting(style) ? style.MinWidth : style.MinHeight, cut: true);
+            case "max-inline-size": return VerticalWriting(style)
+                ? LengthText(style, style.MaxHeight) : LengthText(style, style.MaxWidth);
+            case "max-block-size": return VerticalWriting(style)
+                ? LengthText(style, style.MaxWidth) : LengthText(style, style.MaxHeight);
             case "min-width": return MinLengthText(style, style.MinWidth, cut: true);
             case "max-width": return style.MaxWidth != null ? LengthText(style, style.MaxWidth) : "none";
             case "min-height": return MinLengthText(style, style.MinHeight, cut: true);
@@ -2223,6 +2232,13 @@ public static class ComputedValueSerializer
     /// <summary>A grid line pair as the engine prints it: the trailing <c>auto</c> is what an
     /// omitted end line means, so 'grid-column: span 2' reads 'span 2' and only a second line that
     /// says something of its own is printed (measured; '1 / 3' keeps both).</summary>
+    /// <summary>True when the element's writing mode runs its inline axis vertically, which swaps
+    /// the inline and block axes relative to the horizontal modes this engine lays out (CSS Writing
+    /// Modes 4 §2: 'vertical-rl', 'vertical-lr', 'sideways-lr' and 'sideways-rl' all do).</summary>
+    private static bool VerticalWriting(ComputedStyle style)
+        => style.WritingMode is WritingModeType.VerticalRl or WritingModeType.VerticalLr
+            or WritingModeType.SidewaysLr or WritingModeType.SidewaysRl;
+
     /// <summary>A minimum size: the initial is the 'auto' the page may write, and the reference
     /// engine computes that spelling to the zero it stands for (measured: 'min-width: auto' reads
     /// 'auto' in the specified value and '0px' in the computed one).</summary>
