@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+@property --registered { syntax: "<length>"; inherits: true; initial-value: 10px; }
+@property --registered-color { syntax: "<color>"; inherits: false; initial-value: red; }
+@property --registered-num { syntax: "<number>"; inherits: true; initial-value: 5; }
+.parent{--inherited: blue;}
+.child{--own: green;}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function probe(tag,el,prop){
+  const c=getComputedStyle(el);
+  const v=prop.startsWith("--")?c.getPropertyValue(prop).trim():c.getPropertyValue(prop);
+  out.push(["L",tag,prop+"="+v].join("~"));
+}
+// registered custom properties
+const reg=document.createElement("div");reg.className="parent";document.body.appendChild(reg);
+reg.setAttribute("style",""); // clear
+probe("reg-inherit-init",reg,"--registered");
+probe("reg-color-init",reg,"--registered-color");
+probe("reg-num-init",reg,"--registered-num");
+// unregistered custom property inheritance
+const par=document.createElement("div");par.style.setProperty("--x","10px");
+const kid=document.createElement("div");kid.style.setProperty("--y","20px");par.appendChild(kid);
+document.body.appendChild(par);
+probe("cust-inherit-child",kid,"--x");
+probe("cust-own-child",kid,"--y");
+probe("cust-missing",kid,"--z");
+// var() substitution with fallback
+const vf=document.createElement("div");vf.setAttribute("style","color:var(--missing,red)");
+document.body.appendChild(vf);
+out.push(["L","var-fallback","color="+getComputedStyle(vf).color].join("~"));
+vf.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
