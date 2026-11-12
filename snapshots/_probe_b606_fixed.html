@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{margin:4px}
+.row{white-space:pre;font:12px monospace}
+#fx{position:fixed;top:0;left:0;width:60px;height:30px;background:orange;border:0}
+#fa{position:absolute;top:0;left:0;width:60px;height:30px;background:teal;border:0}
+#fx2{position:fixed;right:0;bottom:0;width:60px;height:30px;background:purple;border:0}
+</style></head><body>
+<div id=out></div>
+<div id=fx>fixedTL</div>
+<div id=fa>absTL</div>
+<div id=fx2>fixedBR</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["fx","fa","fx2"]){
+  const e=document.getElementById(id);const r=e.getBoundingClientRect();
+  row("L|"+id+"|rect="+Math.round(r.left)+","+Math.round(r.top)+","+Math.round(r.width)+"x"+Math.round(r.height));
+}
+</script></body></html>

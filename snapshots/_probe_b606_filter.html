@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+.bx{width:60px;height:40px;background:linear-gradient(90deg,red,blue);display:inline-block;vertical-align:top;margin:4px}
+#f1{filter:brightness(1.5)}
+#f2{filter:grayscale(1)}
+#f3{filter:sepia(0.8)}
+#f4{filter:hue-rotate(90deg)}
+#f5{filter:invert(1)}
+#f6{filter:opacity(0.5)}
+#f7{filter:blur(3px)}
+#f8{filter:contrast(2)}
+#f9{filter:saturate(3)}
+#f10{filter:drop-shadow(3px 3px 2px black)}
+#f11{filter:brightness(0.5) contrast(1.5) saturate(2)}
+#f12{filter:none}
+#fx{position:fixed;top:200px;left:10px;width:60px;height:30px;background:orange;border:1px solid #000;z-index:10}
+#st{position:sticky;top:4px;width:60px;height:30px;background:cyan;border:1px solid #000;display:inline-block;vertical-align:top}
+.wrap{height:120px;overflow:scroll;border:1px solid #000;width:80px;display:inline-block;vertical-align:top}
+</style></head><body>
+<div id=out></div>
+<div class="bx" id=f1>f1</div>
+<div class="bx" id=f2>f2</div>
+<div class="bx" id=f3>f3</div>
+<div class="bx" id=f4>f4</div>
+<div class="bx" id=f5>f5</div>
+<div class="bx" id=f6>f6</div>
+<div class="bx" id=f7>f7</div>
+<div class="bx" id=f8>f8</div>
+<div class="bx" id=f9>f9</div>
+<div class="bx" id=f10>f10</div>
+<div class="bx" id=f11>f11</div>
+<div class="bx" id=f12>f12</div>
+<div class="wrap"><div id=st>sticky</div><div style="height:200px">scroll content</div></div>
+<div id=fx>fixed</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+const ids=["f1","f2","f3","f4","f5","f6","f7","f8","f9","f10","f11","f12"];
+for(const id of ids){
+  const e=document.getElementById(id);const s=getComputedStyle(e);
+  row("L|"+id+"|filter="+s.filter);
+}
+const st=document.getElementById("st");const sst=getComputedStyle(st);
+row("L|sticky|pos="+sst.position+"|top="+sst.top);
+const fx=document.getElementById("fx");const sfx=getComputedStyle(fx);const rfx=fx.getBoundingClientRect();
+row("L|fixed|pos="+sfx.position+"|rect="+Math.round(rfx.left)+","+Math.round(rfx.top)+"|z="+sfx.zIndex);
+</script></body></html>
