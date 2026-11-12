@@ -1,0 +1,123 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function el(tag, attrs) {
+        var d = document.createElement(tag);
+        if (attrs) for (var k in attrs) d.setAttribute(k, attrs[k]);
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. HTMLImageElement ──────────────────────────────────────────────────
+    eq('A1 img.alt reads the alt attribute', (function () {
+        var i = el('img', { 'alt': 'pic' }); var v = i.alt; i.remove(); return v;
+    })(), 'pic');
+    eq('A2 img.src resolves against the document base', (function () {
+        var i = el('img', { 'src': 'a.png' }); var v = i.src; i.remove();
+        return v.indexOf('a.png') >= 0;
+    })(), 'true');
+    eq('A3 img.complete is true for a broken image', (function () {
+        var i = el('img', { 'src': 'a.png' }); var v = i.complete; i.remove(); return v;
+    })(), 'true');
+    eq('A4 img.naturalWidth/naturalHeight default to 0', (function () {
+        var i = el('img', { 'src': 'a.png' });
+        var v = i.naturalWidth + ',' + i.naturalHeight; i.remove(); return v;
+    })(), '0,0');
+    eq('A5 img.width/height are settable', (function () {
+        var i = el('img'); i.width = 100; i.height = 50;
+        var v = i.width + ',' + i.height; i.remove(); return v;
+    })(), '100,50');
+
+    // ── B. HTMLAnchorElement ─────────────────────────────────────────────────
+    eq('B1 a.href resolves against the document base', (function () {
+        var a = el('a', { 'href': '/path' }); var v = a.href; a.remove();
+        return v.indexOf('/path') >= 0;
+    })(), 'true');
+    eq('B2 a.target reads the target attribute', (function () {
+        var a = el('a', { 'target': '_blank' }); var v = a.target; a.remove(); return v;
+    })(), '_blank');
+    eq('B3 a.rel reads the rel attribute', (function () {
+        var a = el('a', { 'rel': 'nofollow' }); var v = a.rel; a.remove(); return v;
+    })(), 'nofollow');
+    eq('B4 a.hash parses the fragment', (function () {
+        var a = el('a', { 'href': 'https://example.com/p#frag' }); var v = a.hash; a.remove(); return v;
+    })(), '#frag');
+    eq('B5 a.hostname parses the host', (function () {
+        var a = el('a', { 'href': 'https://example.com/p' }); var v = a.hostname; a.remove(); return v;
+    })(), 'example.com');
+
+    // ── C. HTMLInputElement ──────────────────────────────────────────────────
+    eq('C1 input.type defaults to text', (function () {
+        var i = el('input'); var v = i.type; i.remove(); return v;
+    })(), 'text');
+    eq('C2 input.type honours the type attribute', (function () {
+        var i = el('input', { 'type': 'checkbox' }); var v = i.type; i.remove(); return v;
+    })(), 'checkbox');
+    eq('C3 input.checked reflects the checked attribute', (function () {
+        var i = el('input', { 'type': 'checkbox', 'checked': '' }); var v = i.checked; i.remove(); return v;
+    })(), 'true');
+    eq('C4 input.disabled reflects the disabled attribute', (function () {
+        var i = el('input', { 'disabled': '' }); var v = i.disabled; i.remove(); return v;
+    })(), 'true');
+    eq('C5 input.name reads the name attribute', (function () {
+        var i = el('input', { 'name': 'q' }); var v = i.name; i.remove(); return v;
+    })(), 'q');
+
+    // ── D. HTMLSelectElement / HTMLOptionElement ─────────────────────────────
+    eq('D1 select.value reads the selected option', (function () {
+        var s = el('select');
+        var o1 = document.createElement('option'); o1.value = 'a'; s.appendChild(o1);
+        var o2 = document.createElement('option'); o2.value = 'b'; o2.selected = true; s.appendChild(o2);
+        var v = s.value; s.remove(); return v;
+    })(), 'b');
+    eq('D2 select.selectedIndex defaults to 0 with options', (function () {
+        var s = el('select');
+        var o = document.createElement('option'); s.appendChild(o);
+        var v = s.selectedIndex; s.remove(); return v;
+    })(), '0');
+    eq('D3 select.options.length reflects the options', (function () {
+        var s = el('select');
+        for (var i = 0; i < 3; i++) s.appendChild(document.createElement('option'));
+        var n = s.options.length; s.remove(); return n;
+    })(), '3');
+    eq('D4 option.text reads the label text', (function () {
+        var o = document.createElement('option'); o.textContent = 'Label';
+        var v = o.text; o.remove(); return v;
+    })(), 'Label');
+
+    // ── E. HTMLLinkElement / HTMLMetaElement ─────────────────────────────────
+    eq('E1 link.rel reads the rel attribute', (function () {
+        var l = el('link', { 'rel': 'stylesheet' }); var v = l.rel; l.remove(); return v;
+    })(), 'stylesheet');
+    eq('E2 meta.name reads the name attribute', (function () {
+        var m = el('meta', { 'name': 'desc' }); var v = m.name; m.remove(); return v;
+    })(), 'desc');
+    eq('E3 meta.content reads the content attribute', (function () {
+        var m = el('meta', { 'content': 'abc' }); var v = m.content; m.remove(); return v;
+    })(), 'abc');
+
+    // ── F. HTMLTextAreaElement ───────────────────────────────────────────────
+    eq('F1 textarea.value reads and writes', (function () {
+        var t = el('textarea'); t.value = 'abc'; var v = t.value; t.remove(); return v;
+    })(), 'abc');
+    eq('F2 textarea.rows/cols default to 2 and 20', (function () {
+        var t = el('textarea'); var v = t.rows + ',' + t.cols; t.remove(); return v;
+    })(), '2,20');
+
+    // ── G. HTMLLabelElement ──────────────────────────────────────────────────
+    eq('G1 label.htmlFor reads the for attribute', (function () {
+        var l = el('label', { 'for': 'inputId' }); var v = l.htmlFor; l.remove(); return v;
+    })(), 'inputId');
+    eq('G2 setting htmlFor writes the for attribute', (function () {
+        var l = el('label'); l.htmlFor = 'x'; var v = l.getAttribute('for'); l.remove(); return v;
+    })(), 'x');
+})();
+</script></body></html>
