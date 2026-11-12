@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{border:1px solid #999}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function mk(parent,extra){const e=document.createElement("div");for(const k in extra)e.style[k]=extra[k];parent.appendChild(e);return e;}
+function probe(p,v,cb){
+  const host=mk(document.body,{display:"flex",height:"60px"});
+  const item=mk(host,{width:"50px"});
+  item.style.setProperty(p,v);
+  out.push(cb(item).join("~"));
+  host.remove();
+}
+probe("place-content","space-between center",i=>{const c=getComputedStyle(i);return ["L","place-content:space-between-center","host="+c.getPropertyValue("place-content"),"item="+c.getPropertyValue("place-self")];});
+probe("place-self","center start",i=>{const c=getComputedStyle(i);return ["L","place-self:center-start","item="+c.getPropertyValue("place-self")];});
+probe("flex","0 0 100px",i=>{const c=getComputedStyle(i);return ["L","flex:0-0-100px","grow="+c.flexGrow,"shrink="+c.flexShrink,"basis="+c.flexBasis];});
+probe("flex-grow","2",i=>{const c=getComputedStyle(i);return ["L","flex-grow:2","grow="+c.flexGrow,"shrink="+c.flexShrink,"basis="+c.flexBasis];});
+probe("flex-basis","content",i=>{const c=getComputedStyle(i);return ["L","flex-basis:content","grow="+c.flexGrow,"shrink="+c.flexShrink,"basis="+c.flexBasis];});
+probe("justify-content","space-around",i=>{const c=getComputedStyle(i);return ["L","justify-content:space-around","host="+c.getPropertyValue("justify-content")];});
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

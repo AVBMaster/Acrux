@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.c{display:grid;width:100px;height:60px;border:1px solid #999}
+.f{display:flex;width:100px;height:60px;border:1px solid #999}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function t(tag,hostStyle,prop,val){
+  const host=document.createElement("div");host.className=hostStyle;
+  for(const k in hostStyle)host.style[k]=hostStyle[k];
+  const item=document.createElement("div");host.appendChild(item);
+  document.body.appendChild(host);
+  host.style.setProperty(prop,val);
+  const c=getComputedStyle(host).getPropertyValue(prop);
+  out.push(["L",tag,prop+"="+val,"comp="+c].join("~"));
+  host.remove();
+}
+t("grid","grid","place-content","space-between center");
+t("grid","grid","place-content","center start");
+t("flex","flex","place-content","space-between center");
+t("grid","grid","place-items","center start");
+t("grid","grid","place-self","center start");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

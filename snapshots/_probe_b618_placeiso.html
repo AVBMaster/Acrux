@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.c{display:grid;width:100px;height:60px;border:1px solid #999}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function t(prop,val){
+  const host=document.createElement("div");host.className="c";
+  document.body.appendChild(host);
+  host.style.setProperty(prop,val);
+  const g=n=>getComputedStyle(host).getPropertyValue(n);
+  out.push(["L",prop+"="+val,"ac="+g("align-content"),"jc="+g("justify-content"),"pc="+g("place-content"),"jc="+g("justify-content")].join("~"));
+  host.remove();
+}
+t("place-content","space-between center");
+t("place-content","center start");
+t("align-content","space-between");
+t("justify-content","center");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

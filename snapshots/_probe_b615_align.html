@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.fl{display:flex;height:60px}
+.gd{display:grid;height:60px}
+div{border:1px solid #999}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function mk(parent,extra){const e=document.createElement("div");for(const k in extra)e.style[k]=extra[k];parent.appendChild(e);return e;}
+// computed values on containers and items
+const props=[
+  ["align-items","flex-start"],["align-items","center"],["align-items","baseline"],["align-items","stretch"],
+  ["justify-content","space-between"],["justify-content","space-around"],["justify-content","center"],
+  ["align-content","space-between"],["align-content","center"],
+  ["place-items","center"],["place-content","space-between center"],["place-self","center start"],
+  ["align-self","flex-end"],["justify-self","center"],
+];
+for(const [p,v] of props){
+  const host=mk(document.body,{display:"flex",height:"60px"});
+  const item=mk(host,{});
+  item.style.setProperty(p,v);
+  const hostComp=getComputedStyle(host).getPropertyValue(p);
+  const itemComp=getComputedStyle(item).getPropertyValue(p);
+  const sup=CSS.supports(p,v)?"Y":"n";
+  out.push(["L",p+":"+v,"sup="+sup,"host="+hostComp,"item="+itemComp].join("~"));
+  host.remove();
+}
+// flex-grow/shrink/basis
+const fg=[["flex","1"],["flex","0 0 100px"],["flex-grow","2"],["flex-shrink","0"],["flex-basis","auto"],["flex-basis","content"]];
+for(const [p,v] of fg){
+  const host=mk(document.body,{display:"flex"});
+  const item=mk(host,{width:"50px"});
+  item.style.setProperty(p,v);
+  const c=getComputedStyle(item);
+  out.push(["L",p+":"+v,"sup="+(CSS.supports(p,v)?"Y":"n"),"grow="+c.flexGrow,"shrink="+c.flexShrink,"basis="+c.flexBasis].join("~"));
+  host.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
