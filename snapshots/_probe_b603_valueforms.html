@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["text-decoration","underline"],
+  ["text-decoration","underline overline"],
+  ["text-decoration","underline red"],
+  ["text-decoration","underline wavy red"],
+  ["text-decoration","underline 3px red"],
+  ["text-decoration","underline wavy 3px red"],
+  ["text-decoration","overline line-through"],
+  ["text-decoration","none"],
+  ["text-decoration-line","underline overline"],
+  ["text-decoration-style","wavy"],
+  ["text-decoration-color","currentColor"],
+  ["font-variant","small-caps"],
+  ["font-variant","small-caps slashed-zero"],
+  ["font-variant","lining-nums tabular-nums"],
+  ["font-variant","ordinal"],
+  ["font-variant","east-asian-full-width"],
+  ["font-variant-caps","small-caps"],
+  ["font-variant-numeric","tabular-nums slashed-zero"],
+  ["font-variant-east-asian","full-width"],
+  ["font-variant-position","super"],
+  ["letter-spacing","-1px"],
+  ["letter-spacing","0.5em"],
+  ["letter-spacing","normal"],
+  ["word-spacing","2px"],
+  ["word-spacing","-3px"],
+  ["line-height","2"],
+  ["line-height","150%"],
+  ["line-height","normal"],
+  ["white-space","pre-wrap"],
+  ["white-space","break-spaces"],
+  ["word-break","break-all"],
+  ["overflow-wrap","anywhere"],
+  ["hyphens","manual"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  const sup=(()=>{try{return CSS.supports(p,v)?"Y":"n";}catch(e){return "E";}})();
+  el.style.setProperty(p,v);
+  const comp=(()=>{try{return getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  const echo=(()=>{try{return el.style.getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  row("L|"+p+":"+v+"|sup="+sup+"|comp="+comp+"|echo="+echo);
+  el.remove();
+}
+</script></body></html>

@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+.b{width:60px;height:40px;border:1px solid #000;background:#eef;display:inline-block;margin:8px}
+</style></head><body>
+<div id=out></div>
+<div class="b" id=t1 style="transform:translate(10px,20px)">1</div>
+<div class="b" id=t2 style="transform:rotate(45deg)">2</div>
+<div class="b" id=t3 style="transform:scale(2)">3</div>
+<div class="b" id=t4 style="transform:rotate(90deg);transform-origin:0 0">4</div>
+<div class="b" id=t5 style="transform:translateX(15px) scaleY(0.5)">5</div>
+<div class="b" id=t6 style="transform:skewX(20deg)">6</div>
+<div class="b" id=t7 style="transform-origin:top right">7</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["t1","t2","t3","t4","t5","t6","t7"]){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|rect="+Math.round(r.left)+","+Math.round(r.top)+","+Math.round(r.width)+"x"+Math.round(r.height)+"|tf="+(s.transform||"-")+"|to="+(s.transformOrigin||"-")+"|tb="+(s.transformBox||"-"));
+}
+</script></body></html>
