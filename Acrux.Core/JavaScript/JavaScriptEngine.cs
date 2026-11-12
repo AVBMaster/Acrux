@@ -3353,8 +3353,9 @@ public class JavaScriptEngine : IDisposable
             // The event the error carries is the interface's own: the message the reference writes,
             // the value still reachable from 'error', and the position fields left empty.
             function ErrorEvent(type, init) {
+                if (type === undefined) throw new TypeError('Failed to construct \'ErrorEvent\': 1 argument required, but only 0 present.');
                 init = init || { };
-                var evt = new Event(String(type === undefined ? '' : type),
+                var evt = new Event(String(type),
                     { bubbles: !!init.bubbles, cancelable: !!init.cancelable });
                 // The five members the interface declares belong to it, not to the event the page
                 // happens to have been handed, so they are kept non-enumerably and read through the
@@ -5268,8 +5269,9 @@ public class JavaScriptEngine : IDisposable
                 return evt;
             }
             function Event(type, init) {
+                if (type === undefined) throw new TypeError('Failed to construct \'Event\': 1 argument required, but only 0 present.');
                 var evt = document.createEvent('Event');
-                evt.type = String(type === undefined ? '' : type);
+                evt.type = String(type);
                 evt.bubbles = !!(init && init.bubbles);
                 evt.cancelable = !!(init && init.cancelable);
                 evt.composed = !!(init && init.composed);
@@ -5277,8 +5279,9 @@ public class JavaScriptEngine : IDisposable
             }
 
             function CustomEvent(type, init) {
+                if (type === undefined) throw new TypeError('Failed to construct \'CustomEvent\': 1 argument required, but only 0 present.');
                 var evt = document.createEvent('customevent');
-                evt.type = String(type === undefined ? '' : type);
+                evt.type = String(type);
                 evt.bubbles = !!(init && init.bubbles);
                 evt.cancelable = !!(init && init.cancelable);
                 evt.composed = !!(init && init.composed);
@@ -5287,8 +5290,9 @@ public class JavaScriptEngine : IDisposable
             }
 
             function MouseEvent(type, init) {
+                if (type === undefined) throw new TypeError('Failed to construct \'MouseEvent\': 1 argument required, but only 0 present.');
                 var evt = document.createEvent('mouseevent');
-                evt.type = type;
+                evt.type = String(type);
                 untrustedEvent(evt);
                 if (init) {
                     if (init.bubbles !== undefined) evt.bubbles = init.bubbles;
@@ -6564,9 +6568,14 @@ public class JavaScriptEngine : IDisposable
                                 || name === 'FocusEvent') ? 'UIEvent' : 'Event';
                     var proto = defineInterface(name, baseName,
                         function (type, init) {
+                            // WebIDL makes 'type' a required DOMString on every event but TouchEvent's
+                            // init-only Event, so a missing or undefined type is a TypeError.
+                            if (!initOnly && type === undefined) {
+                                throw new TypeError('Failed to construct \'' + name + '\': 1 argument required, but only 0 present.');
+                            }
                             var evt = document.createEvent(name);
                             if (initOnly) { init = type; }
-                            else evt.type = String(type === undefined ? '' : type);
+                            else evt.type = String(type);
                             init = init || { };
                             // DOM §4.5.2: EventInit's three flags are all false, and every family built
                             // on it starts from there. The engine's own event object is made for the

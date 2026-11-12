@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><body><script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function probe(name, a){ try { new window[name](a); return 'no-throw'; } catch(e){ return e.constructor.name; } }
+    eq('Event() throws', probe('Event'), 'TypeError');
+    eq('CustomEvent() throws', probe('CustomEvent'), 'TypeError');
+    eq('ProgressEvent() throws', probe('ProgressEvent'), 'TypeError');
+    eq('ErrorEvent() throws', probe('ErrorEvent'), 'TypeError');
+    eq('MessageEvent() throws', probe('MessageEvent'), 'TypeError');
+    eq('MouseEvent() throws', probe('MouseEvent'), 'TypeError');
+    eq('KeyboardEvent() throws', probe('KeyboardEvent'), 'TypeError');
+    eq('Event(undefined) throws', probe('Event', undefined), 'TypeError');
+    eq('Event(null) -> "null" no throw', new Event(null).type, 'null');
+    eq('Event(123) -> "123"', new Event(123).type, '123');
+    eq('Event("x") ok', new Event('x').type, 'x');
+})();
+</script></body></html>

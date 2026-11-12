@@ -1,0 +1,55 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // ── A. CustomEvent ────────────────────────────────────────────────────────
+    var ce = new CustomEvent('ping', { detail: { n: 1 }, bubbles: true, cancelable: true });
+    eq('A1 type', ce.type, 'ping');
+    eq('A2 detail round-trips', ce.detail.n, '1');
+    eq('A3 bubbles', ce.bubbles, 'true');
+    eq('A4 cancelable', ce.cancelable, 'true');
+    eq('A5 default detail is null', new CustomEvent('x').detail, 'null');
+    eq('A6 CustomEvent is an Event', ce instanceof Event, 'true');
+    eq('A7 CustomEvent has initCustomEvent', typeof ce.initCustomEvent, 'function');
+
+    // ── B. ProgressEvent ─────────────────────────────────────────────────────
+    var pe = new ProgressEvent('progress', { lengthComputable: true, loaded: 3, total: 10 });
+    eq('B1 type', pe.type, 'progress');
+    eq('B2 lengthComputable', pe.lengthComputable, 'true');
+    eq('B3 loaded', pe.loaded, '3');
+    eq('B4 total', pe.total, '10');
+    eq('B5 defaults loaded 0', new ProgressEvent('p').loaded, '0');
+    eq('B6 ProgressEvent is an Event', pe instanceof Event, 'true');
+
+    // ── C. ErrorEvent ────────────────────────────────────────────────────────
+    var ee = new ErrorEvent('error', { message: 'm', filename: 'f.js', lineno: 5, colno: 2 });
+    eq('C1 type', ee.type, 'error');
+    eq('C2 message', ee.message, 'm');
+    eq('C3 filename', ee.filename, 'f.js');
+    eq('C4 lineno', ee.lineno, '5');
+    eq('C5 colno', ee.colno, '2');
+    eq('C6 defaults message empty', new ErrorEvent('e').message, '');
+
+    // ── D. MessageEvent ──────────────────────────────────────────────────────
+    var me = new MessageEvent('message', { data: 'hello', origin: 'https://x', lastEventId: '1' });
+    eq('D1 type', me.type, 'message');
+    eq('D2 data', me.data, 'hello');
+    eq('D3 origin', me.origin, 'https://x');
+    eq('D4 lastEventId', me.lastEventId, '1');
+    eq('D5 defaults data null', new MessageEvent('m').data, 'null');
+    eq('D6 MessageEvent is an Event', me instanceof Event, 'true');
+
+    // ── E. the constructors refuse a non-dictionary init ─────────────────────
+    eq('E1 Event ctor no arg throws', (function(){ try { new Event(); return 'no-throw'; } catch(e){ return e.constructor.name; } })(), 'TypeError');
+    eq('E2 CustomEvent detail survives dispatch', (function(){
+        var got = null;
+        var el = document.createElement('div');
+        el.addEventListener('ping', function(e){ got = e.detail.k; });
+        el.dispatchEvent(new CustomEvent('ping', { detail: { k: 7 } }));
+        return got;
+    })(), '7');
+})();
+</script></body></html>
