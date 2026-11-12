@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+/* logical border under vertical writing mode */
+#b1{writing-mode:vertical-rl;border-block-start:3px solid red;border-inline-start:2px solid blue;width:40px;height:30px}
+/* logical margin under vertical */
+#m1{writing-mode:vertical-rl;margin-block-start:10px;margin-inline-start:5px;width:40px;height:30px;background:#eef}
+/* logical padding under vertical */
+#p1{writing-mode:vertical-rl;padding-block-start:8px;padding-inline-end:6px;width:40px;height:30px;background:#efe}
+/* logical inset under vertical */
+#i1{writing-mode:vertical-rl;inset-block-start:5px;inset-inline-start:8px;width:30px;height:40px;background:#ffe}
+</style></head><body><meta charset=utf-8>
+<div id=b1>b1</div><div id=m1>m1</div><div id=p1>p1</div>
+<div style="position:relative;width:60px;height:50px;background:#f8f8ff"><div id=i1>i1</div></div>
+<script>
+const ids=["b1","m1","p1","i1"];
+const g=id=>{const s=getComputedStyle(document.getElementById(id));
+ return id+":bbs="+s.borderBlockStartWidth+"|bis="+s.borderInlineStartWidth+"|mbs="+s.marginBlockStart+"|mis="+s.marginInlineStart+"|pbs="+s.paddingBlockStart+"|pie="+s.paddingInlineEnd+"|ibt="+s.insetBlockStart+"|iis="+s.insetInlineStart;};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join(" ## ");
+</script></body></html>
