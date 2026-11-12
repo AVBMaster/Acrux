@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+div{width:100px}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["width","calc(50px + 20px)"],
+  ["width","calc(100% - 30px)"],
+  ["width","calc(2 * 30px)"],
+  ["width","calc(100px / 4)"],
+  ["width","calc(1em + 5px)"],
+  ["width","calc(50% + 10px)"],
+  ["font-size","calc(16px * 1.5)"],
+  ["font-size","calc(2em + 4px)"],
+  ["margin","calc(10px + 5%)"],
+  ["padding","calc(2px * 3)"],
+  ["line-height","calc(1.5 * 16px)"],
+  ["color","rgb(255, 0, 0)"],
+  ["color","rgba(0, 128, 255, 0.5)"],
+  ["color","hsl(120, 100%, 50%)"],
+  ["width","min(100px, 50px)"],
+  ["width","max(100px, 50px)"],
+  ["width","clamp(30px, 50px, 80px)"],
+  ["width","calc(100% / 3)"],
+  ["margin-left","calc(-10px)"],
+  ["width","calc(10px + 2em)"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  const sup=(()=>{try{return CSS.supports(p,v)?"Y":"n";}catch(e){return "E";}})();
+  el.style.setProperty(p,v);
+  const comp=(()=>{try{return getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  const echo=(()=>{try{return el.style.getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  row("L|"+p+":"+v+"|sup="+sup+"|comp="+comp+"|echo="+echo);
+  el.remove();
+}
+</script></body></html>

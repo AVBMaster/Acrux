@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#c1{column-count:2;column-gap:20px;width:300px;border:1px solid #000;font-size:12px}
+#c2{columns:2;width:300px;border:1px solid #000;font-size:12px}
+#c3{column-width:100px;column-gap:10px;width:320px;border:1px solid #000;font-size:12px}
+#c4{column-count:3;column-rule:2px solid red;width:300px;border:1px solid #000;font-size:12px}
+#c5{column-count:2;column-fill:auto;height:80px;width:200px;border:1px solid #000;font-size:12px}
+#c6{column-span:all}
+</style></head><body>
+<div id=out></div>
+<div id=c1>Two columns of text here with enough words to fill both columns fully and evenly.</div>
+<div id=c2>Columns shorthand two columns of text with enough words to fill both columns.</div>
+<div id=c3>Column width based with enough text to flow across multiple columns evenly.</div>
+<div id=c4><span id=c6>span-all heading</span>Three column rule text that fills the columns with a visible rule.</div>
+<div id=c5>Lots of text for auto fill column that overflows the height constraint set here.</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const id of ["c1","c2","c3","c4","c5"]){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|"+Math.round(r.width)+"x"+Math.round(r.height)+"|cc="+(s.columnCount||"-")+"|cg="+(s.columnGap||"-")+"|cw="+(s.columnWidth||"-")+"|cf="+(s.columnFill||"-")+"|cr="+(s.columnRule||"-"));
+}
+</script></body></html>
