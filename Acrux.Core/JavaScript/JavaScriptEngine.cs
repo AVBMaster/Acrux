@@ -21815,9 +21815,33 @@ public class ConsoleHost
         var msg = $"{prefix}Group: {string.Join(" ", args.Select(a => a?.ToString() ?? "null"))}";
         Console.WriteLine(msg);
     }
+    // console.groupCollapsed: the engine makes no collapsed/expanded distinction, so it writes the same label line as group.
+    public void groupCollapsed(params object?[] args)
+    {
+        _groupLevel++;
+        var prefix = new string(' ', _groupLevel * 2);
+        var msg = $"{prefix}Group: {string.Join(" ", args.Select(a => a?.ToString() ?? "null"))}";
+        Console.WriteLine(msg);
+    }
     public void groupEnd()
     {
         if (_groupLevel > 0) _groupLevel--;
+    }
+    // console.dirxml prints the element's outer markup the way dir prints an object.
+    public void dirxml(object? obj)
+    {
+        if (obj is Dom.Node node)
+        {
+            var markup = node.NodeType == Dom.NodeType.Element
+                ? ((Dom.Element)node).OuterHTML
+                : node.TextContent;
+            _devToolsConsole?.Log("log", markup);
+            Console.WriteLine(markup);
+        }
+        else
+        {
+            dir(obj);
+        }
     }
     public void count(string? label = null)
     {

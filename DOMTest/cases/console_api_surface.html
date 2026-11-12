@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // ── A. all the console methods are present ───────────────────────────────
+    var names = ['assert','clear','count','debug','dir','error','group','groupCollapsed',
+                 'groupEnd','info','log','table','time','timeEnd','trace','warn','dirxml',
+                 'timeLog','countReset'];
+    for (var i = 0; i < names.length; i++) {
+        eq('A:console.' + names[i] + ' is a function', typeof console[names[i]], 'function');
+    }
+
+    // ── B. console.log does not throw ────────────────────────────────────────
+    eq('B1 console.log with args no-throw', (function(){ console.log('a','b',1,true,null,undefined); return 'ok'; })(), 'ok');
+    eq('B2 console.log with no args no-throw', (function(){ console.log(); return 'ok'; })(), 'ok');
+
+    // ── C. substitution ──────────────────────────────────────────────────────
+    eq('C1 %s substitution no-throw', (function(){ console.log('%s', 'x'); return 'ok'; })(), 'ok');
+    eq('C2 %d substitution no-throw', (function(){ console.log('%d', 42); return 'ok'; })(), 'ok');
+    eq('C3 %o substitution no-throw', (function(){ console.log('%o', {}); return 'ok'; })(), 'ok');
+    eq('C4 %% literal no-throw', (function(){ console.log('100%%'); return 'ok'; })(), 'ok');
+
+    // ── D. count / time / assert round-trips ─────────────────────────────────
+    console.count('c');
+    console.count('c');
+    eq('D1 count no-throw', 'ok', 'ok');
+    console.time('t');
+    console.timeEnd('t');
+    eq('D2 time/timeEnd no-throw', 'ok', 'ok');
+    console.time('t2');
+    console.timeLog('t2');
+    console.timeEnd('t2');
+    eq('D3 timeLog no-throw', 'ok', 'ok');
+    console.assert(true, 'never');
+    console.assert(false, 'logged');
+    eq('D4 assert no-throw', 'ok', 'ok');
+
+    // ── E. groups ─────────────────────────────────────────────────────────────
+    console.group('g');
+    console.groupEnd();
+    console.groupCollapsed('g');
+    console.groupEnd();
+    eq('E1 group/groupEnd no-throw', 'ok', 'ok');
+    eq('E2 groupCollapsed/groupEnd no-throw', 'ok', 'ok');
+
+    // ── F. clear / trace / table / dir / dirxml ───────────────────────────────
+    console.clear();
+    eq('F1 clear no-throw', 'ok', 'ok');
+    console.trace();
+    eq('F2 trace no-throw', 'ok', 'ok');
+    console.table([{a:1},{a:2}]);
+    eq('F3 table no-throw', 'ok', 'ok');
+    console.dir({x:1});
+    console.dirxml(document.body);
+    eq('F4 dir/dirxml no-throw', 'ok', 'ok');
+})();
+</script></body></html>
