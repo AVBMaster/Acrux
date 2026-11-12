@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+div{width:80px;height:40px;background:#eef;border:1px solid #000}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["mask","linear-gradient(black,transparent)"],
+  ["mask","url(a.png) no-repeat center"],
+  ["mask","url(a.png), url(b.png)"],
+  ["mask-image","url(a.png), url(b.png)"],
+  ["mask-repeat","no-repeat, repeat"],
+  ["mask-position","center, top left"],
+  ["mask-size","cover, contain"],
+  ["mask-clip","padding-box, border-box"],
+  ["border","1px solid red"],
+  ["border","2px dashed"],
+  ["border","solid blue"],
+  ["border-top","3px dotted green"],
+  ["border-color","red blue"],
+  ["border-width","1px 2px"],
+  ["border-style","solid dotted"],
+  ["border-radius","10px 5px"],
+  ["border-radius","10px 20px 30px 40px"],
+  ["border-image","linear-gradient(red,blue) 1"],
+  ["outline","2px solid red"],
+  ["font","italic bold 16px/1.5 Georgia"],
+  ["font","small-caps 14px Arial"],
+  ["list-style","square inside"],
+  ["list-style","url(a.png)"],
+  ["text-decoration","underline wavy red 3px"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  const sup=(()=>{try{return CSS.supports(p,v)?"Y":"n";}catch(e){return "E";}})();
+  el.style.setProperty(p,v);
+  const comp=(()=>{try{return getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  const echo=(()=>{try{return el.style.getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  row("L|"+p+":"+v+"|sup="+sup+"|comp="+comp+"|echo="+echo);
+  el.remove();
+}
+</script></body></html>
