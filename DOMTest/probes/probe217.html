@@ -1,0 +1,43 @@
+<!DOCTYPE html><html><body><div id="root">
+<div id="a" class="x"></div>
+</div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // ── A. matchMedia returns a MediaQueryList ───────────────────────────────
+    var mql = window.matchMedia('(min-width: 100px)');
+    eq('A1 matchMedia returns an object', typeof mql, 'object');
+    eq('A2 MediaQueryList has matches', 'matches' in mql, 'true');
+    eq('A3 MediaQueryList has media', 'media' in mql, 'true');
+    eq('A4 media echoes the query', mql.media, '(min-width: 100px)');
+    eq('A5 matches is a boolean', typeof mql.matches, 'boolean');
+
+    // ── B. MediaQueryList interface ─────────────────────────────────────────
+    eq('B1 MediaQueryList is its interface', mql instanceof MediaQueryList, 'true');
+    eq('B2 MediaQueryList has addEventListener', typeof mql.addEventListener, 'function');
+    eq('B3 MediaQueryList has addListener (legacy)', typeof mql.addListener, 'function');
+    eq('B4 MediaQueryList has removeListener (legacy)', typeof mql.removeListener, 'function');
+    eq('B5 MediaQueryList has onchange', 'onchange' in mql, 'true');
+
+    // ── C. always-matching and never-matching queries ────────────────────────
+    eq('C1 all matches', window.matchMedia('all').matches, 'true');
+    eq('C2 empty matches', window.matchMedia('').matches, 'true');
+    eq('C3 not all does not match', window.matchMedia('not all').matches, 'false');
+
+    // ── D. addListener/removeListener round-trip ─────────────────────────────
+    var fired = 0;
+    var fn = function () { fired++; };
+    mql.addListener(fn);
+    mql.removeListener(fn);
+    eq('D1 add/remove listener no-throw', 'ok', 'ok');
+    eq('D2 no event fired from add/remove alone', fired, '0');
+
+    // ── E. invalid query does not throw ─────────────────────────────────────
+    var bad;
+    try { bad = window.matchMedia('not-a-real-query'); } catch (e) { bad = 'threw'; }
+    eq('E1 matchMedia on an unknown query returns a list', bad instanceof MediaQueryList, 'true');
+})();
+</script></body></html>
