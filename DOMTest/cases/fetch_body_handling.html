@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. Response body methods ─────────────────────────────────────────────
+    eq('A1 Response.text() resolves the body', (function () {
+        return new Response('hello').text().then(function (t) { return t; });
+    })() instanceof Promise, 'true');
+    eq('A2 Response.json() parses an object', (function () {
+        return new Response('{"n":5}').json().then(function (j) { return j.n; });
+    })() instanceof Promise, 'true');
+    eq('A3 Response.arrayBuffer() answers a promise', (function () {
+        return new Response('x').arrayBuffer() instanceof Promise;
+    })(), 'true');
+    eq('A4 Response.blob() answers a promise', (function () {
+        return new Response('x').blob() instanceof Promise;
+    })(), 'true');
+    eq('A5 Response status defaults to 200', (function () {
+        return new Response().status;
+    })(), '200');
+    eq('A6 Response.ok is true for 200', (function () {
+        return new Response().ok;
+    })(), 'true');
+    eq('A7 Response.ok is false for 404', (function () {
+        return new Response('', { status: 404 }).ok;
+    })(), 'false');
+    eq('A8 Response.statusText honours the init', (function () {
+        return new Response('', { statusText: 'Not Found' }).statusText;
+    })(), 'Not Found');
+    eq('A9 Response.headers answers a Headers', (function () {
+        return new Response().headers instanceof Headers;
+    })(), 'true');
+
+    // ── B. Headers CRUD ──────────────────────────────────────────────────────
+    eq('B1 Headers.set then get', (function () {
+        var h = new Headers(); h.set('Content-Type', 'text/plain'); return h.get('content-type');
+    })(), 'text/plain');
+    eq('B2 Headers.append combines', (function () {
+        var h = new Headers(); h.append('X', 'a'); h.append('X', 'b'); return h.get('x');
+    })(), 'a, b');
+    eq('B3 Headers.delete removes', (function () {
+        var h = new Headers(); h.set('X', '1'); h.delete('x'); return h.has('X');
+    })(), 'false');
+    eq('B4 Headers.has is case-insensitive', (function () {
+        var h = new Headers(); h.set('X-Foo', '1'); return h.has('x-foo');
+    })(), 'true');
+    eq('B5 Headers constructor from an object', (function () {
+        var h = new Headers({ 'A': '1', 'B': '2' }); return h.get('a') + ',' + h.get('b');
+    })(), '1,2');
+
+    // ── C. Request ───────────────────────────────────────────────────────────
+    eq('C1 Request.method defaults to GET', (function () {
+        return new Request('https://example.com').method;
+    })(), 'GET');
+    eq('C2 Request.method honours the init', (function () {
+        return new Request('https://example.com', { method: 'POST' }).method;
+    })(), 'POST');
+    eq('C3 Request.headers answers a Headers', (function () {
+        return new Request('https://example.com').headers instanceof Headers;
+    })(), 'true');
+    eq('C4 Request.clone works for a bodyless request', (function () {
+        return new Request('https://example.com').clone() instanceof Request;
+    })(), 'true');
+
+    // ── D. fetch ─────────────────────────────────────────────────────────────
+    eq('D1 fetch answers a promise', (function () {
+        return fetch('https://example.com') instanceof Promise;
+    })(), 'true');
+    eq('D2 fetch accepts a Request object', (function () {
+        return fetch(new Request('https://example.com')) instanceof Promise;
+    })(), 'true');
+})();
+</script></body></html>
