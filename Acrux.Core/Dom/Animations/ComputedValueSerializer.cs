@@ -2552,15 +2552,24 @@ public static class ComputedValueSerializer
             ? new List<string>(style.BackgroundImage)
             : new List<string> { "none" };
         var color = Longhand(style, "background-color");
-        var repeat = Longhand(style, "background-repeat");
-        var attachment = Longhand(style, "background-attachment");
-        var position = Longhand(style, "background-position");
-        var size = Longhand(style, "background-size");
-        var origin = Longhand(style, "background-origin");
-        var clip = Longhand(style, "background-clip");
+        // Each layer may carry its own repeat/position/size/attachment/boxes, so every field is
+        // read per layer (measured: 'url(a.png), url(b.png)' repeats each layer once, it does not
+        // print 'repeat, repeat' inside one layer).
+        var repeatL = List(Longhand(style, "background-repeat"));
+        var attachmentL = List(Longhand(style, "background-attachment"));
+        var positionL = List(Longhand(style, "background-position"));
+        var sizeL = List(Longhand(style, "background-size"));
+        var originL = List(Longhand(style, "background-origin"));
+        var clipL = List(Longhand(style, "background-clip"));
         var items = new List<string>(images.Count);
         for (int i = 0; i < images.Count; i++)
         {
+            var repeat = At(repeatL, i);
+            var attachment = At(attachmentL, i);
+            var position = At(positionL, i);
+            var size = At(sizeL, i);
+            var origin = At(originL, i);
+            var clip = At(clipL, i);
             var parts = new List<string>(8)
             {
                 // The colour belongs to the last layer only (CSS Backgrounds 3 §4.3), and the

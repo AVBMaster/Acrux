@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+div{width:80px;height:40px;border:1px solid #000}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["background","red"],
+  ["background","url(a.png) no-repeat center"],
+  ["background","linear-gradient(red,blue) no-repeat"],
+  ["background","url(a.png), url(b.png)"],
+  ["background-position","center center"],
+  ["background-size","cover"],
+  ["background-repeat","repeat-x"],
+  ["background-clip","padding-box"],
+  ["background-origin","border-box"],
+  ["mask","linear-gradient(black,transparent)"],
+  ["transition","all 2s ease-in"],
+  ["transition","width 1s, height 2s"],
+  ["animation","spin 2s linear infinite"],
+  ["animation-name","spin"],
+  ["animation-duration","2s"],
+  ["animation-iteration-count","infinite"],
+  ["animation-direction","alternate"],
+  ["animation-fill-mode","forwards"],
+  ["animation-timing-function","cubic-bezier(0.25,0.1,0.25,1)"],
+  ["transition-property","width"],
+  ["transition-timing-function","linear"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  const sup=(()=>{try{return CSS.supports(p,v)?"Y":"n";}catch(e){return "E";}})();
+  el.style.setProperty(p,v);
+  const comp=(()=>{try{return getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  const echo=(()=>{try{return el.style.getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  row("L|"+p+":"+v+"|sup="+sup+"|comp="+comp+"|echo="+echo);
+  el.remove();
+}
+</script></body></html>
