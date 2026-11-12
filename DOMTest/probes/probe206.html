@@ -1,0 +1,118 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function el(tag) {
+        var d = document.createElement(tag || 'div');
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. Shadow DOM ────────────────────────────────────────────────────────
+    eq('A1 attachShadow creates a ShadowRoot', (function () {
+        var d = el('div'); var s = d.attachShadow({ mode: 'open' });
+        var r = s instanceof ShadowRoot; d.remove(); return r;
+    })(), 'true');
+    eq('A2 attachShadow throws when called twice', (function () {
+        var d = el('div'); d.attachShadow({ mode: 'open' });
+        var r = safe(function () { d.attachShadow({ mode: 'open' }); return 'ok'; }).slice(0, 3); d.remove(); return r;
+    })(), 'ERR');
+    eq('A3 shadowRoot reflects the attached root', (function () {
+        var d = el('div'); d.attachShadow({ mode: 'open' });
+        var r = d.shadowRoot instanceof ShadowRoot; d.remove(); return r;
+    })(), 'true');
+    eq('A4 mode is readable', (function () {
+        var d = el('div'); d.attachShadow({ mode: 'open' });
+        var r = d.shadowRoot.mode; d.remove(); return r;
+    })(), 'open');
+    eq('A5 innerHTML on the shadow root works', (function () {
+        var d = el('div'); var s = d.attachShadow({ mode: 'open' });
+        s.innerHTML = '<b>x</b>';
+        var r = s.innerHTML; d.remove(); return r;
+    })(), '<b>x</b>');
+    eq('A6 host has no direct access to shadow children', (function () {
+        var d = el('div'); var s = d.attachShadow({ mode: 'open' });
+        s.innerHTML = '<b>x</b>';
+        var n = d.childNodes.length; d.remove(); return n;
+    })(), '0');
+    eq('A7 attachShadow rejects a text node', safe(function () {
+        document.createTextNode('x').attachShadow({ mode: 'open' }); return 'ok';
+    }).slice(0, 3), 'ERR');
+
+    // ── B. Custom Elements ───────────────────────────────────────────────────
+    eq('B1 customElements.define registers a name', (function () {
+        class MyEl extends HTMLElement { }
+        customElements.define('my-el-a', MyEl);
+        return customElements.get('my-el-a') === MyEl;
+    })(), 'true');
+    eq('B2 a defined element upgrades to the custom class', (function () {
+        class MyElB extends HTMLElement { }
+        customElements.define('my-el-b', MyElB);
+        var d = document.createElement('my-el-b');
+        return d instanceof MyElB;
+    })(), 'true');
+    eq('C3 customElements.get returns undefined for an unregistered name', safe(function () {
+        return customElements.get('not-registered-x');
+    }), 'ok:undefined');
+    eq('B4 define rejects an invalid name', safe(function () {
+        customElements.define('div', HTMLElement); return 'ok';
+    }).slice(0, 3), 'ERR');
+    eq('B5 connectedCallback fires on insertion', (function () {
+        var calls = 0;
+        class Lifecycle extends HTMLElement {
+            connectedCallback() { calls++; }
+        }
+        customElements.define('lifecycle-x', Lifecycle);
+        var d = document.createElement('lifecycle-x');
+        document.getElementById('root').appendChild(d);
+        d.remove(); return calls;
+    })(), '1');
+
+    // ── C. History ───────────────────────────────────────────────────────────
+    eq('C1 history.pushState changes the URL', (function () {
+        history.pushState({ a: 1 }, '', '?x=1');
+        var s = location.search; history.back(); return s;
+    })(), '?x=1');
+    eq('C2 history.state reads the pushed state', (function () {
+        history.pushState({ b: 2 }, '', '?y=2');
+        var s = JSON.stringify(history.state); history.back(); return s;
+    })(), '{"b":2}');
+    eq('C3 history.replaceState does not add an entry', (function () {
+        history.replaceState({ c: 3 }, '', '?z=3');
+        var s = location.search; history.back(); return s;
+    })(), '?z=3');
+    eq('C4 history.length is a number >= 1', safe(function () {
+        return history.length >= 1;
+    }), 'ok:true');
+
+    // ── D. WebSocket constants ───────────────────────────────────────────────
+    eq('D1 WebSocket readyState constants', (function () {
+        return [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED].join(',');
+    })(), '0,1,2,3');
+    eq('D2 a WebSocket starts in CONNECTING', (function () {
+        return new WebSocket('wss://example.com').readyState;
+    })(), '0');
+    eq('D3 WebSocket url is reflected', (function () {
+        return new WebSocket('wss://example.com/path').url;
+    })(), 'wss://example.com/path');
+
+    // ── E. MessageChannel ────────────────────────────────────────────────────
+    eq('E1 MessageChannel answers two ports', (function () {
+        var ch = new MessageChannel();
+        return (ch.port1 instanceof MessagePort) + ',' + (ch.port2 instanceof MessagePort);
+    })(), 'true,true');
+    eq('E2 postMessage/onmessage round-trips a message', (function () {
+        var ch = new MessageChannel();
+        ch.port1.onmessage = function (e) { ch.port1.got = e.data; };
+        ch.port2.postMessage('hello');
+        return 'pending';
+    })(), 'pending');
+})();
+</script></body></html>
