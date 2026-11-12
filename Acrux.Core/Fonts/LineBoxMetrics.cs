@@ -23,13 +23,26 @@ public static class LineBoxMetrics
     /// <summary>Fallback font size when a style is missing entirely.</summary>
     private const float DefaultFontSize = 16f;
 
-    /// <summary>Metrics of the style's primary font at the style's font size.</summary>
+    /// <summary>
+    /// Metrics of the style's primary font at the style's font size.
+    /// 'font-size-adjust' rescales the font the strut is built from (CSS Fonts 4 §5.2):
+    /// the effective size is the authored size times the adjust value divided by the
+    /// font's own aspect (x-height/em). The reported 'font-size' keeps the authored
+    /// value — only the strut and the glyphs shrink or grow.
+    /// </summary>
     public static FontMetrics GetFontMetrics(ComputedStyle? style)
     {
         if (style == null)
             return FontMetricsProvider.Get((SkiaSharp.SKTypeface?)null, DefaultFontSize);
 
         float size = style.FontSize > 0 ? style.FontSize : DefaultFontSize;
+        if (style.FontSizeAdjust is { } adjust && adjust > 0)
+        {
+            var raw = FontMetricsProvider.Get(style.FontFamily, size, style.FontWeight, style.FontStyle);
+            float aspect = size > 0 ? raw.XHeight / size : 0f;
+            if (aspect > 0)
+                size = size * (adjust / aspect);
+        }
         return FontMetricsProvider.Get(style.FontFamily, size, style.FontWeight, style.FontStyle);
     }
 

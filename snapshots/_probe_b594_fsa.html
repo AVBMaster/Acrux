@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+div{width:300px}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["", "none"],
+  ["f1","0.5"],
+  ["f2","1"],
+  ["f3","0.3"],
+  ["f4","from-font"],
+  ["f5","0.8"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+// font-size on its own, then adjust
+const sizes=["20px"];
+for(const [id,adj] of cases){
+  const e=document.createElement("div");
+  e.id=id; e.style.fontSize="20px";
+  if(adj!=="none") e.style.fontSizeAdjust=adj;
+  document.body.appendChild(e);
+  e.textContent="Test text "+id;
+}
+row("L|BASE|done");
+for(const [id,adj] of cases){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|adj="+adj+"|fs="+s.fontSize+"|fsa="+(s.fontSizeAdjust||"-")+"|h="+Math.round(r.height)+"|fam="+s.fontFamily.slice(0,20));
+}
+// also measure the font's x-height via canvas
+const c=document.createElement("canvas").getContext("2d");
+c.font="20px monospace";
+const m=c.measureText("x");
+row("L|CANVAS|x="+m.width+"|actualAscent="+Math.round(c.measureText("x").actualBoundingBoxAscent*1000)/1000);
+</script></body></html>

@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+#r1{accent-color:red;width:24px;height:24px}
+#r2{accent-color:rgb(0,128,255);width:24px;height:24px}
+#vo{writing-mode:vertical-rl;text-orientation:upright;height:120px;width:40px;border:1px solid #000;font-size:18px}
+#vm{writing-mode:vertical-rl;height:120px;width:40px;border:1px solid #000;font-size:18px;margin-left:6px}
+#vs{writing-mode:vertical-rl;text-orientation:sideways;height:120px;width:40px;border:1px solid #000;font-size:18px;margin-left:6px}
+#ru{ruby-position:over;font-size:20px;margin:8px 0}
+#ru2{ruby-position:under;font-size:20px;margin:8px 0}
+</style></head><body>
+<input type=checkbox id=r1 checked><span>red</span><br>
+<input type=radio id=r2 checked><span>blue</span><br>
+<div id=vo>A1</div>
+<div id=vm>A2</div>
+<div id=vs>A3</div>
+<div><ruby id=ru>漢<rt>kan</rt></ruby><ruby id=ru2>字<rt>ji</rt></ruby></div>
+<script>
+const ids=["r1","r2","vo","vm","vs","ru","ru2"];
+const g=id=>{const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+ return id+"="+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top)+" accent="+(s.accentColor||"-")+" orient="+(s.textOrientation||"-")+" rpos="+(s.rubyPosition||"-");};
+document.body.appendChild(document.createElement("div")).textContent=ids.map(g).join("#");
+</script></body></html>

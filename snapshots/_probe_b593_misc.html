@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+</style></head><body>
+<div id=out></div>
+<script>
+const props = {
+  "accent-color":["auto","red","currentColor"],
+  "text-orientation":["mixed","upright","sideways","sideways-right"],
+  "ruby-align":["start","center","space-between","space-around"],
+  "ruby-position":["over","under","alternate","alternate-first"],
+  "hyphenate-character":["auto","-"],
+  "hyphenate-limit-chars":["auto","5 2 2","6"],
+  "print-color-adjust":["economy","exact"],
+  "forced-color-adjust":["auto","none","preserve-ancestor-colors"],
+  "math-style":["normal","compact"],
+  "math-shift":["normal","compact"],
+  "math-depth":["normal","0","1"],
+};
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,vals] of Object.entries(props)){
+  const sup=vals.map(v=>CSS.supports(p,v)?"Y":"n").join("/");
+  const el=document.createElement("div");document.body.appendChild(el);
+  let def; try{def=getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){def="ERR";}
+  row("L|"+p+"|sup="+sup+"|def="+def);
+  for(const v of vals){
+    try{
+      el.style.setProperty(p,v);
+      const c=getComputedStyle(el).getPropertyValue(p)||"(empty)";
+      row("L|"+p+":"+v+"|=>"+c);
+    }catch(e){row("L|"+p+":"+v+"|ERR");}
+  }
+  el.remove();
+}
+</script></body></html>

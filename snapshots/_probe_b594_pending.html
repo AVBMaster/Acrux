@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+#a1{font-size-adjust:none;font-size:20px}
+#a2{font-size-adjust:0.5;font-size:20px}
+#a3{font-size-adjust:from-font;font-size:20px}
+#b1{width:180px;border:1px solid #000;text-wrap:normal;font-size:14px}
+#b2{width:180px;border:1px solid #000;text-wrap:balance;font-size:14px}
+#b3{width:180px;border:1px solid #000;text-wrap:pretty;font-size:14px}
+#b4{width:180px;border:1px solid #000;text-wrap:stable;font-size:14px}
+#c1{writing-mode:horizontal-tb;height:60px;border:1px solid #000;font-size:16px}
+#c2{writing-mode:vertical-rl;height:60px;border:1px solid #000;font-size:16px;margin-top:4px}
+#c3{writing-mode:vertical-lr;height:60px;border:1px solid #000;font-size:16px;margin-top:4px}
+#c4{writing-mode:sideways-rl;height:60px;border:1px solid #000;font-size:16px;margin-top:4px}
+#c5{writing-mode:sideways-lr;height:60px;border:1px solid #000;font-size:16px;margin-top:4px}
+</style></head><body>
+<div id=out></div>
+<div id=a1>size-adjust:none</div>
+<div id=a2>size-adjust:0.5</div>
+<div id=a3>size-adjust:from-font</div>
+<div id=b1>The quick brown fox jumps over the lazy dog and then some more</div>
+<div id=b2>The quick brown fox jumps over the lazy dog and then some more</div>
+<div id=b3>The quick brown fox jumps over the lazy dog and then some more</div>
+<div id=b4>The quick brown fox jumps over the lazy dog and then some more</div>
+<div id=c1>Horiz text</div>
+<div id=c2>Vert-rl text</div>
+<div id=c3>Vert-lr text</div>
+<div id=c4>Sideways-rl text</div>
+<div id=c5>Sideways-lr text</div>
+<script>
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+const all=["a1","a2","a3","b1","b2","b3","b4","c1","c2","c3","c4","c5"];
+for(const id of all){
+  const e=document.getElementById(id);const s=getComputedStyle(e);const r=e.getBoundingClientRect();
+  row("L|"+id+"|"+Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.left)+","+Math.round(r.top)+"|fs="+s.fontSize+"|fsa="+(s.fontSizeAdjust||"-")+"|tw="+(s.textWrap||"-")+"|wm="+(s.writingMode||"-"));
+}
+</script></body></html>
