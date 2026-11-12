@@ -1,0 +1,132 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function el(tag) {
+        var d = document.createElement(tag || 'div');
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. EventTarget basics ────────────────────────────────────────────────
+    eq('A1 addEventListener + dispatchEvent fires the listener', (function () {
+        var t = new EventTarget(); var fired = false;
+        t.addEventListener('x', function () { fired = true; });
+        t.dispatchEvent(new Event('x')); return fired;
+    })(), 'true');
+    eq('A2 removeEventListener stops the listener', (function () {
+        var t = new EventTarget(); var n = 0;
+        function h() { n++; }
+        t.addEventListener('x', h); t.dispatchEvent(new Event('x'));
+        t.removeEventListener('x', h); t.dispatchEvent(new Event('x'));
+        return n;
+    })(), '1');
+    eq('A3 once fires a single time', (function () {
+        var t = new EventTarget(); var n = 0;
+        t.addEventListener('x', function () { n++; }, { once: true });
+        t.dispatchEvent(new Event('x')); t.dispatchEvent(new Event('x'));
+        return n;
+    })(), '1');
+    eq('A4 two listeners on the same type both fire', (function () {
+        var t = new EventTarget(); var n = 0;
+        t.addEventListener('x', function () { n++; });
+        t.addEventListener('x', function () { n++; });
+        t.dispatchEvent(new Event('x')); return n;
+    })(), '2');
+    eq('A5 a bare EventTarget is an EventTarget', (function () {
+        return new EventTarget() instanceof EventTarget;
+    })(), 'true');
+
+    // ── B. Event properties ──────────────────────────────────────────────────
+    eq('B1 Event.type', (function () {
+        var e = new Event('mytype'); return e.type;
+    })(), 'mytype');
+    eq('B2 Event.bubbles defaults to false', (function () {
+        return new Event('x').bubbles;
+    })(), 'false');
+    eq('B3 Event.bubbles honours the init', (function () {
+        return new Event('x', { bubbles: true }).bubbles;
+    })(), 'true');
+    eq('B4 Event.cancelable honours the init', (function () {
+        return new Event('x', { cancelable: true }).cancelable;
+    })(), 'true');
+    eq('B5 Event.target is set on dispatch', (function () {
+        var t = new EventTarget(); var got;
+        t.addEventListener('x', function (e) { got = typeof e.target; });
+        t.dispatchEvent(new Event('x')); return got;
+    })(), 'object');
+    eq('B6 Event.currentTarget is set on dispatch', (function () {
+        var t = new EventTarget(); var got;
+        t.addEventListener('x', function (e) { got = typeof e.currentTarget; });
+        t.dispatchEvent(new Event('x')); return got;
+    })(), 'object');
+    eq('B7 Event.eventPhase is AT_TARGET at the target', (function () {
+        var t = new EventTarget(); var got;
+        t.addEventListener('x', function (e) { got = e.eventPhase; });
+        t.dispatchEvent(new Event('x')); return got;
+    })(), '2');
+    eq('B8 Event.timeStamp is a number', (function () {
+        return typeof new Event('x').timeStamp;
+    })(), 'number');
+
+    // ── C. CustomEvent ───────────────────────────────────────────────────────
+    eq('C1 CustomEvent carries detail', (function () {
+        var e = new CustomEvent('x', { detail: { n: 5 } }); return e.detail.n;
+    })(), '5');
+    eq('C2 CustomEvent detail defaults to null', (function () {
+        return new CustomEvent('x').detail;
+    })(), 'null');
+
+    // ── D. MouseEvent properties ─────────────────────────────────────────────
+    eq('D1 MouseEvent clientX/clientY', (function () {
+        var e = new MouseEvent('click', { clientX: 10, clientY: 20 });
+        return e.clientX + ',' + e.clientY;
+    })(), '10,20');
+    eq('D2 MouseEvent button and buttons', (function () {
+        var e = new MouseEvent('click', { button: 2, buttons: 4 });
+        return e.button + ',' + e.buttons;
+    })(), '2,4');
+    eq('D3 MouseEvent inherits from Event', (function () {
+        return new MouseEvent('click') instanceof Event;
+    })(), 'true');
+
+    // ── E. KeyboardEvent properties ──────────────────────────────────────────
+    eq('E1 KeyboardEvent key and code', (function () {
+        var e = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA' });
+        return e.key + ',' + e.code;
+    })(), 'a,KeyA');
+    eq('E2 KeyboardEvent modifiers', (function () {
+        var e = new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true });
+        return e.ctrlKey + ',' + e.shiftKey + ',' + e.altKey;
+    })(), 'true,true,false');
+
+    // ── F. stopPropagation / preventDefault ──────────────────────────────────
+    eq('F1 stopPropagation stops further listeners on ancestors', (function () {
+        var p = el('div'); var c = document.createElement('span');
+        p.appendChild(c);
+        var pHeard = false;
+        c.addEventListener('x', function (e) { e.stopPropagation(); });
+        p.addEventListener('x', function () { pHeard = true; });
+        c.dispatchEvent(new Event('x', { bubbles: true }));
+        p.remove(); return pHeard;
+    })(), 'false');
+    eq('F2 preventDefault sets defaultPrevented', (function () {
+        var t = new EventTarget(); var e = new Event('x', { cancelable: true });
+        t.addEventListener('x', function (ev) { ev.preventDefault(); });
+        t.dispatchEvent(e); return e.defaultPrevented;
+    })(), 'true');
+    eq('F3 stopImmediatePropagation stops later listeners on the same target', (function () {
+        var t = new EventTarget(); var n = 0;
+        t.addEventListener('x', function (e) { n++; e.stopImmediatePropagation(); });
+        t.addEventListener('x', function () { n++; });
+        t.dispatchEvent(new Event('x')); return n;
+    })(), '1');
+})();
+</script></body></html>
