@@ -1,0 +1,84 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. WebSocket ─────────────────────────────────────────────────────────
+    eq('A1 WebSocket is a constructor', (function () {
+        return typeof WebSocket;
+    })(), 'function');
+    eq('A2 WebSocket CONNECTING/OPEN/CLOSING/CLOSED constants', (function () {
+        return [WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED].join(',');
+    })(), '0,1,2,3');
+    eq('A3 a fresh WebSocket is CONNECTING', (function () {
+        return new WebSocket('wss://example.com').readyState;
+    })(), '0');
+    eq('A4 WebSocket url is reflected', (function () {
+        return new WebSocket('wss://example.com/x').url;
+    })(), 'wss://example.com/x');
+    eq('A5 WebSocket.send is a function', (function () {
+        return typeof new WebSocket('wss://example.com').send;
+    })(), 'function');
+    eq('A6 WebSocket.close is a function', (function () {
+        return typeof new WebSocket('wss://example.com').close;
+    })(), 'function');
+    eq('A7 WebSocket has onopen/onmessage/onclose/onerror', (function () {
+        var w = new WebSocket('wss://example.com');
+        return [typeof w.onopen, typeof w.onmessage, typeof w.onclose, typeof w.onerror].join(',');
+    })(), 'object,object,object,object');
+    eq('A8 WebSocket.protocol defaults to empty', (function () {
+        return new WebSocket('wss://example.com').protocol;
+    })(), '');
+    eq('A9 WebSocket.extensions defaults to empty', (function () {
+        return new WebSocket('wss://example.com').extensions;
+    })(), '');
+
+    // ── B. EventSource ───────────────────────────────────────────────────────
+    eq('B1 EventSource is a constructor', (function () {
+        return typeof EventSource;
+    })(), 'function');
+    eq('B2 EventSource readyState constants', (function () {
+        return [EventSource.CONNECTING, EventSource.OPEN, EventSource.CLOSED].join(',');
+    })(), '0,1,2');
+    eq('B3 a fresh EventSource is CONNECTING', (function () {
+        return new EventSource('/es').readyState;
+    })(), '0');
+    eq('B4 EventSource.url resolves against the document base', (function () {
+        var e = new EventSource('/es').url;
+        return e.indexOf('/es') >= 0;
+    })(), 'true');
+    eq('B5 EventSource has onmessage/onerror/onopen', (function () {
+        var e = new EventSource('/es');
+        return [typeof e.onmessage, typeof e.onerror, typeof e.onopen].join(',');
+    })(), 'object,object,object');
+
+    // ── C. MessagePort ───────────────────────────────────────────────────────
+    eq('C1 MessageChannel answers two ports', (function () {
+        var ch = new MessageChannel();
+        return (ch.port1 instanceof MessagePort) + ',' + (ch.port2 instanceof MessagePort);
+    })(), 'true,true');
+    eq('C2 a MessagePort has postMessage/start/close', (function () {
+        var ch = new MessageChannel();
+        return [typeof ch.port1.postMessage, typeof ch.port1.start, typeof ch.port1.close].join(',');
+    })(), 'function,function,function');
+    eq('C3 a MessagePort has onmessage/onmessageerror', (function () {
+        var ch = new MessageChannel();
+        return [typeof ch.port1.onmessage, typeof ch.port1.onmessageerror].join(',');
+    })(), 'object,object');
+
+    // ── D. window messaging ──────────────────────────────────────────────────
+    eq('D1 window.postMessage is a function', (function () {
+        return typeof window.postMessage;
+    })(), 'function');
+    eq('D2 window.onmessage is present', (function () {
+        return typeof window.onmessage;
+    })(), 'object');
+})();
+</script></body></html>
