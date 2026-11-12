@@ -1302,7 +1302,17 @@ public class ComputedStyleHost
                     ? SideUsed(name + "-end", sides[1], box) ?? sides[1] : start;
                 return start == end ? start : start + " " + end;
             }
-            // A positioned box's inset reports the offset layout will apply, so its percentage is
+            // The four-side box shorthand says the four physical edges its longhands say, so each
+            // edge is priced the way that longhand is and the four are said in the shortest form
+            // that means all (measured: 'margin: calc(10px + 5%)' of a ~1000px containing block
+            // answers '60.4px', one value, never 'calc(5% + 10px)' with the '%' left in it).
+            case "margin": case "padding":
+                // Each edge is priced the way its own longhand is, then the four are said in the
+                // shortest form that means all (measured: 'margin: calc(10px + 5%)' of a ~1000px
+                // containing block answers '60.4px', one value, never 'calc(5% + 10px)' with the
+                // '%' left in it). The split is top-level only, so 'calc(10px + 5%)' stays one
+                // token.
+                return BoxUsed(name, text, box);            // A positioned box's inset reports the offset layout will apply, so its percentage is
             // priced against the containing block (CSS 2.1 §10.5/§10.6: the vertical pair against
             // its height, the horizontal pair against its width). A static box moves nothing, so its
             // inset keeps the serialiser's text with the '%' left in it (measured).
@@ -1399,6 +1409,53 @@ public class ComputedStyleHost
             ?? _style.ComputedViewportWidth;
         if (inlineSize <= 0) return null;
         return _style.ComputedLengthCss(length, percentageBase: inlineSize);
+    }
+
+    /// <summary>A four-side box shorthand the page wrote with a percentage (CSS 2.1 §8.3/§8.5):
+    /// each edge is priced the way its own longhand is, then the four are said in the shortest
+    /// form that means all (measured: 'margin: calc(10px + 5%)' of a ~1000px containing block
+    /// answers '60.4px', one value, never 'calc(5% + 10px)' with the '%' left in it). The text is
+    /// split on top-level whitespace only, so 'calc(10px + 5%)' stays one token.</summary>
+    private string? BoxUsed(string name, string text, Acrux.Core.Dom.LayoutBox box)
+    {
+        if (_style == null || text.IndexOf('%') < 0) return null;
+        var sides = SplitTopLevelSpaces(text);
+        if (sides.Count == 0) return null;
+        string Side(int i, string suffix)
+        {
+            var raw = sides[i];
+            return SideUsed(name + "-" + suffix, raw, box) ?? raw;
+        }
+        var top = Side(0, "top");
+        var right = sides.Count >= 2 ? Side(1, "right") : top;
+        var bottom = sides.Count >= 3 ? Side(2, "bottom") : top;
+        var left = sides.Count >= 4 ? Side(3, "left") : right;
+        if (!string.Equals(left, right, StringComparison.Ordinal))
+            return $"{top} {right} {bottom} {left}";
+        if (string.Equals(bottom, top, StringComparison.Ordinal))
+            return string.Equals(top, right, StringComparison.Ordinal) ? top : $"{top} {right}";
+        return $"{top} {right} {bottom}";
+    }
+
+    /// <summary>Split on whitespace that is not inside parentheses, so a value like
+    /// 'calc(10px + 5%)' stays one token while '1px 2px' splits in two.</summary>
+    private static List<string> SplitTopLevelSpaces(string text)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = -1;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (char.IsWhiteSpace(c) && depth == 0)
+            {
+                if (start >= 0) { parts.Add(text[start..i]); start = -1; }
+            }
+            else if (start < 0) start = i;
+        }
+        if (start >= 0) parts.Add(text[start..]);
+        return parts;
     }
 
     /// <summary>An inset the page wrote with a percentage on a box that is actually positioned.

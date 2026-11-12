@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:100px}
+</style></head><body>
+<div id=out></div>
+<script>
+const cases=[
+  ["margin","calc(10px + 5%)"],
+  ["margin-left","calc(10px + 5%)"],
+  ["margin-top","calc(10px + 5%)"],
+  ["margin-right","calc(10px + 5%)"],
+  ["margin-bottom","calc(10px + 5%)"],
+  ["padding","calc(10px + 5%)"],
+  ["padding-left","calc(10px + 5%)"],
+  ["padding-top","calc(10px + 5%)"],
+];
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,v] of cases){
+  const el=document.createElement("div");document.body.appendChild(el);
+  el.style.setProperty(p,v);
+  const comp=(()=>{try{return getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){return "ERR";}})();
+  // also read the individual top/left regardless of what was set
+  const top=(()=>{try{return getComputedStyle(el).marginTop;}catch(e){return "?";}})();
+  const left=(()=>{try{return getComputedStyle(el).marginLeft;}catch(e){return "?";}})();
+  row("L|"+p+":"+v+"|comp="+comp+"|readTop="+top+"|readLeft="+left);
+  el.remove();
+}
+</script></body></html>
