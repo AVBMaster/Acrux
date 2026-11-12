@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset=utf-8><style>
+body{font:12px monospace;margin:4px}
+.row{white-space:pre;font:12px monospace}
+</style></head><body>
+<div id=out></div>
+<script>
+const props={
+"caret-color":["auto","red","transparent","currentColor"],
+"caret-shape":["auto","bar","block","underscore"],
+"text-emphasis-color":["currentColor","red","#abc"],
+"text-emphasis-style":["none","filled","open","dot","circle","double-circle","triangle","sesame","filled dot"],
+"text-emphasis-position":["over right","under left","over left"],
+"outline-offset":["0px","3px","-2px"],
+"outline-style":["none","solid","dashed","dotted","double","groove","ridge","inset","outset"],
+"column-rule-style":["none","solid","dashed","dotted","double"],
+"column-fill":["auto","balance"],
+"column-span":["none","all"],
+"box-decoration-break":["slice","clone"],
+"orphans":["2","auto"],
+"widows":["2","auto"],
+"break-inside":["auto","avoid","avoid-page","avoid-column"],
+"break-before":["auto","page","column","avoid","left","right"],
+"caption-side":["top","bottom","block-start","inline-end"],
+"empty-cells":["show","hide"],
+"table-layout":["auto","fixed"],
+"list-style-position":["outside","inside"],
+"pointer-events":["auto","none","visiblePainted","fill","stroke","all"],
+"touch-action":["auto","none","pan-x","pan-y","manipulation"],
+"user-select":["auto","text","none","all"],
+"resize":["none","both","horizontal","vertical","block","inline"],
+"aspect-ratio":["auto","1","16/9","1.5"],
+"object-fit":["fill","contain","cover","none","scale-down"],
+"object-position":["50% 50%","left top","center","0 0","100% 100%"],
+"image-rendering":["auto","smooth","crisp-edges","pixelated"],
+"mix-blend-mode":["normal","multiply","screen","overlay","darken","lighten","color-dodge","difference","exclusion","hue","saturation","color","luminosity"],
+"isolation":["auto","isolate"],
+};
+const out=document.getElementById("out");
+function row(t){const d=document.createElement("div");d.className="row";d.textContent=t;out.appendChild(d);}
+for(const [p,vals] of Object.entries(props)){
+  const sup=vals.map(v=>{try{return CSS.supports(p,v)?"Y":"n";}catch(e){return "E";}}).join("/");
+  const el=document.createElement("div");document.body.appendChild(el);
+  let def;try{def=getComputedStyle(el).getPropertyValue(p)||"(empty)";}catch(e){def="ERR";}
+  row("L|"+p+"|sup="+sup+"|def="+def);
+  for(const v of vals){try{el.style.setProperty(p,v);const c=getComputedStyle(el).getPropertyValue(p)||"(empty)";row("L|"+p+":"+v+"|=>"+c);}catch(e){row("L|"+p+":"+v+"|ERR");}}
+  el.remove();
+}
+</script></body></html>
