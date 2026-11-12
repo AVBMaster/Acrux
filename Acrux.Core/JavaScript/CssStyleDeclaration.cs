@@ -469,6 +469,16 @@ public abstract class CssStyleDeclarationBase : System.Dynamic.DynamicObject, ID
             if (x != null && y != null)
                 return Acrux.Core.Css.ShorthandExpander.BackgroundPositionPairText(x, y);
         }
+        // 'mask-position' is said the same way — one <position> per layer from its x and y axes —
+        // so it normalises the same (measured: 'center' reads 'center center' and 'top left' reads
+        // 'left top', exactly as 'background-position' does).
+        if (name.Equals("mask-position", StringComparison.OrdinalIgnoreCase))
+        {
+            var x = ReadThroughShorthand("-webkit-mask-position-x", block);
+            var y = ReadThroughShorthand("-webkit-mask-position-y", block);
+            if (x != null && y != null)
+                return Acrux.Core.Css.ShorthandExpander.BackgroundPositionPairText(x, y);
+        }
         return null;
     }
 
