@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function form(html) {
+        var f = document.createElement('form');
+        f.innerHTML = html;
+        document.getElementById('root').appendChild(f);
+        return f;
+    }
+
+    // ── A. form.elements live collection ─────────────────────────────────────
+    eq('A1 form.elements collects the listed controls', (function () {
+        var f = form('<input name="a"><input name="b"><textarea name="c"></textarea>');
+        var n = f.elements.length; f.remove(); return n;
+    })(), '3');
+    eq('A2 form.elements is live', (function () {
+        var f = form('<input name="a">');
+        var list = f.elements; var before = list.length;
+        var c = document.createElement('input'); c.name = 'b'; f.appendChild(c);
+        var after = list.length; f.remove(); return before + ',' + after;
+    })(), '1,2');
+    eq('A3 form.elements named access finds a control', (function () {
+        var f = form('<input name="q" value="v">'); var v = f.elements.q.value; f.remove(); return v;
+    })(), 'v');
+    eq('A4 form.elements skips non-listed elements', (function () {
+        var f = form('<input name="a"><p>not a control</p><button>b</button>');
+        var n = f.elements.length; f.remove(); return n;
+    })(), '2');
+
+    // ── B. form.reset ────────────────────────────────────────────────────────
+    eq('B1 form.reset restores text inputs to the default', (function () {
+        var f = form('<input name="a" value="orig">');
+        var input = f.elements.a; input.value = 'changed';
+        f.reset(); var v = input.value; f.remove(); return v;
+    })(), 'orig');
+    eq('B2 form.reset clears checked checkboxes', (function () {
+        var f = form('<input type="checkbox" name="c" checked>');
+        var input = f.elements.c; input.checked = false;
+        f.reset(); var v = input.checked; f.remove(); return v;
+    })(), 'true');
+
+    // ── C. checkbox / radio semantics ────────────────────────────────────────
+    eq('C1 checkbox.checked is settable', (function () {
+        var f = form('<input type="checkbox" name="c">');
+        var input = f.elements.c; input.checked = true;
+        var v = input.checked; f.remove(); return v;
+    })(), 'true');
+    eq('C2 radio buttons in a group share the name', (function () {
+        var f = form('<input type="radio" name="r" value="1"><input type="radio" name="r" value="2">');
+        var radios = f.querySelectorAll('input[name="r"]');
+        radios[0].checked = true;
+        var v = radios[0].checked + ',' + radios[1].checked; f.remove(); return v;
+    })(), 'true,false');
+    eq('C3 checking one radio unchecks the others', (function () {
+        var f = form('<input type="radio" name="r" value="1"><input type="radio" name="r" value="2">');
+        var radios = f.querySelectorAll('input[name="r"]');
+        radios[0].checked = true; radios[1].checked = true;
+        var v = radios[0].checked + ',' + radios[1].checked; f.remove(); return v;
+    })(), 'false,true');
+
+    // ── D. form attributes ───────────────────────────────────────────────────
+    eq('D1 form.method defaults to get', (function () {
+        var f = form(''); var v = f.method; f.remove(); return v;
+    })(), 'get');
+    eq('D2 form.action reads the action attribute', (function () {
+        var f = form(''); f.action = '/submit'; var v = f.action; f.remove();
+        return v.indexOf('/submit') >= 0;
+    })(), 'true');
+    eq('D3 form.name reads the name attribute', (function () {
+        var f = form(''); f.setAttribute('name', 'myform'); var v = f.name; f.remove(); return v;
+    })(), 'myform');
+
+    // ── E. form association via the form attribute ───────────────────────────
+    eq('E1 an input outside a form can associate via the form attribute', (function () {
+        var f = form(''); f.id = 'f1';
+        var input = document.createElement('input'); input.setAttribute('form', 'f1');
+        document.getElementById('root').appendChild(input);
+        var owner = input.form === f; input.remove(); f.remove(); return owner;
+    })(), 'true');
+    eq('E2 a fieldset inside a form is in form.elements', (function () {
+        var f = form('<fieldset><input name="a"></fieldset>');
+        var n = f.elements.length; f.remove(); return n;
+    })(), '1');
+
+    // ── F. form.submit / requestSubmit exist ─────────────────────────────────
+    eq('F1 form.submit is a function', (function () {
+        var f = form(''); var v = typeof f.submit; f.remove(); return v;
+    })(), 'function');
+    eq('F2 form.requestSubmit is a function', (function () {
+        var f = form(''); var v = typeof f.requestSubmit; f.remove(); return v;
+    })(), 'function');
+})();
+</script></body></html>

@@ -352,11 +352,47 @@ public abstract class Element : Node
     internal void ResetValue() => _value = null;
 
     /// <summary>HTML §4.10.5: 'checked' is the state the user left the control in and 'defaultChecked'
-    /// is the attribute, so the two answer separately for as long as the control is dirty.</summary>
+    /// is the attribute, so the two answer separately for as long as the control is dirty. Checking a
+    /// radio button unchecks the other radios in its group (HTML §4.10.5.1.2).</summary>
     public bool Checked
     {
         get => _checked ?? HasAttribute("checked");
-        set => _checked = value;
+        set
+        {
+            _checked = value;
+            if (value) UncheckRadioGroup();
+        }
+    }
+
+    /// <summary>HTML §4.10.5.1.2: a radio button is grouped by its name within its form (or its
+    /// nearest form-associated ancestor), and checking one unchecks the others in that group.</summary>
+    private void UncheckRadioGroup()
+    {
+        if (TagName != "INPUT" || InputType?.ToLowerInvariant() != "radio") return;
+        var name = Name;
+        if (string.IsNullOrEmpty(name)) return;
+        // Walk the ancestor chain to the nearest form, falling back to the document when the
+        // control is form-associated by attribute rather than by ancestry.
+        var scope = (Node?)Closest("form") ?? OwnerDocument;
+        if (scope != null) UncheckRadiosIn(scope, name, this);
+    }
+
+    private static void UncheckRadiosIn(Node scope, string name, Element? skip)
+    {
+        foreach (var child in scope.Children)
+        {
+            if (child is Element c)
+            {
+                if (c.TagName == "INPUT" &&
+                    c.InputType?.ToLowerInvariant() == "radio" &&
+                    c.GetAttribute("name") == name &&
+                    !ReferenceEquals(c, skip))
+                {
+                    c._checked = false;
+                }
+                UncheckRadiosIn(c, name, skip);
+            }
+        }
     }
 
     public bool DefaultChecked
