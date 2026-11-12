@@ -1,0 +1,103 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+    function el(tag, attrs) {
+        var d = document.createElement(tag || 'div');
+        if (attrs) for (var k in attrs) d.setAttribute(k, attrs[k]);
+        document.getElementById('root').appendChild(d);
+        return d;
+    }
+
+    // ── A. getAttribute / setAttribute / hasAttribute / removeAttribute ──────
+    eq('A1 getAttribute reads a set attribute', (function () {
+        var d = el('div', { 'data-x': '1' }); var v = d.getAttribute('data-x'); d.remove(); return v;
+    })(), '1');
+    eq('A2 getAttribute returns null for a missing attribute', (function () {
+        var d = el('div'); var v = d.getAttribute('nope'); d.remove(); return v;
+    })(), 'null');
+    eq('A3 setAttribute creates the attribute', (function () {
+        var d = el('div'); d.setAttribute('foo', 'bar'); var v = d.getAttribute('foo'); d.remove(); return v;
+    })(), 'bar');
+    eq('A4 hasAttribute for a present attribute', (function () {
+        var d = el('div', { 'x': '1' }); var v = d.hasAttribute('x'); d.remove(); return v;
+    })(), 'true');
+    eq('A5 hasAttribute for a missing attribute', (function () {
+        var d = el('div'); var v = d.hasAttribute('x'); d.remove(); return v;
+    })(), 'false');
+    eq('A6 removeAttribute removes it', (function () {
+        var d = el('div', { 'x': '1' }); d.removeAttribute('x'); var v = d.hasAttribute('x'); d.remove(); return v;
+    })(), 'false');
+    eq('A7 attribute names are case-insensitive', (function () {
+        var d = el('div'); d.setAttribute('DATA-X', '1'); var v = d.getAttribute('data-x'); d.remove(); return v;
+    })(), '1');
+
+    // ── B. attribute vs property distinction ─────────────────────────────────
+    eq('B1 the class attribute maps to className', (function () {
+        var d = el('div', { 'class': 'a b' }); var v = d.className; d.remove(); return v;
+    })(), 'a b');
+    eq('B2 setting className reflects in the attribute', (function () {
+        var d = el('div'); d.className = 'z'; var v = d.getAttribute('class'); d.remove(); return v;
+    })(), 'z');
+    eq('C1 the value attribute and value property diverge after editing', (function () {
+        var input = document.createElement('input'); input.setAttribute('value', 'init');
+        input.value = 'edited';
+        var attr = input.getAttribute('value'); var prop = input.value;
+        input.remove(); return attr + ',' + prop;
+    })(), 'init,edited');
+    eq('C2 defaultValue reads the attribute', (function () {
+        var input = document.createElement('input'); input.setAttribute('value', 'init');
+        var v = input.defaultValue; input.remove(); return v;
+    })(), 'init');
+
+    // ── D. dataset ───────────────────────────────────────────────────────────
+    eq('D1 dataset reads a data attribute', (function () {
+        var d = el('div', { 'data-foo': '1' }); var v = d.dataset.foo; d.remove(); return v;
+    })(), '1');
+    eq('D2 setting dataset writes a data attribute', (function () {
+        var d = el('div'); d.dataset.bar = '2'; var v = d.getAttribute('data-bar'); d.remove(); return v;
+    })(), '2');
+    eq('D3 a camelCase dataset key maps to a dashed attribute', (function () {
+        var d = el('div', { 'data-my-key': 'v' }); var v = d.dataset.myKey; d.remove(); return v;
+    })(), 'v');
+
+    // ── E. getAttributeNS / setAttributeNS ───────────────────────────────────
+    eq('E1 setAttributeNS/getAttributeNS round-trip', (function () {
+        var svgns = 'http://www.w3.org/2000/svg';
+        var d = document.createElementNS(svgns, 'svg');
+        d.setAttributeNS(svgns, 'xlink:href', 'a.png');
+        var v = d.getAttributeNS(svgns, 'href'); d.remove(); return v;
+    })(), 'a.png');
+
+    // ── F. attribute node operations ─────────────────────────────────────────
+    eq('F1 createAttribute + setAttributeNode', (function () {
+        var d = el('div'); var a = document.createAttribute('foo'); a.value = 'bar';
+        d.setAttributeNode(a); var v = d.getAttribute('foo'); d.remove(); return v;
+    })(), 'bar');
+    eq('F2 getAttributeNode answers an Attr', (function () {
+        var d = el('div', { 'x': '1' }); var a = d.getAttributeNode('x');
+        var r = a.value + ',' + a.name; d.remove(); return r;
+    })(), '1,x');
+
+    // ── G. boolean attributes ────────────────────────────────────────────────
+    eq('G1 a boolean attribute present with an empty value reads empty', (function () {
+        var input = document.createElement('input'); input.setAttribute('disabled', '');
+        var v = input.getAttribute('disabled'); input.remove(); return v;
+    })(), '');
+    eq('G2 the disabled property reflects the attribute presence', (function () {
+        var input = document.createElement('input'); input.setAttribute('disabled', '');
+        var v = input.disabled; input.remove(); return v;
+    })(), 'true');
+    eq('G3 removing the attribute clears the property', (function () {
+        var input = document.createElement('input'); input.setAttribute('disabled', '');
+        input.removeAttribute('disabled'); var v = input.disabled; input.remove(); return v;
+    })(), 'false');
+})();
+</script></body></html>
