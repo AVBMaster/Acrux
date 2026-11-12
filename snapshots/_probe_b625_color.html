@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:60px;height:30px;background:#eef;border:1px solid #000}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function probe(tag,decl,prop){
+  const el=document.createElement("div");el.setAttribute("style",decl);
+  document.body.appendChild(el);
+  let sup="E";try{sup=CSS.supports(prop||"color",decl.split(":")[1].replace(";","").trim())?"Y":"n";}catch(e){}
+  const comp=getComputedStyle(el).getPropertyValue(prop||"color")||"(empty)";
+  out.push(["L",tag,"sup="+sup,"comp="+comp].join("~"));
+  el.remove();
+}
+// modern colour functions
+probe("color-display-p3","color:color(display-p3 1 0 0)");
+probe("color-srgb","color:color(srgb 1 0 0)");
+probe("oklch","color:oklch(70% 0.1 200)");
+probe("oklab","color:oklab(0.7 0.1 0.1)");
+probe("lab","color:lab(50% 40 59)");
+probe("lch","color:lch(50% 70 40)");
+probe("color-mix","color:color-mix(in srgb, red, blue)");
+probe("color-mix-pct","color:color-mix(in srgb, red 30%, blue)");
+probe("color-mix-oklab","color:color-mix(in oklab, red, blue)");
+probe("relative-color","color:rgb(from red r g b)");
+probe("hsl-space","color:hsl(120 100% 50%)");
+probe("hwb","color:hwb(120 0% 0%)");
+// background colours
+probe("bg-color-mix","background-color:color-mix(in srgb, red, blue)","background-color");
+probe("bg-oklch","background-color:oklch(70% 0.1 200)","background-color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
