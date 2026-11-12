@@ -1,0 +1,98 @@
+<!DOCTYPE html><html><head>
+<style id="s1">.cls { color: red; }</style>
+<style id="s2">@media (min-width: 1px) { .m { color: blue; } }</style>
+</head><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    function safe(fn) {
+        try { return 'ok:' + fn(); }
+        catch (e) { return 'ERR:' + String(e && e.name) + ':' + String(e && e.message).slice(0, 40); }
+    }
+
+    // ── A. document.styleSheets ──────────────────────────────────────────────
+    eq('A1 document.styleSheets has an entry per style element', document.styleSheets.length >= 2, 'true');
+    eq('A2 a style sheet reports its rule count', safe(function () {
+        return document.styleSheets[0].cssRules.length;
+    }), 'ok:1');
+
+    // ── B. CSSStyleSheet insertRule / deleteRule ─────────────────────────────
+    eq('B1 insertRule adds a rule', safe(function () {
+        var sheet = document.styleSheets[0];
+        var before = sheet.cssRules.length;
+        sheet.insertRule('.new { color: green; }', sheet.cssRules.length);
+        var after = sheet.cssRules.length; sheet.deleteRule(after - 1);
+        return after > before;
+    }), 'ok:true');
+    eq('B2 insertRule at index 0 places the rule first', safe(function () {
+        var sheet = document.styleSheets[0];
+        sheet.insertRule('.first { color: green; }', 0);
+        var sel = sheet.cssRules[0].selectorText; sheet.deleteRule(0);
+        return sel;
+    }), 'ok:.first');
+    eq('B3 deleteRule removes a rule', safe(function () {
+        var sheet = document.styleSheets[0];
+        sheet.insertRule('.tmp { color: green; }', sheet.cssRules.length);
+        var last = sheet.cssRules.length - 1; sheet.deleteRule(last);
+        return sheet.cssRules.length === last;
+    }), 'ok:true');
+
+    // ── C. CSSStyleRule ──────────────────────────────────────────────────────
+    eq('C1 a style rule reports its selectorText', safe(function () {
+        return document.styleSheets[0].cssRules[0].selectorText;
+    }), 'ok:.cls');
+    eq('C2 a style rule reports its cssText', safe(function () {
+        return document.styleSheets[0].cssRules[0].cssText.indexOf('color') >= 0;
+    }), 'ok:true');
+    eq('C3 a style rule exposes a style declaration', safe(function () {
+        return document.styleSheets[0].cssRules[0].style.color;
+    }), 'ok:red');
+
+    // ── D. CSSStyleDeclaration ───────────────────────────────────────────────
+    eq('D1 setProperty then getPropertyValue', safe(function () {
+        var d = document.getElementById('root').style;
+        d.setProperty('color', 'blue'); var v = d.getPropertyValue('color');
+        d.removeProperty('color'); return v;
+    }), 'ok:blue');
+    eq('D2 removeProperty clears the value', safe(function () {
+        var d = document.getElementById('root').style;
+        d.setProperty('color', 'blue'); d.removeProperty('color');
+        return d.getPropertyValue('color');
+    }), 'ok:');
+    eq('D3 an element style declaration reads its inline properties', safe(function () {
+        var d = document.getElementById('root'); d.style.color = 'red';
+        var v = getComputedStyle(d).color; d.style.color = ''; return v;
+    }), 'ok:rgb(255, 0, 0)');
+    eq('D4 cssText round-trips a declaration', safe(function () {
+        var d = document.createElement('div'); d.style.cssText = 'color: red; width: 10px;';
+        var v = d.style.color + ',' + d.style.width; d.remove(); return v;
+    }), 'ok:red,10px');
+
+    // ── E. CSSMediaRule ──────────────────────────────────────────────────────
+    eq('E1 a media rule reports its media text', safe(function () {
+        var sheet = document.styleSheets[1];
+        return sheet.cssRules[0].media.mediaText;
+    }), 'ok:(min-width: 1px)');
+    eq('E2 a media rule exposes nested rules', safe(function () {
+        var sheet = document.styleSheets[1];
+        return sheet.cssRules[0].cssRules.length;
+    }), 'ok:1');
+
+    // ── F. CSSOM on an element's inline style ────────────────────────────────
+    eq('F1 element.style has a length', safe(function () {
+        var d = document.getElementById('root'); d.style.color = 'red';
+        var n = d.style.length; d.style.color = ''; return n;
+    }), 'ok:1');
+    eq('F2 element.style.item(0) names the property', safe(function () {
+        var d = document.getElementById('root'); d.style.color = 'red';
+        var v = d.style.item(0); d.style.color = ''; return v;
+    }), 'ok:color');
+    eq('F3 styleSheets[0].ownerNode names its style element', safe(function () {
+        var sheet = document.styleSheets[0];
+        return sheet.ownerNode ? sheet.ownerNode.id : 'none';
+    }), 'ok:s1');
+})();
+</script></body></html>
