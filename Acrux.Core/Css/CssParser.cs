@@ -108,7 +108,10 @@ public class CssParser
                     break;
                 }
                 case StyleRuleProperty propertyRule:
-                    target.PropertyRules.Add(new PropertyRule { Name = propertyRule.Name });
+                    var pr = new PropertyRule { Name = propertyRule.Name };
+                    foreach (var d in propertyRule.Descriptors)
+                        pr.Descriptors[d.Key] = d.Value;
+                    target.PropertyRules.Add(pr);
                     break;
                 case StyleRuleCounterStyle counterStyle:
                     target.CounterStyleRules.Add(new CounterStyleRule { Name = counterStyle.Name });
@@ -325,6 +328,10 @@ public class KeyframeBlock
 public class PropertyRule : CssAtRule
 {
     public string Name { get; set; } = "";
+    /// <summary>The @property descriptors ('syntax', 'inherits', 'initial-value') the rule
+    /// declared, keyed by descriptor name. The initial value is what a registered custom
+    /// property answers for a box that never wrote it (CSS Properties 5 §3.2).</summary>
+    public Dictionary<string, string> Descriptors { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public class CounterStyleRule : CssAtRule

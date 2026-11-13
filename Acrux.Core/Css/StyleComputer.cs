@@ -68,7 +68,6 @@ public class StyleComputer
         // pipeline never re-parses the CSS text. The legacy model is retained only
         // for the string scans (HasHoverRules).
         var modern = stylesheet.ModernContents;
-        if (modern == null) return;
         if (origin == CascadeOrigin.UserAgent)
             _uaSheet = modern;
         else
@@ -81,8 +80,23 @@ public class StyleComputer
                 OwnerText = owner?.TextContent,
             };
             SeedMedia(sheet);
+            RegisterPropertyInitialValues(modern);
             _authorSheets.Add(sheet);
             if (owner != null) owner.AssociatedStyleSheet = modern;
+        }
+    }
+
+    /// <summary>Register the initial value each @property rule declares (CSS Properties 5 §3.2): a
+    /// registered custom property answers that initial for any box that never wrote it, so
+    /// getComputedStyle falls back to it when the element has no such custom property.</summary>
+    private static void RegisterPropertyInitialValues(StyleSheetContents sheet)
+    {
+        foreach (var rule in sheet.ChildRules)
+        {
+            if (rule is not StyleRuleProperty property) continue;
+            if (!property.Descriptors.TryGetValue("initial-value", out var initial)) continue;
+            if (string.IsNullOrWhiteSpace(initial)) continue;
+            Acrux.Core.Css.CssFunctionEvaluator.SetCustomProperty(property.Name, initial.Trim());
         }
     }
 

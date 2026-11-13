@@ -780,7 +780,14 @@ public class ComputedStyle
     public IEnumerable<KeyValuePair<string, string>> GetDeclaredOnlyValues() => _declaredOnlyValues;
 
     public void SetCustomProperty(string name, string value) => _customProperties[name] = value;
-    public string? GetCustomProperty(string name) => _customProperties.GetValueOrDefault(name);
+    /// <summary>The custom property's computed value: what the element or an ancestor wrote, or —
+    /// for a property an @property rule registered — that rule's initial-value when nothing wrote
+    /// it (CSS Properties 5 §3.2, measured: '--registered: 10px' answers '10px'). Registered
+    /// non-inheriting properties also answer their initial here; inheritance is handled by the
+    /// cascade, which only copies the property when the rule says it inherits.</summary>
+    public string? GetCustomProperty(string name) =>
+        _customProperties.GetValueOrDefault(name)
+        ?? Acrux.Core.Css.CssFunctionEvaluator.GetCustomProperty(name);
     public bool HasCustomProperty(string name) => _customProperties.ContainsKey(name);
     public IEnumerable<KeyValuePair<string, string>> GetAllCustomProperties() => _customProperties;
     public Length Width { get; set; } = AutoLength.Instance;
