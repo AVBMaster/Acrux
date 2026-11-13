@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// text-decoration longhands
+gc("tdl-none","text-decoration-line:none","text-decoration-line");
+gc("tdl-under","text-decoration-line:underline","text-decoration-line");
+gc("tdl-over","text-decoration-line:overline","text-decoration-line");
+gc("tdl-both","text-decoration-line:underline overline","text-decoration-line");
+gc("tds-solid","text-decoration-style:solid","text-decoration-style");
+gc("tds-wavy","text-decoration-style:wavy","text-decoration-style");
+gc("tds-dotted","text-decoration-style:dotted","text-decoration-style");
+gc("tds-dashed","text-decoration-style:dashed","text-decoration-style");
+gc("tds-double","text-decoration-style:double","text-decoration-style");
+gc("tdc-red","text-decoration-color:red","text-decoration-color");
+gc("tdt-thickness","text-decoration-thickness:2px","text-decoration-thickness");
+gc("tdt-from-font","text-decoration-thickness:from-font","text-decoration-thickness");
+gc("tdt-auto","text-decoration-thickness:auto","text-decoration-thickness");
+// text-transform
+gc("tt-none","text-transform:none","text-transform");
+gc("tt-upper","text-transform:uppercase","text-transform");
+gc("tt-lower","text-transform:lowercase","text-transform");
+gc("tt-cap","text-transform:capitalize","text-transform");
+gc("tt-fullw","text-transform:full-width","text-transform");
+gc("tt-fullsize","text-transform:full-size-kana","text-transform");
+// font-variant-caps
+gc("fvc-normal","font-variant-caps:normal","font-variant-caps");
+gc("fvc-small","font-variant-caps:small-caps","font-variant-caps");
+gc("fvc-allsmall","font-variant-caps:all-small-caps","font-variant-caps");
+gc("fvc-petite","font-variant-caps:petite-caps","font-variant-caps");
+gc("fvc-unicase","font-variant-caps:unicase","font-variant-caps");
+gc("fvc-titling","font-variant-caps:titling-caps","font-variant-caps");
+// text-emphasis
+gc("te-style","text-emphasis-style:filled dot","text-emphasis-style");
+gc("te-color","text-emphasis-color:red","text-emphasis-color");
+// text-underline-offset
+gc("tuo-px","text-underline-offset:3px","text-underline-offset");
+gc("tuo-auto","text-underline-offset:auto","text-underline-offset");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
