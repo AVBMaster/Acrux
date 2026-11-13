@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+" "+Math.round(r.width)+"x"+Math.round(r.height);}
+
+// #136 transformed getBoundingClientRect
+const t1=document.createElement("div");t1.style.width="100px";t1.style.height="50px";
+t1.style.transform="translate(30px,20px)";t1.style.background="#fcc";document.body.appendChild(t1);
+L("transform-translate",rect(t1));t1.remove();
+const t2=document.createElement("div");t2.style.width="100px";t2.style.height="50px";
+t2.style.transform="rotate(45deg)";t2.style.background="#ccf";document.body.appendChild(t2);
+const r2=t2.getBoundingClientRect();L("transform-rotate-w",Math.round(r2.width));L("transform-rotate-h",Math.round(r2.height));t2.remove();
+const t3=document.createElement("div");t3.style.width="100px";t3.style.height="50px";
+t3.style.transform="scale(2)";t3.style.background="#cfc";document.body.appendChild(t3);
+L("transform-scale",rect(t3));t3.remove();
+
+// #146 ch precision (should be fractional, not rounded pixel)
+const c1=document.createElement("div");c1.style.font="16px monospace";c1.style.width="10ch";c1.style.whiteSpace="pre";document.body.appendChild(c1);
+const cw=c1.getBoundingClientRect().width;L("ch-10monospace",cw.toFixed(3));c1.remove();
+const c2=document.createElement("div");c2.style.font="20px serif";c2.style.width="5ch";c2.style.whiteSpace="pre";document.body.appendChild(c2);
+L("ch-5serif",c2.getBoundingClientRect().width.toFixed(3));c2.remove();
+
+// #188 inline-level table
+const it=document.createElement("table");it.style.display="inline-table";it.style.border="1px solid #000";
+const itr=document.createElement("tr");it.appendChild(itr);
+const itd=document.createElement("td");itd.textContent="cell";itr.appendChild(itd);
+document.body.appendChild(it);
+const itr2=it.getBoundingClientRect();
+L("inline-table-w",Math.round(itr2.width));L("inline-table-display",getComputedStyle(it).display);
+it.remove();
+// verify it sits on the baseline with text
+const wrap=document.createElement("div");wrap.style.font="16px monospace";
+wrap.innerHTML="before<table style='display:inline-table;border:1px solid #000'><tr><td>T</td></tr></table>after";
+document.body.appendChild(wrap);
+L("inline-table-in-text",wrap.textContent);wrap.remove();
+
+// #215 sideways writing-mode
+const sw=document.createElement("div");sw.style.writingMode="sideways-lr";sw.style.height="100px";sw.textContent="sideways";document.body.appendChild(sw);
+L("sideways-lr-w",Math.round(sw.getBoundingClientRect().width));L("sideways-lr-display",getComputedStyle(sw).writingMode);
+sw.remove();
+const sw2=document.createElement("div");sw2.style.writingMode="vertical-rl";sw2.style.height="100px";sw2.textContent="縦書き";document.body.appendChild(sw2);
+L("vertical-rl-w",Math.round(sw2.getBoundingClientRect().width));L("vertical-rl-display",getComputedStyle(sw2).writingMode);
+sw2.remove();
+
+// #136 getClientRects for inline
+const span=document.createElement("span");span.textContent="hello world";document.body.appendChild(span);
+const crs=span.getClientRects();L("clientrects-count",crs.length);
+if(crs.length>0)L("clientrects-first",Math.round(crs[0].width)+"x"+Math.round(crs[0].height));
+span.remove();
+
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
