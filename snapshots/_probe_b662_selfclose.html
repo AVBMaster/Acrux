@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// HTML parser handling of self-closing in SVG/foreign content
+// HTML §13.2.5.5: in SVG, <rect/> is self-closing; <rect> is not
+const NS="http://www.w3.org/2000/svg";
+// via innerHTML - SVG in HTML
+const d1=document.createElement("div");
+d1.innerHTML='<svg xmlns="http://www.w3.org/2000/svg"><rect/><circle/></svg>';
+const svg1=d1.querySelector("svg");
+L("svg-selfclose-children",svg1?svg1.children.length:"no-svg");
+L("svg-rect",svg1?svg1.children[0]?.tagName:"none");
+svg1?.remove();
+// self-closing in HTML (should NOT self-close - next tag is sibling)
+const d2=document.createElement("div");
+d2.innerHTML='<div><span/><b>x</b></div>';
+const dv=d2.querySelector("div");
+L("html-selfclose-span-children",dv.children.length);
+L("html-selfclose-first",dv.children[0]?.tagName);
+L("html-selfclose-second",dv.children[1]?.tagName);
+dv?.remove();
+// foreign self-closing inside HTML innerHTML (SVG context)
+const d3=document.createElement("div");
+d3.innerHTML='<svg xmlns="http://www.w3.org/2000/svg"><rect x="0"/><circle r="5"/></svg>';
+const svg3=d3.querySelector("svg");
+L("svg-inline-children",svg3?svg3.children.length:"none");
+svg3?.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
