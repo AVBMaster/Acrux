@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+const NS="http://www.w3.org/2000/svg";
+const svg=document.createElementNS(NS,"svg");svg.setAttribute("width","200");svg.setAttribute("height","100");
+document.body.appendChild(svg);
+// presentation attributes -> CSS properties
+const rect=document.createElementNS(NS,"rect");
+rect.setAttribute("x","10");rect.setAttribute("y","10");
+rect.setAttribute("width","50");rect.setAttribute("height","30");
+rect.setAttribute("fill","red");rect.setAttribute("stroke","blue");rect.setAttribute("stroke-width","3");
+rect.setAttribute("fill-opacity","0.5");
+svg.appendChild(rect);
+L("fill",getComputedStyle(rect).fill);
+L("stroke",getComputedStyle(rect).stroke);
+L("stroke-width",getComputedStyle(rect).strokeWidth);
+L("fill-opacity",getComputedStyle(rect).fillOpacity);
+L("x-prop",getComputedStyle(rect).x);
+L("width-prop",getComputedStyle(rect).width);
+// geometry attrs
+const circ=document.createElementNS(NS,"circle");
+circ.setAttribute("cx","50");circ.setAttribute("cy","40");circ.setAttribute("r","20");
+circ.setAttribute("fill","green");
+svg.appendChild(circ);
+L("cx",getComputedStyle(circ).cx);L("r",getComputedStyle(circ).r);L("cy",getComputedStyle(circ).cy);
+L("circ-fill",getComputedStyle(circ).fill);
+// CSS beats presentation attribute
+rect.style.fill="purple";
+L("css-beats-attr",getComputedStyle(rect).fill);
+svg.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
