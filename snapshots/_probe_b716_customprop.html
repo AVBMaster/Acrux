@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// custom property inheritance
+const parent=document.createElement("div");parent.style.setProperty("--size","20px");
+const child=document.createElement("span");child.style.fontSize="var(--size)";child.textContent="x";
+parent.appendChild(child);document.body.appendChild(parent);
+L("cp-inherit",getComputedStyle(child).fontSize);
+L("cp-value",getComputedStyle(child).getPropertyValue("--size").split(" ").join("_"));
+parent.remove();
+// var() with fallback
+const fb=document.createElement("div");fb.style.setProperty("--x","red");fb.style.color="var(--x)";document.body.appendChild(fb);
+L("var-no-fallback",getComputedStyle(fb).color.split(" ").join("_"));
+fb.remove();
+// var() fallback used when var undefined
+const fb2=document.createElement("div");fb2.style.color="var(--undefined,blue)";document.body.appendChild(fb2);
+L("var-fallback",getComputedStyle(fb2).color.split(" ").join("_"));
+fb2.remove();
+// var() fallback not used when var defined
+const fb3=document.createElement("div");fb3.style.setProperty("--c","green");fb3.style.color="var(--c,red)";document.body.appendChild(fb3);
+L("var-fallback-unused",getComputedStyle(fb3).color.split(" ").join("_"));
+fb3.remove();
+// custom property on :root
+document.documentElement.style.setProperty("--root-var","42px");
+const rvc=document.createElement("div");rvc.style.fontSize="var(--root-var)";document.body.appendChild(rvc);
+L("root-var",getComputedStyle(rvc).fontSize);
+rvc.remove();document.documentElement.style.removeProperty("--root-var");
+// custom property with calc
+const cc=document.createElement("div");cc.style.setProperty("--w","calc(10px + 5px)");cc.style.width="var(--w)";document.body.appendChild(cc);
+L("cp-calc",getComputedStyle(cc).width);
+cc.remove();
+// custom property undefined → var() with no fallback = invalid
+const uv=document.createElement("div");uv.style.color="var(--nope)";uv.style.backgroundColor="yellow";document.body.appendChild(uv);
+L("var-undefined-color",getComputedStyle(uv).color.split(" ").join("_"));
+L("var-undefined-bg",getComputedStyle(uv).backgroundColor.split(" ").join("_"));
+uv.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
