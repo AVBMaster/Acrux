@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+const NS="http://www.w3.org/2000/svg";
+const svg=document.createElementNS(NS,"svg");svg.setAttribute("width","200");svg.setAttribute("height","100");
+document.body.appendChild(svg);
+// rect geometry properties that DO map
+const rect=document.createElementNS(NS,"rect");
+rect.setAttribute("x","10");rect.setAttribute("y","10");
+rect.setAttribute("width","50");rect.setAttribute("height","30");
+svg.appendChild(rect);
+L("x",getComputedStyle(rect).x);
+L("y",getComputedStyle(rect).y);
+L("width",getComputedStyle(rect).width);
+L("height",getComputedStyle(rect).height);
+// set via CSS (bypasses attribute path)
+rect.style.width="60px";rect.style.height="40px";
+L("width-css",getComputedStyle(rect).width);
+L("height-css",getComputedStyle(rect).height);
+svg.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
