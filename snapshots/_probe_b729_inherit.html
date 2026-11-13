@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// Test which properties inherit from parent to child
+function testInherit(prop,css){
+  const parent=document.createElement("div");
+  parent.style.cssText=css;
+  const child=document.createElement("span");child.textContent="x";
+  parent.appendChild(child);document.body.appendChild(parent);
+  const pv=getComputedStyle(child).getPropertyValue(prop).trim();
+  parent.remove();
+  return pv===""?"(empty)":pv.split(" ").join("_");
+}
+// Inherited properties
+L("inh-color",testInherit("color","color:red"));
+L("inh-font-size",testInherit("font-size","font-size:20px"));
+L("inh-font-family",testInherit("font-family","font-family:serif"));
+L("inh-font-weight",testInherit("font-weight","font-weight:bold"));
+L("inh-line-height",testInherit("line-height","line-height:2"));
+L("inh-text-align",testInherit("text-align","text-align:center"));
+L("inh-text-indent",testInherit("text-indent","text-indent:20px"));
+L("inh-letter-spacing",testInherit("letter-spacing","letter-spacing:2px"));
+L("inh-word-spacing",testInherit("word-spacing","word-spacing:5px"));
+L("inh-white-space",testInherit("white-space","white-space:pre"));
+L("inh-visibility",testInherit("visibility","visibility:hidden"));
+L("inh-direction",testInherit("direction","direction:rtl"));
+L("inh-text-transform",testInherit("text-transform","text-transform:uppercase"));
+L("inh-text-decoration-line",testInherit("text-decoration-line","text-decoration-line:underline"));
+// Non-inherited properties
+L("non-inh-width",testInherit("width","width:100px"));
+L("non-inh-height",testInherit("height","height:50px"));
+L("non-inh-margin",testInherit("margin-top","margin-top:10px"));
+L("non-inh-padding",testInherit("padding-top","padding-top:10px"));
+L("non-inh-border",testInherit("border-top-width","border-top-width:3px"));
+L("non-inh-background",testInherit("background-color","background-color:red"));
+L("non-inh-display",testInherit("display","display:flex"));
+L("non-inh-position",testInherit("position","position:absolute"));
+L("non-inh-overflow",testInherit("overflow","overflow:hidden"));
+L("non-inh-opacity",testInherit("opacity","opacity:0.5"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
