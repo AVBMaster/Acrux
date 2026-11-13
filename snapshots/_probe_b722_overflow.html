@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// overflow shorthand and longhands
+gc("of-visible","overflow:visible","overflow");
+gc("of-hidden","overflow:hidden","overflow");
+gc("of-auto","overflow:auto","overflow");
+gc("of-scroll","overflow:scroll","overflow");
+gc("of-clip","overflow:clip","overflow");
+gc("ofx-hidden","overflow-x:hidden","overflow-x");
+gc("ofy-auto","overflow-y:auto","overflow-y");
+gc("of-xy","overflow-x:hidden;overflow-y:scroll","overflow");
+// scrollbar-width
+gc("sbw-auto","scrollbar-width:auto","scrollbar-width");
+gc("sbw-thin","scrollbar-width:thin","scrollbar-width");
+gc("sbw-none","scrollbar-width:none","scrollbar-width");
+// scrollbar-gutter
+gc("sbg-auto","scrollbar-gutter:auto","scrollbar-gutter");
+gc("sbg-stable","scrollbar-gutter:stable","scrollbar-gutter");
+gc("sbg-both","scrollbar-gutter:stable both-edges","scrollbar-gutter");
+// overflow-anchor
+gc("oa-none","overflow-anchor:none","overflow-anchor");
+// overscroll-behavior
+gc("osb-auto","overscroll-behavior:auto","overscroll-behavior");
+gc("osb-contain","overscroll-behavior:contain","overscroll-behavior");
+gc("osb-none","overscroll-behavior:none","overscroll-behavior");
+gc("osbx-none","overscroll-behavior-x:none","overscroll-behavior-x");
+// scrollbar-color
+gc("sbc","scrollbar-color:red blue","scrollbar-color");
+// text-overflow
+gc("to-clip","text-overflow:clip","text-overflow");
+gc("to-ellipsis","text-overflow:ellipsis","text-overflow");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
