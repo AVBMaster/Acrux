@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.g{display:grid;width:200px;height:80px;border:1px solid #000}
+.f{display:flex;width:200px;height:80px;border:1px solid #000}
+.it{width:30px;height:20px;background:tomato}
+</style></head><body>
+<div id="out"></div>
+<div class="g" id="g1" style="place-content:space-between center">
+  <div class="it"></div><div class="it"></div>
+</div>
+<div class="f" id="f1" style="place-content:space-between center">
+  <div class="it"></div><div class="it"></div>
+</div>
+<script>
+const out=[];
+function pos(id){
+  const host=document.getElementById(id);
+  const kids=[...host.children];
+  return kids.map((k,i)=>{
+    const r=k.getBoundingClientRect();
+    return "k"+i+"@x"+Math.round(r.x)+"_y"+Math.round(r.y);
+  }).join(",");
+}
+out.push(["L","grid-sb-center","kids="+pos("g1")].join("~"));
+out.push(["L","flex-sb-center","kids="+pos("f1")].join("~"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
