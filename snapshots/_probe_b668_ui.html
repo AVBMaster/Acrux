@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// accent-color (#input)
+gc("accent","accent-color:red","accent-color");
+// caret-color
+gc("caret-red","caret-color:red","caret-color");
+gc("caret-auto","caret-color:auto","caret-color");
+// outline offset/width/style
+gc("ol-2px","outline:2px solid blue;outline-offset:3px","outline");
+gc("ol-offset","outline-offset:3px","outline-offset");
+gc("ol-width","outline-width:2px","outline-width");
+gc("ol-style","outline-style:solid","outline-style");
+// resize
+gc("resize-both","resize:both","resize");
+// user-select
+gc("us-none","user-select:none","user-select");
+// touch-action
+gc("ta-panx","touch-action:pan-x","touch-action");
+// -webkit-appearance
+gc("appearance-none","appearance:none","appearance");
+gc("appearance-btn","appearance:button","appearance");
+// cursor
+gc("cursor-pointer","cursor:pointer","cursor");
+gc("cursor-crosshair","cursor:crosshair","cursor");
+// pointer-events
+gc("pe-none","pointer-events:none","pointer-events");
+// visibility
+gc("vis-hidden","visibility:hidden","visibility");
+// opacity
+gc("opacity-05","opacity:0.5","opacity");
+// box-decoration-break
+gc("bdb-clone","box-decoration-break:clone","box-decoration-break");
+// image-rendering
+gc("ir-pixel","image-rendering:pixelated","image-rendering");
+// object-fit
+gc("of-cover","object-fit:cover","object-fit");
+// backdrop-filter
+gc("bdf-blur","backdrop-filter:blur(4px)","backdrop-filter");
+// filter (computed)
+gc("filter-blur","filter:blur(2px)","filter");
+// mix-blend-mode
+gc("mix-multiply","mix-blend-mode:multiply","mix-blend-mode");
+// clip-path basic
+gc("clip-circle","clip-path:circle(50%)","clip-path");
+gc("clip-inset","clip-path:inset(10px)","clip-path");
+// shape-outside
+gc("shape-circle","shape-outside:circle(50%)","shape-outside");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
