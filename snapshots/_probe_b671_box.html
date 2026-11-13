@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// border-image
+const bi=document.createElement("div");bi.style.width="100px";bi.style.height="50px";
+bi.style.border="10px solid transparent";
+bi.style.borderImage="linear-gradient(red,blue) 1";
+bi.style.background="#eee";document.body.appendChild(bi);
+L("border-image-w",Math.round(bi.getBoundingClientRect().width));
+L("border-image-bi",getComputedStyle(bi).borderImageSource.split(" ").join("_"));
+bi.remove();
+// border-radius + overflow
+const br=document.createElement("div");br.style.width="100px";br.style.height="50px";
+br.style.borderRadius="10px";br.style.overflow="hidden";br.style.background="#fcc";
+document.body.appendChild(br);
+L("borderradius-overflow",rect(br));
+br.remove();
+// box-shadow spread/inset
+const bs=document.createElement("div");bs.style.width="50px";bs.style.height="50px";
+bs.style.boxShadow="inset 5px 5px 10px rgba(0,0,0,0.5)";document.body.appendChild(bs);
+L("boxshadow-inset",getComputedStyle(bs).boxShadow.split(" ").join("_"));
+bs.remove();
+// outline roundrect
+const orr=document.createElement("div");orr.style.width="50px";orr.style.height="50px";
+orr.style.outline="3px solid red";orr.style.outlineOffset="2px";document.body.appendChild(orr);
+L("outline-offset",Math.round(orr.getBoundingClientRect().width));
+orr.remove();
+// background-clip text
+const bct=document.createElement("div");bct.style.fontSize="20px";bct.style.fontWeight="bold";
+bct.style.background="linear-gradient(red,blue)";bct.style.webkitBackgroundClip="text";
+bct.style.webkitTextFillColor="transparent";bct.textContent="GRADIENT";
+document.body.appendChild(bct);
+L("bgclip-text-bc",getComputedStyle(bct).webkitBackgroundClip);
+L("bgclip-text-fill",getComputedStyle(bct).webkitTextFillColor);
+bct.remove();
+// multiple box-shadows
+const mb=document.createElement("div");mb.style.width="50px";mb.style.height="50px";
+mb.style.boxShadow="2px 2px red, 4px 4px blue";document.body.appendChild(mb);
+L("boxshadow-multi",getComputedStyle(mb).boxShadow.split(" ").join("_"));
+mb.remove();
+// background-position with percentages
+const bp=document.createElement("div");bp.style.width="200px";bp.style.height="100px";
+bp.style.background="url(x.png) no-repeat 50% 50%/contain";
+document.body.appendChild(bp);
+L("bgpos-50pct",getComputedStyle(bp).backgroundPosition.split(" ").join("_"));
+L("bgsize-contain",getComputedStyle(bp).backgroundSize.split(" ").join("_"));
+bp.remove();
+// radial gradient shape
+const rg=document.createElement("div");rg.style.width="100px";rg.style.height="100px";
+rg.style.background="radial-gradient(circle at 30% 30%, white, black)";
+document.body.appendChild(rg);
+L("radial-gradient",getComputedStyle(rg).backgroundImage.split(" ").join("_").substring(0,60));
+rg.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
