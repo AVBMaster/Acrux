@@ -354,9 +354,15 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             float sectionAvailableInlineSize = gridInline;
             foreach (var section in data.sections)
             {
+                // A bare '<tr>' with no section wrapper is grouped as an implicit tbody whose
+                // 'node' is that row itself. The wrapper must then carry no element, or it
+                // collides with the row fragment below it and the row's cells are left without
+                // a box (the anonymous-wrapper descend in AssignLayoutBox relies on a null here).
+                var sectionElement = section.node is { } sn &&
+                    sn.ComputedStyle?.Display == DisplayType.TableRow ? null : section.node;
                 var sectionFrag = new BoxFragment
                 {
-                    Element = section.node,
+                    Element = sectionElement,
                     InlineOffset = borderSpacing,
                     BlockOffset = blockOffset,
                     InlineSize = sectionAvailableInlineSize,

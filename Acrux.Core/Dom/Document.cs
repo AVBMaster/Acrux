@@ -378,6 +378,23 @@ public class Document : Node
         return FindElementById(DocumentElement, id);
     }
 
+    /// <summary>The element the document URL's fragment names, which is the sole :target match
+    /// (HTML §7.4.1.1 / CSS Selectors 4 §3.3): '#sec' on a URL targets the element whose id is
+    /// 'sec'. A URL with no fragment, or a fragment naming no element, targets nothing, so no
+    /// element matches ':target'.</summary>
+    public Element? TargetElement
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Url)) return null;
+            int hash = Url.LastIndexOf('#');
+            if (hash < 0) return null;
+            var fragment = Url[(hash + 1)..];
+            if (fragment.Length == 0) return null;
+            return GetElementById(Uri.UnescapeDataString(fragment));
+        }
+    }
+
     public List<Element> GetElementsByTagName(string tagName)
     {
         var result = new List<Element>();

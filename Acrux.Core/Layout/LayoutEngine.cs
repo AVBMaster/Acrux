@@ -327,8 +327,14 @@ public class LayoutEngine
     {
         foreach (var childBox in box.Children)
         {
-            if (childBox.Dimensions?.Element is not { } childElement ||
-                ReferenceEquals(childElement, element))
+            if (childBox.Dimensions?.Element is not { } childElement)
+            {
+                // An anonymous wrapper (an implicit tbody grouping bare rows) has no element
+                // of its own but its rows and cells do; descend without assigning a box.
+                AssignLayoutBox(element, childBox);
+                continue;
+            }
+            if (ReferenceEquals(childElement, element))
                 continue;
             childElement.LayoutBox = childBox;
             AssignLayoutBox(childElement, childBox);

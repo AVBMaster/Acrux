@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+#sec1:target{background:#cfc}
+#sec2:target{color:red}
+div:target{outline:2px solid blue}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function probe(tag,el){out.push("L~"+tag+"~"+el.id+"="+getComputedStyle(el).backgroundColor);}
+// Static :target from URL fragment '#sec1'
+const s1=document.getElementById("sec1");
+const s2=document.getElementById("sec2");
+const s3=document.getElementById("sec3");
+probe("s1-target",s1);
+probe("s2-not-target",s2);
+probe("s3-not-target",s3);
+document.getElementById("out").textContent=out.join("\n");
+</script>
+<div id="sec1">Section 1</div>
+<div id="sec2">Section 2</div>
+<div id="sec3">Section 3</div>
+</body></html>

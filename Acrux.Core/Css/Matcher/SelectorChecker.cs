@@ -288,7 +288,7 @@ public class SelectorChecker
             CssPseudoType.Lang => MatchLang(selector.Argument, element),
             CssPseudoType.Dir => MatchDir(selector.Argument, element),
             CssPseudoType.Defined => IsDefined(element),
-            CssPseudoType.Target => false,
+            CssPseudoType.Target => ReferenceEquals(element, element.OwnerDocument?.TargetElement),
             CssPseudoType.Modal => element.IsModal,
             CssPseudoType.PopoverOpen => element.IsPopoverShowing,
             CssPseudoType.Fullscreen => false,

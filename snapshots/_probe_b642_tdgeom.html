@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const t=document.createElement("table");t.style.width="200px";
+const tr=document.createElement("tr");t.appendChild(tr);
+const td=document.createElement("td");td.textContent="cell";tr.appendChild(td);
+document.body.appendChild(t);
+const d=document.getElementById("out");
+const lines=[];
+lines.push("L|table-rect="+JSON.stringify(t.getBoundingClientRect()));
+lines.push("L|td-rect="+JSON.stringify(td.getBoundingClientRect()));
+lines.push("L|tr-rect="+JSON.stringify(tr.getBoundingClientRect()));
+lines.push("L|td-offsetParent="+(td.offsetParent===null?"null":(td.offsetParent.tagName||"?")));
+lines.push("L|td-offsetLeft="+td.offsetLeft+"|td-offsetTop="+td.offsetTop+"|td-offsetWidth="+td.offsetWidth+"|td-offsetHeight="+td.offsetHeight);
+lines.push("L|td-clientWidth="+td.clientWidth+"|td-clientHeight="+td.clientHeight);
+d.textContent=lines.join("\n");
+</script></body></html>
