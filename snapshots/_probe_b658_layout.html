@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// #302 multicolumn column-width shrink-to-fit
+const mc1=document.createElement("div");mc1.style.columns="2";mc1.style.columnGap="20px";
+mc1.textContent="hello world ".repeat(30);document.body.appendChild(mc1);
+const mc1r=mc1.getBoundingClientRect();
+L("multicol-2col-w",Math.round(mc1r.width));L("multicol-2col-h",Math.round(mc1r.height));
+L("multicol-2col-cw",getComputedStyle(mc1).columnWidth);L("multicol-2col-cg",getComputedStyle(mc1).columnGap);
+mc1.remove();
+// multicolumn with explicit column-width
+const mc2=document.createElement("div");mc2.style.columnWidth="100px";mc2.style.columnGap="10px";
+mc2.textContent="hello world ".repeat(20);document.body.appendChild(mc2);
+L("multicol-cw100-w",Math.round(mc2.getBoundingClientRect().width));
+L("multicol-cw100-cw",getComputedStyle(mc2).columnWidth);
+mc2.remove();
+// column-span:all (#185)
+const mc3=document.createElement("div");mc3.style.columns="2";
+mc3.innerHTML="<p>First col text here.</p><h2 style='column-span:all'>Full Width</h2><p>Second col text.</p>";
+document.body.appendChild(mc3);
+L("colspan-all-h",Math.round(mc3.getBoundingClientRect().height));
+mc3.remove();
+
+// #300 foreign-content self-closing
+// SVG self-closing
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("width","100");svg.setAttribute("height","50");
+const rect1=document.createElementNS("http://www.w3.org/2000/svg","rect");
+rect1.setAttribute("width","50");rect1.setAttribute("height","25");rect1.setAttribute("fill","red");
+svg.appendChild(rect1);document.body.appendChild(svg);
+L("svg-rect",svg.children.length);svg.remove();
+// HTML in foreign (MathML)
+const math=document.createElementNS("http://www.w3.org/1998/Math/MathML","math");
+math.setAttribute("display","block");document.body.appendChild(math);
+const mi=document.createElementNS("http://www.w3.org/1998/Math/MathML","mi");mi.textContent="x";
+math.appendChild(mi);
+L("mathml-children",math.children.length);math.remove();
+
+// #319 inline-level table in flow context
+const flow=document.createElement("div");flow.style.border="1px solid blue";
+flow.innerHTML="text<table style='display:inline-table;width:50px;height:30px;background:#fcc'><tr><td>x</td></tr></table>more text";
+document.body.appendChild(flow);
+const flowR=flow.getBoundingClientRect();
+L("inline-table-flow-w",Math.round(flowR.width));L("inline-table-flow-h",Math.round(flowR.height));
+flow.remove();
+
+// #321 multicolumn child bg
+const mc4=document.createElement("div");mc4.style.columns="2";mc4.style.columnGap="10px";mc4.style.columnRule="1px solid #ccc";
+mc4.innerHTML="<p style='background:#fcc'>Col1 text here with background</p><p style='background:#ccf'>Col2 more text here</p>";
+document.body.appendChild(mc4);
+L("multicol-bgh-w",Math.round(mc4.getBoundingClientRect().width));
+mc4.remove();
+
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
