@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+function add(html,css){
+  const d=document.createElement("div");d.setAttribute("style",css);d.innerHTML=html;
+  document.body.appendChild(d);return d;
+}
+// horizontal-tb (default)
+let d=add("Hello","writing-mode:horizontal-tb;width:100px;height:50px;background:#fcc");
+L("htb",rect(d));d.remove();
+// vertical-rl
+d=add("Hello","writing-mode:vertical-rl;width:100px;height:80px;background:#ccf");
+L("vrl",rect(d));d.remove();
+// vertical-lr
+d=add("Hello","writing-mode:vertical-lr;width:100px;height:80px;background:#cfc");
+L("vlr",rect(d));d.remove();
+// sideways-rl
+d=add("Hello","writing-mode:sideways-rl;width:100px;height:80px;background:#ffc");
+L("srl",rect(d));d.remove();
+// text-orientation upright in vertical
+d=add("Hello","writing-mode:vertical-rl;text-orientation:upright;width:100px;height:80px");
+L("vrl-upright",rect(d));d.remove();
+// direction rtl
+d=add("ABC","direction:rtl;width:100px;height:30px");
+L("rtl",rect(d));d.remove();
+// direction ltr
+d=add("ABC","direction:ltr;width:100px;height:30px");
+L("ltr",rect(d));d.remove();
+// unicode-bidi override
+d=add("ABC","direction:rtl;unicode-bidi:bidi-override;width:100px;height:30px");
+L("bidi-override",rect(d));d.remove();
+// mixed writing modes parent/child
+d=add("Outer<div style='writing-mode:horizontal-tb'>Inner</div>","writing-mode:vertical-rl;width:100px;height:100px");
+L("mixed-wm",rect(d));d.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
