@@ -266,7 +266,7 @@ public class SelectorChecker
             CssPseudoType.FocusWithin => IsFocusWithin(element),
             CssPseudoType.Enabled => IsFormLike(element) && !IsActuallyDisabled(element),
             CssPseudoType.Disabled => IsActuallyDisabled(element),
-            CssPseudoType.Checked => element.HasAttribute("checked") || element.HasAttribute("selected"),
+            CssPseudoType.Checked => IsChecked(element),
             CssPseudoType.Required => element.HasAttribute("required"),
             CssPseudoType.Optional => !element.HasAttribute("required") && IsFormLike(element),
             CssPseudoType.Valid => IsValidControl(element),
@@ -561,6 +561,18 @@ public class SelectorChecker
             if (!string.IsNullOrEmpty(dir)) { direction = dir.ToLowerInvariant(); break; }
         }
         return direction == wanted;
+    }
+
+    /// <summary>HTML §4.10.5.1: ':checked' reflects the element's checked state — the checked
+    /// content attribute when nothing else has set it, and the dirty-checkedness flag once script
+    /// or the user has. Reading the Checked property (not just the attribute) covers both, so
+    /// 'cb.checked = true' matches ':checked' the way the reference engine does.</summary>
+    private static bool IsChecked(Element element)
+    {
+        var type = (element.GetAttribute("type") ?? "").ToLowerInvariant();
+        if (type == "checkbox" || type == "radio")
+            return element.Checked;
+        return element.HasAttribute("checked") || element.HasAttribute("selected");
     }
 
     /// <summary>HTML §4.13.6: ':indeterminate' matches a progress bar (an unspecified one always),
