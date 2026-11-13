@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+const td=document.createElement("td");
+td.colSpan=3;
+L("colSpan-prop",td.colSpan);
+L("colspan-attr",td.getAttribute("colspan")==null?"null":td.getAttribute("colspan"));
+L("outerHTML",td.outerHTML);
+// also rowSpan
+td.rowSpan=2;
+L("rowSpan-prop",td.rowSpan);
+L("rowspan-attr",td.rowSpan.getAttribute==null?"n/a":td.getAttribute("rowspan")==null?"null":td.getAttribute("rowspan"));
+L("outerHTML2",td.outerHTML);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

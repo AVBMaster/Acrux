@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// single colspan=2 in a 2-col table (via a header row defining 2 cols)
+const t=document.createElement("table");t.style.width="200px";
+const tr0=document.createElement("tr");t.appendChild(tr0);
+const h1=document.createElement("td");h1.textContent="H1";tr0.appendChild(h1);
+const h2=document.createElement("td");h2.textContent="H2";tr0.appendChild(h2);
+const tr1=document.createElement("tr");t.appendChild(tr1);
+const wide=document.createElement("td");wide.setAttribute("colspan","2");wide.textContent="WIDE";tr1.appendChild(wide);
+document.body.appendChild(t);
+L("header1-w",Math.round(h1.getBoundingClientRect().width));
+L("header2-w",Math.round(h2.getBoundingClientRect().width));
+L("wide-w",Math.round(wide.getBoundingClientRect().width));
+L("wide-attr",wide.getAttribute("colspan"));
+t.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

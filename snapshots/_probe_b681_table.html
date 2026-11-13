@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+function mkTable(style,captionSide){
+  const t=document.createElement("table");t.setAttribute("style",style);
+  if(captionSide){const c=document.createElement("caption");c.textContent="Cap";if(captionSide)c.style.captionSide=captionSide;t.appendChild(c);}
+  const tr=document.createElement("tr");t.appendChild(tr);
+  const td=document.createElement("td");td.textContent="A";tr.appendChild(td);
+  const td2=document.createElement("td");td2.textContent="B";tr.appendChild(td2);
+  document.body.appendChild(t);return t;
+}
+// table-layout fixed vs auto
+let t=mkTable("table-layout:fixed;width:200px");
+L("tl-fixed-w",Math.round(t.getBoundingClientRect().width));
+L("tl-fixed-computed",getComputedStyle(t).tableLayout);
+t.remove();
+t=mkTable("table-layout:auto;width:200px");
+L("tl-auto-w",Math.round(t.getBoundingClientRect().width));
+t.remove();
+// caption-side bottom
+t=mkTable("border-collapse:collapse;width:200px","bottom");
+L("caption-bottom-h",Math.round(t.getBoundingClientRect().height));
+L("caption-side",getComputedStyle(t.querySelector("caption")).captionSide);
+t.remove();
+// border-spacing
+t=mkTable("border-collapse:separate;border-spacing:10px 5px;width:200px");
+L("border-spacing",getComputedStyle(t).borderSpacing.split(" ").join("_"));
+t.remove();
+// empty-cells
+t=mkTable("border-collapse:separate;empty-cells:hide;width:200px");
+L("empty-cells",getComputedStyle(t).emptyCells);
+t.remove();
+// colspan
+t=document.createElement("table");t.style.width="200px";t.style.borderCollapse="collapse";
+const tr=document.createElement("tr");t.appendChild(tr);
+const td=document.createElement("td");td.colSpan=2;td.textContent="wide";tr.appendChild(td);
+document.body.appendChild(t);
+L("colspan-w",Math.round(td.getBoundingClientRect().width));
+t.remove();
+// vertical-align in cell
+t=document.createElement("table");t.style.height="80px";t.style.borderCollapse="collapse";
+const tr2=document.createElement("tr");t.appendChild(tr2);
+const tdv=document.createElement("td");tdv.style.height="80px";tdv.style.verticalAlign="bottom";tdv.textContent="v";tr2.appendChild(tdv);
+document.body.appendChild(t);
+L("cell-valign",getComputedStyle(tdv).verticalAlign);
+L("cell-valign-y",Math.round(tdv.getBoundingClientRect().y));
+t.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// pure attribute, no colSpan property
+const t=document.createElement("table");t.style.width="200px";t.style.borderCollapse="collapse";
+const tr=document.createElement("tr");t.appendChild(tr);
+const td=document.createElement("td");td.setAttribute("colspan","2");td.textContent="wide";tr.appendChild(td);
+document.body.appendChild(t);
+L("attr-colspan-get",td.getAttribute("colspan"));
+L("attr-colSpan-prop",td.colSpan);
+L("attr-width",Math.round(td.getBoundingClientRect().width));
+t.remove();
+// setAttribute then read colspan via CellColspan path
+const t2=document.createElement("table");t2.style.width="300px";
+const tr2=document.createElement("tr");t2.appendChild(tr2);
+const a=document.createElement("td");a.setAttribute("colspan","2");a.textContent="A";tr2.appendChild(a);
+const b=document.createElement("td");b.textContent="B";tr2.appendChild(b);
+document.body.appendChild(t2);
+L("mixed-a",Math.round(a.getBoundingClientRect().width));
+L("mixed-b",Math.round(b.getBoundingClientRect().width));
+t2.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

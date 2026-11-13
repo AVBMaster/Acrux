@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// colspan=2 with table width 200
+const t=document.createElement("table");t.style.width="200px";t.style.borderCollapse="collapse";
+const tr=document.createElement("tr");t.appendChild(tr);
+const td=document.createElement("td");td.colSpan=2;td.textContent="wide";tr.appendChild(td);
+document.body.appendChild(t);
+L("colspan2-w",Math.round(td.getBoundingClientRect().width));
+L("colspan2-attr",td.colSpan);
+L("colspan2-attr-str",td.getAttribute("colspan"));
+t.remove();
+// two cells in same row for comparison
+const t2=document.createElement("table");t2.style.width="200px";t2.style.borderCollapse="collapse";
+const tr2=document.createElement("tr");t2.appendChild(tr2);
+const a=document.createElement("td");a.textContent="A";tr2.appendChild(a);
+const b=document.createElement("td");b.textContent="B";tr2.appendChild(b);
+document.body.appendChild(t2);
+L("two-cells-a",Math.round(a.getBoundingClientRect().width));
+L("two-cells-b",Math.round(b.getBoundingClientRect().width));
+t2.remove();
+// colspan via attribute string
+const t3=document.createElement("table");t3.style.width="200px";
+const tr3=document.createElement("tr");t3.appendChild(tr3);
+const c=document.createElement("td");c.setAttribute("colspan","2");c.textContent="C";tr3.appendChild(c);
+document.body.appendChild(t3);
+L("colspan-attr-w",Math.round(c.getBoundingClientRect().width));
+t3.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
