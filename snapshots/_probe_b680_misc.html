@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@layer base{.x{color:red}}
+@layer top{.x{color:blue}}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// list-style
+const li=document.createElement("li");li.style.listStyleType="square";document.body.appendChild(li);
+L("list-style-type",getComputedStyle(li).listStyleType);
+L("list-style-position",getComputedStyle(li).listStylePosition);
+li.remove();
+// @layer
+const lx=document.createElement("div");lx.className="x";document.body.appendChild(lx);
+L("layer-x-color",getComputedStyle(lx).color.split(" ").join("_"));
+lx.remove();
+// var() / custom properties
+const cp=document.createElement("div");cp.style.setProperty("--x","10px");
+cp.style.width="var(--x)";document.body.appendChild(cp);
+L("var-width",getComputedStyle(cp).width);
+L("var-x",getComputedStyle(cp).getPropertyValue("--x").split(" ").join("_"));
+cp.remove();
+// calc
+const calc=document.createElement("div");calc.style.width="calc(100px + 50px)";document.body.appendChild(calc);
+L("calc-add",getComputedStyle(calc).width);
+calc.remove();
+// color-mix
+const cm=document.createElement("div");cm.style.color="color-mix(in srgb,red,blue)";document.body.appendChild(cm);
+L("color-mix",getComputedStyle(cm).color.split(" ").join("_"));
+cm.remove();
+// oklch / lab
+const oc=document.createElement("div");oc.style.color="oklch(0.5 0.1 180)";document.body.appendChild(oc);
+L("oklch",getComputedStyle(oc).color.split(" ").join("_"));
+oc.remove();
+// currentcolor
+const cc=document.createElement("div");cc.style.color="red";cc.style.borderColor="currentcolor";document.body.appendChild(cc);
+L("currentcolor-border",getComputedStyle(cc).borderTopColor.split(" ").join("_"));
+cc.remove();
+// conic-gradient
+const cg=document.createElement("div");cg.style.background="conic-gradient(red,yellow,green,blue,red)";document.body.appendChild(cg);
+L("conic-bg",getComputedStyle(cg).backgroundImage.split(" ").join("_").substring(0,40));
+cg.remove();
+// mask shorthand
+const mk=document.createElement("div");mk.style.webkitMaskImage="url(x.png)";mk.style.webkitMaskSize="cover";document.body.appendChild(mk);
+L("mask-image",getComputedStyle(mk).webkitMaskImage);
+L("mask-size",getComputedStyle(mk).webkitMaskSize);
+mk.remove();
+// @property registered custom prop
+const rp=document.createElement("div");rp.style.setProperty("--regx","5px");document.body.appendChild(rp);
+L("reg-prop",getComputedStyle(rp).getPropertyValue("--regx").split(" ").join("_"));
+rp.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
