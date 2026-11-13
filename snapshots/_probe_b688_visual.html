@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace;background:#fff}
+.box{display:inline-block;margin:4px;vertical-align:top}
+.row{white-space:pre;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function add(html,css){
+  const d=document.createElement("div");d.setAttribute("style",css);d.innerHTML=html;
+  d.className="box";document.body.appendChild(d);return d;
+}
+// box-shadow spread
+add("S1","width:60px;height:40px;background:#fcc;box-shadow:0 0 8px 4px rgba(0,0,0,0.4)");
+// inset shadow
+add("S2","width:60px;height:40px;background:#ccf;box-shadow:inset 4px 4px 6px rgba(0,0,0,0.5)");
+// multiple shadows
+add("S3","width:60px;height:40px;background:#cfc;box-shadow:3px 3px red,6px 6px blue");
+// linear gradient
+add("G1","width:80px;height:40px;background:linear-gradient(to right,red,yellow)");
+// radial gradient
+add("G2","width:80px;height:40px;background:radial-gradient(circle,white,black)");
+// conic gradient
+add("G3","width:80px;height:40px;background:conic-gradient(red,yellow,green,blue,red)");
+// border-radius
+add("BR","width:60px;height:40px;background:#eee;border:3px solid #333;border-radius:15px");
+// asymmetric radius
+add("BR2","width:60px;height:40px;background:#fcc;border-radius:20px 5px 10px 0");
+// border-image
+const bi=add("BI","width:60px;height:40px;border:8px solid transparent;border-image:linear-gradient(red,blue) 1;box-sizing:border-box");
+// outline
+add("OL","width:60px;height:40px;background:#fff;outline:3px solid red;outline-offset:3px");
+// clip-path circle
+add("CP1","width:60px;height:60px;background:#ccf;clip-path:circle(50%)");
+// clip-path polygon
+add("CP2","width:60px;height:60px;background:#cfc;clip-path:polygon(50% 0,100% 100%,0 100%)");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
