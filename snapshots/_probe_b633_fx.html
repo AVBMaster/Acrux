@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:80px;height:40px;border:1px solid #999;font-size:14px}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+const cases=[
+  ["text-shadow","none"],
+  ["text-shadow","2px 2px red"],
+  ["text-shadow","1px 1px 2px blue, -1px -1px 2px green"],
+  ["box-shadow","none"],
+  ["box-shadow","inset 2px 2px 4px red"],
+  ["box-shadow","2px 2px 0 black, 4px 4px 0 gray"],
+  ["filter","blur(2px) brightness(1.2)"],
+  ["filter","drop-shadow(2px 2px red)"],
+  ["filter","grayscale(1) sepia(0.5)"],
+  ["backdrop-filter","blur(4px)"],
+  ["mix-blend-mode","multiply"],
+  ["opacity","0.5"],
+  ["text-decoration","underline wavy red 2px"],
+  ["text-emphasis","filled dot red"],
+  ["text-underline-offset","3px"],
+  ["text-decoration-thickness","2px"],
+];
+for(const [p,v] of cases){
+  const el=document.createElement("div");
+  el.style.setProperty(p,v);
+  document.body.appendChild(el);
+  const sup=CSS.supports(p,v)?"Y":"n";
+  const comp=getComputedStyle(el).getPropertyValue(p)||"(empty)";
+  out.push(["L",p+"="+v.replace(/ /g,"_"),"sup="+sup,"comp="+comp.replace(/ /g,"_").replace(/,/g,"")].join("~"));
+  el.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

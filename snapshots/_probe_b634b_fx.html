@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:8px}.row{white-space:pre;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+const cases=[
+  ["ts-1","text-shadow","2px 2px red"],
+  ["ts-2","text-shadow","1px 1px 2px blue, -1px -1px 2px green"],
+  ["bs-1","box-shadow","inset 2px 2px 4px red"],
+  ["bs-2","box-shadow","2px 2px 0 black, 4px 4px 0 gray"],
+  ["ds","filter","drop-shadow(2px 2px red)"],
+  ["bf","backdrop-filter","blur(4px)"],
+  ["te","text-emphasis","filled dot red"],
+];
+for(const [id,p,v] of cases){
+  const el=document.createElement("div");el.id=id;
+  el.style.setProperty(p,v);document.body.appendChild(el);
+}
+for(const [id,p,v] of cases){
+  const el=document.getElementById(id);
+  const comp=getComputedStyle(el).getPropertyValue(p)||"(empty)";
+  // one row per case, compacted
+  document.getElementById("out").insertAdjacentHTML("beforeend","<div class=\"row\">L|"+id+"|"+comp.replace(/[ ,]+/g,"_")+"</div>");
+}
+</script></body></html>
