@@ -3563,7 +3563,10 @@ public static class CssPropertyApplier
 
     public static JustifyContentType ParseJustifyContent(string value) => value.ToLowerInvariant() switch
     {
-        "flex-end" => JustifyContentType.FlexEnd,
+        "flex-end" or "end" => JustifyContentType.FlexEnd,
+        // CSS Box Alignment 3 §5: 'right'/'left' are side values of the content-distribution
+        // properties, and on a left-to-right grid 'right' is the end edge.
+        "right" => JustifyContentType.FlexEnd,
         "center" => JustifyContentType.Center,
         "space-between" => JustifyContentType.SpaceBetween,
         "space-around" => JustifyContentType.SpaceAround,
