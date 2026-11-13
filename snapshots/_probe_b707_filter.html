@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// filter functions
+gc("f-blur","filter:blur(3px)","filter");
+gc("f-brightness","filter:brightness(1.5)","filter");
+gc("f-contrast","filter:contrast(0.8)","filter");
+gc("f-grayscale","filter:grayscale(100%)","filter");
+gc("f-sepia","filter:sepia(50%)","filter");
+gc("f-saturate","filter:saturate(2)","filter");
+gc("f-hue-rotate","filter:hue-rotate(90deg)","filter");
+gc("f-invert","filter:invert(50%)","filter");
+gc("f-opacity","filter:opacity(0.5)","filter");
+gc("f-drop-shadow","filter:drop-shadow(2px 2px 3px black)","filter");
+gc("f-multi","filter:blur(2px) brightness(1.2)","filter");
+gc("f-none","filter:none","filter");
+// backdrop-filter
+gc("bf-blur","backdrop-filter:blur(5px)","backdrop-filter");
+gc("bf-none","backdrop-filter:none","backdrop-filter");
+// mask
+gc("m-image","-webkit-mask-image:url(x.png)","-webkit-mask-image");
+gc("m-size","-webkit-mask-size:contain","-webkit-mask-size");
+gc("m-repeat","-webkit-mask-repeat:no-repeat","-webkit-mask-repeat");
+gc("m-position","-webkit-mask-position:center","-webkit-mask-position");
+// mask shorthand computed
+gc("m-short","-webkit-mask:url(x.png) center/contain no-repeat","-webkit-mask");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
