@@ -537,10 +537,16 @@ public static class TableLayoutUtils
     /// one of the spanned columns as distributable (non-mergeable).</summary>
     public static void EnsureDistributableColumnExists(int startColumnIndex, int span, List<TableTypes.Column> columnConstraints)
     {
-        if (startColumnIndex >= columnConstraints.Count)
-            return;
-        int effectiveSpan = Math.Min(span, columnConstraints.Count - startColumnIndex);
-        for (int i = startColumnIndex; i < startColumnIndex + effectiveSpan; i++)
+        // A colspan cell's span defines columns the table must have: a lone
+        // '<td colspan=2>' in an otherwise empty row is a two-column table (HTML §4.9.11).
+        // Grow the column list when the span reaches past the end instead of clamping,
+        // which used to collapse the span to 1 and left the cell 0px wide.
+        while (startColumnIndex + span > columnConstraints.Count)
+        {
+            columnConstraints.Add(new TableTypes.Column(
+                new TableTypes.CellInlineConstraint(), 0, 1) { is_mergeable = true });
+        }
+        for (int i = startColumnIndex; i < startColumnIndex + span; i++)
         {
             if (!columnConstraints[i].is_collapsed)
             {
