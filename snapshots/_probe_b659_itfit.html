@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:16px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+v);}
+function mkw(html){const d=document.createElement("div");d.innerHTML=html;document.body.appendChild(d);const t=d.querySelector("table");const w=t.getBoundingClientRect().width;d.remove();return Math.round(w);}
+L("it-alone",mkw("<table style='display:inline-table;border:1px solid #000'><tr><td>ab</td></tr></table>"));
+L("it-inline-text",mkw("xx<table style='display:inline-table;border:1px solid #000'><tr><td>ab</td></tr></table>"));
+L("it-inline-noborder",mkw("xx<table style='display:inline-table'><tr><td>ab</td></tr></table>"));
+L("it-block",mkw("<table style='display:block;width:auto;border:1px solid #000'><tr><td>ab</td></tr></table>"));
+L("it-iblock",mkw("<table style='display:inline-block;width:auto;border:1px solid #000'><tr><td>ab</td></tr></table>"));
+L("it-float",mkw("<div style='float:left'>x</div><table style='display:inline-table;border:1px solid #000'><tr><td>ab</td></tr></table>"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
