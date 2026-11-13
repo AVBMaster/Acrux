@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+/* specificity test */
+#id{color:red}          /* 1,0,0 */
+.cls{color:blue}        /* 0,1,0 */
+/* !important beats id */
+.imp{color:green !important}
+/* inline beats all but !important */
+/* attribute selector */
+[attr="val"]{color:purple}
+/* pseudo-class */
+p:first-child{color:orange}
+/* descendant vs child */
+div span{color:brown}
+div > span{color:teal}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// specificity: id beats class
+const a=document.createElement("div");a.id="id";a.className="cls";document.body.appendChild(a);
+L("id-vs-class",getComputedStyle(a).color.split(" ").join("_"));
+a.remove();
+// !important beats inline
+const b=document.createElement("div");b.className="imp";b.style.color="yellow";document.body.appendChild(b);
+L("important-vs-inline",getComputedStyle(b).color.split(" ").join("_"));
+b.remove();
+// attribute selector
+const c=document.createElement("div");c.setAttribute("attr","val");document.body.appendChild(c);
+L("attr-selector",getComputedStyle(c).color.split(" ").join("_"));
+c.remove();
+// :first-child
+const p=document.createElement("p");document.body.appendChild(p);
+L("first-child",getComputedStyle(p).color.split(" ").join("_"));
+p.remove();
+// descendant + child combinator both apply, child wins (later + higher spec)
+const wrap=document.createElement("div");
+wrap.innerHTML="<span class='s'>x</span>";
+document.body.appendChild(wrap);
+L("combinator-span",getComputedStyle(wrap.querySelector("span")).color.split(" ").join("_"));
+wrap.remove();
+// inline style beats class
+const d=document.createElement("div");d.className="cls";d.style.color="yellow";document.body.appendChild(d);
+L("inline-vs-class",getComputedStyle(d).color.split(" ").join("_"));
+d.remove();
+// !important vs higher specificity id
+const e=document.createElement("div");e.id="id";e.className="imp";document.body.appendChild(e);
+L("important-vs-id",getComputedStyle(e).color.split(" ").join("_"));
+e.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
