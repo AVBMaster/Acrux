@@ -63,7 +63,6 @@ public class StyleComputer
     public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author, Element? owner = null)
     {
         _stylesheets.Add(stylesheet);
-        System.Console.Error.WriteLine($"[AS] AddStylesheet modern=[{stylesheet.ModernContents!=null}] propRules=[{stylesheet.PropertyRules.Count}]");
 
         // Prefer the token-parsed sheet attached by CssParser.Parse so the modern
         // pipeline never re-parses the CSS text. The legacy model is retained only

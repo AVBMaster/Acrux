@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(tag,v){out.push("L~"+tag+"~"+v);}
+function cc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v);d.remove();
+}
+cc("hex","color:#ff0000","color");
+cc("rgb","color:rgb(255,0,0)","color");
+cc("rgba","color:rgba(255,0,0,0.5)","color");
+cc("hsl","color:hsl(0,100%,50%)","color");
+cc("hsla","color:hsla(0,100%,50%,0.5)","color");
+cc("oklch","color:oklch(0.6 0.2 30)","color");
+cc("lab","color:lab(50% 40 30)","color");
+cc("named","color:red","color");
+cc("bg-hex","background-color:#00ff00","background-color");
+cc("border-rgb","border-color:rgb(0,0,255)","border-color");
+cc("modern-rgb","color:rgb(255 0 0)","color");
+cc("modern-rgb-pct","color:rgb(100% 0% 0%)","color");
+cc("hsl-modern","color:hsl(120 100% 50%)","color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

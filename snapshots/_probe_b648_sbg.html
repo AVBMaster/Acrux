@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function g(css){const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);const v=getComputedStyle(d).scrollbarGutter;d.remove();return v.split(" ").join("_");}
+out.push("L~auto~"+g("scrollbar-gutter:auto"));
+out.push("L~stable~"+g("scrollbar-gutter:stable"));
+out.push("L~stable-both~"+g("scrollbar-gutter:stable both-edges"));
+out.push("L~both-stable~"+g("scrollbar-gutter:both-edges stable"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.abs{position:absolute;top:50px;left:60px;width:40px;height:30px;background:#fcc}
+.fix{position:fixed;top:20px;left:20px;width:30px;height:20px;background:#ccf}
+.rel-wrap{position:relative;width:100px;height:80px;background:#cfc}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(tag,v){out.push("L~"+tag+"~"+v);}
+function geo(tag,el){const r=el.getBoundingClientRect();L(tag,Math.round(r.x)+","+Math.round(r.y)+" "+Math.round(r.width)+"x"+Math.round(r.height));}
+// absolute with no positioned ancestor -> containing block is initial containing block (viewport-ish)
+const a1=document.createElement("div");a1.className="abs";document.body.appendChild(a1);
+geo("abs-noancestor",a1);a1.remove();
+// fixed -> viewport
+const f1=document.createElement("div");f1.className="fix";document.body.appendChild(f1);
+geo("fixed",f1);f1.remove();
+// absolute inside relative -> relative to the relative box's padding box
+const rw=document.createElement("div");rw.className="rel-wrap";document.body.appendChild(rw);
+const a2=document.createElement("div");a2.className="abs";rw.appendChild(a2);
+geo("abs-in-rel",a2);
+geo("rel-wrap",rw);
+rw.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

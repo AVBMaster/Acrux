@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(tag,v){out.push("L~"+tag+"~"+v);}
+function mk(css,html){
+  const d=document.createElement("div");d.setAttribute("style",css);
+  if(html)d.innerHTML=html;document.body.appendChild(d);return d;
+}
+// ch metric as fraction not rounded pixel (#301)
+L("ch-open", (()=>{const d=mk("width:10ch;font:16px monospace");const w=d.getBoundingClientRect().width;const d2=mk("width:1ch;font:16px monospace");const w2=d2.getBoundingClientRect().width;d.remove();d2.remove();return Math.round(w2*100)/100;})());
+// scrollbar-gutter both-edges inset (#257)
+{const d=mk("overflow:auto;scrollbar-gutter:stable both-edges;height:60px","<div style='height:200px'>x</div>");
+ const cs=getComputedStyle(d);L("sbg-both",cs.scrollbarGutter);}
+// text-underline-position pair (b272)
+L("tup-over",getComputedStyle(mk("text-underline-position:over")).textUnderlinePosition);
+L("tup-under",getComputedStyle(mk("text-underline-position:under")).textUnderlinePosition);
+L("tup-l",getComputedStyle(mk("text-underline-position:left")).textUnderlinePosition);
+L("tup-ru",getComputedStyle(mk("text-underline-position:right under")).textUnderlinePosition);
+// box-decoration-break (#-slice/clone)
+L("bdb-slice",getComputedStyle(mk("box-decoration-break:slice")).boxDecorationBreak);
+L("bdb-clone",getComputedStyle(mk("box-decoration-break:clone")).boxDecorationBreak);
+L("bdb-webkit",getComputedStyle(mk("-webkit-box-decoration-break:clone")).boxDecorationBreak);
+// white-space-collapse (#b203)
+L("wsc-collapse",getComputedStyle(mk("white-space-collapse:collapse")).whiteSpaceCollapse);
+L("wsc-preserve",getComputedStyle(mk("white-space-collapse:preserve")).whiteSpaceCollapse);
+// text-wrap-mode/style
+L("twm-wrap",getComputedStyle(mk("text-wrap-mode:wrap")).textWrapMode);
+L("tws-balance",getComputedStyle(mk("text-wrap-style:balance")).textWrapStyle);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
