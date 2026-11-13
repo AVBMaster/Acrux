@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}table{width:200px;border:1px solid #000}td{border:1px solid #999;padding:4px;font-size:12px}</style></head><body>
+<div id="out"></div>
+<script>
+const t=document.createElement("table");t.style.width="200px";
+const tr=document.createElement("tr");t.appendChild(tr);
+const td=document.createElement("td");td.textContent="cell";tr.appendChild(td);
+document.body.appendChild(t);
+const tdRect=td.getBoundingClientRect();
+const tRect=t.getBoundingClientRect();
+const tw=td.scrollWidth,ow=td.offsetWidth;
+document.getElementById("out").textContent="L|td|offsetW="+td.offsetWidth+"|clientW="+td.clientWidth+"|scrollW="+td.scrollWidth+"|rectW="+Math.round(tdRect.width)+"|tableW="+Math.round(tRect.width);
+</script></body></html>
