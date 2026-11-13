@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+function add(html,css){
+  const d=document.createElement("div");d.setAttribute("style",css);d.innerHTML=html;
+  document.body.appendChild(d);return d;
+}
+// box-sizing content-box vs border-box
+let d=add("x","width:100px;height:50px;padding:10px;border:5px solid;box-sizing:content-box");
+L("cb-with-pad",rect(d));d.remove();
+d=add("x","width:100px;height:50px;padding:10px;border:5px solid;box-sizing:border-box");
+L("bb-with-pad",rect(d));d.remove();
+// min-width constrains
+d=add("x","width:50px;min-width:100px");
+L("min-width-wins",rect(d));d.remove();
+// max-width constrains
+d=add("x","width:200px;max-width:100px");
+L("max-width-wins",rect(d));d.remove();
+// min-height on auto-height
+d=add("x","min-height:80px");
+L("min-height",rect(d));d.remove();
+// max-height with content
+d=add("x<br>x<br>x<br>x<br>x","max-height:50px;overflow:hidden");
+L("max-height-overflow",rect(d));d.remove();
+// min/max interaction
+d=add("x","width:50px;min-width:80px;max-width:120px");
+L("min-max-interact",rect(d));d.remove();
+// percentage width
+const pw=add("<div style='width:50%;background:#fcc'>inner</div>","width:200px");
+L("pct-width-inner",Math.round(pw.children[0].getBoundingClientRect().width));
+pw.remove();
+// auto height with padding
+d=add("x","padding:10px");
+L("auto-h-pad",rect(d));d.remove();
+// border-box with only border
+d=add("x","width:50px;box-sizing:border-box;border:10px solid");
+L("bb-border-only",rect(d));d.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
