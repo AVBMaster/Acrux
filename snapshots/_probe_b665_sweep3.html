@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v===""?"(empty)":v.split(" ").join("_"));d.remove();
+}
+// calc-size computed value
+gc("calc-size-fixed","width:calc-size(100px,size)","width");
+gc("calc-size-min","width:calc-size(auto,min-content)","width");
+// math functions
+gc("min","width:min(100px,50px)","width");
+gc("max","width:max(100px,50px)","width");
+gc("clamp","width:clamp(50px,80px,100px)","width");
+// aspect-ratio
+const ar=document.createElement("div");ar.style.width="100px";ar.style.aspectRatio="2/1";ar.style.background="#fcc";document.body.appendChild(ar);
+L("aspect-2-1",Math.round(ar.getBoundingClientRect().width)+"x"+Math.round(ar.getBoundingClientRect().height));
+ar.remove();
+// contain-intrinsic-size
+gc("cis","contain-intrinsic-size:100px 50px","contain-intrinsic-size");
+// text-box trim
+gc("tb-both","text-box:trim-both cap alphabetic","text-box");
+// scrollbar-gutter both-edges (use non-space delim)
+gc("sbg-both","scrollbar-gutter:stable both-edges","scrollbar-gutter");
+// text-emphasis shorthand
+gc("te-dot","text-emphasis:filled dot #333","text-emphasis");
+// font-synthesis shorthand
+gc("fsyn-none","font-synthesis:none","font-synthesis");
+gc("fsyn-weight","font-synthesis:weight","font-synthesis");
+// white-space shorthand
+gc("ws-nowrap","white-space:nowrap","white-space");
+// paint-order
+gc("po-stroke-fill","paint-order:stroke fill","paint-order");
+// text-decoration shorthand
+gc("td-underline","text-decoration:underline wavy red","text-decoration");
+// background shorthand layering
+gc("bg-layered","background:url(x.png) no-repeat center/cover,linear-gradient(red,blue)","background");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
