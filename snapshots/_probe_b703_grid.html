@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function mkGrid(cols,items,extra){
+  const g=document.createElement("div");
+  g.style.cssText="display:grid;grid-template-columns:"+cols+";width:300px;"+(extra||"");
+  items.forEach(t=>{const c=document.createElement("div");c.textContent=t;g.appendChild(c);});
+  document.body.appendChild(g);
+  const widths=[...g.children].map(c=>Math.round(c.getBoundingClientRect().width));
+  const h=Math.round(g.getBoundingClientRect().height);
+  g.remove();return{widths,h};
+}
+// fr units
+let r=mkGrid("1fr 1fr",["A","B"]);
+L("fr-1-1",r.widths.join("/"));
+// fr with different ratios
+r=mkGrid("1fr 2fr",["A","B"]);
+L("fr-1-2",r.widths.join("/"));
+// minmax
+r=mkGrid("minmax(50px,100px) 1fr",["A","B"]);
+L("minmax-50-100",r.widths.join("/"));
+// auto-fill
+r=mkGrid("repeat(auto-fill,50px)",["A","B","C","D","E"]);
+L("auto-fill-50",r.widths.join("/"));
+// auto-fit
+r=mkGrid("repeat(auto-fit,50px)",["A","B"]);
+L("auto-fit-50",r.widths.join("/"));
+// repeat count
+r=mkGrid("repeat(3,1fr)",["A","B","C"]);
+L("repeat-3-1fr",r.widths.join("/"));
+// explicit + fr mix
+r=mkGrid("100px 1fr 1fr",["A","B","C"]);
+L("100px-1fr-1fr",r.widths.join("/"));
+// row heights
+r=mkGrid("1fr",["A","B","C"],"grid-auto-rows:20px");
+L("grid-rows-20",r.h);
+// grid-column span
+const g=document.createElement("div");
+g.style.cssText="display:grid;grid-template-columns:repeat(3,1fr);width:300px";
+const c1=document.createElement("div");c1.textContent="A";g.appendChild(c1);
+const c2=document.createElement("div");c2.style.gridColumn="span 2";c2.textContent="B";g.appendChild(c2);
+document.body.appendChild(g);
+L("grid-span2-w",Math.round(c2.getBoundingClientRect().width));
+g.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
