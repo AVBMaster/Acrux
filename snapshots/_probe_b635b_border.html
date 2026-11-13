@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{font:12px monospace;margin:8px}.row{white-space:pre;font:12px monospace}div{width:80px;height:40px}</style></head><body><div id="out"></div>
+<script>
+const cases=[
+  ["bw-thin","border-width","thin"],
+  ["bw-med","border-width","medium"],
+  ["bw-4","border-width","1px 2px 3px 4px"],
+  ["bs-2","border-style","solid dashed"],
+  ["bc-3","border-color","red blue green"],
+  ["br-2","border-radius","10px 20px"],
+  ["br-50","border-radius","50%"],
+  ["br-slash","border-radius","10px 20px 30px 40px / 5px 10px"],
+  ["brtl","border-top-left-radius","10px 20px"],
+  ["ow-thin","outline-width","thin"],
+  ["os-dash","outline-style","dashed"],
+  ["oc-inv","outline-color","invert"],
+  ["oo-neg","outline-offset","-4px"],
+  ["bc-collapse","border-collapse","collapse"],
+  ["bsp-2","border-spacing","5px 10px"],
+];
+for(const [id,p,v] of cases){
+  const el=document.createElement("div");el.id=id;
+  el.style.setProperty(p,v);document.body.appendChild(el);
+}
+for(const [id,p,v] of cases){
+  const el=document.getElementById(id);
+  const comp=(getComputedStyle(el).getPropertyValue(p)||"(empty)").replace(/[ ,]+/g,"_");
+  document.getElementById("out").insertAdjacentHTML("beforeend","<div class=\"row\">L|"+id+"|"+p+"|"+comp+"</div>");
+}
+</script></body></html>
