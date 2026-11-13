@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// logical properties
+gc("ps-inline","padding-inline-start:10px","padding-inline-start");
+gc("ps-inline-block","padding-block:5px","padding-block");
+gc("ms-inline","margin-inline:auto","margin-inline");
+gc("bw-inline","border-inline-start-width:3px","border-inline-start-width");
+gc("bs-inline","border-block-start-style:dashed","border-block-start-style");
+gc("is-inline","inline-size:100px","inline-size");
+gc("bs-blocksize","block-size:50px","block-size");
+gc("inset-inline","inset-inline-start:5px","inset-inline-start");
+// direction + logical
+gc("ps-dir-rtl","direction:rtl;padding-inline-start:10px","padding-inline-start");
+// writing-mode
+gc("wm-vertical","writing-mode:vertical-rl","writing-mode");
+gc("wm-horiz","writing-mode:horizontal-tb","writing-mode");
+// @media via matchMedia
+L("matchmedia-width",matchMedia("(min-width:100px)").matches);
+L("matchmedia-false",matchMedia("(min-width:99999px)").matches);
+// @supports via CSS.supports
+L("supports-flex",CSS.supports("display:flex"));
+L("supports-bogus",CSS.supports("display:bogus"));
+L("supports-selector",CSS.supports("selector(:has(a))"));
+// container queries
+const cq=document.createElement("div");cq.style.containerType="inline-size";document.body.appendChild(cq);
+L("container-type",getComputedStyle(cq).containerType);
+cq.remove();
+// :has
+const has=document.createElement("div");has.innerHTML="<p>child</p>";document.body.appendChild(has);
+L("has-child",has.matches(":has(p)"));
+has.remove();
+// :is / :where specificity
+const isd=document.createElement("div");isd.className="cls";document.body.appendChild(isd);
+L("is-match",isd.matches(":is(.cls, #other)"));
+L("where-match",isd.matches(":where(.cls)"));
+isd.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
