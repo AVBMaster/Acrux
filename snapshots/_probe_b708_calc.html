@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gw(tag,css){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue("width").trim();
+  L(tag,v===""?"(empty)":v.split(" ").join("_"));d.remove();
+}
+// calc arithmetic
+gw("calc-add","width:calc(10px + 20px)");
+gw("calc-sub","width:calc(50px - 30px)");
+gw("calc-mul","width:calc(10px * 3)");
+gw("calc-div","width:calc(100px / 4)");
+gw("calc-nested","width:calc(calc(10px + 5px) * 2)");
+gw("calc-mixed","width:calc(50% + 10px)");
+gw("calc-em","font-size:16px;width:calc(2em + 5px)");
+gw("calc-rem","width:calc(1rem + 1px)");
+gw("calc-pct-of-parent","width:calc(50% - 25px)");
+gw("calc-zero","width:calc(0px)");
+gw("calc-negative","width:calc(10px - 50px)");
+gw("calc-multi-unit","width:calc(1in + 2.54cm)");
+// min/max/clamp
+gw("min","width:min(100px, 50px)");
+gw("max","width:max(100px, 50px)");
+gw("clamp","width:clamp(50px, 80px, 100px)");
+gw("clamp-below","width:clamp(50px, 30px, 100px)");
+gw("clamp-above","width:clamp(50px, 200px, 100px)");
+// nested min/max/calc
+gw("min-nested","width:min(calc(50px + 50px), 80px)");
+gw("max-nested","width:max(50px, calc(30px * 2))");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
