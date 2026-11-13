@@ -1405,16 +1405,18 @@ public class GridLayoutAlgorithm
     {
         if (tracks.Count == 0 || float.IsNaN(definiteContainer) || float.IsInfinity(definiteContainer))
             return;
+        // §12.6 stretches free space into auto tracks only when the content
+        // alignment leaves that space undistributed. 'center'/'end'/'start'
+        // and the space-* distributions each consume it themselves, so the
+        // tracks stay content-sized and the alignment is visible. The check is
+        // first so a stretched track never zeroes the free space the alignment
+        // needs (measured: a single auto column under 'justify-content: center').
+        string key = (contentAlignment ?? "normal").Trim().ToLowerInvariant().Replace("-", "");
+        if (key is not ("normal" or "stretch")) return;
         float used = paddingBleed + gap * Math.Max(0, tracks.Count - 1);
         foreach (var t in tracks) used += t.BaseSize;
         float free = definiteContainer - used;
         if (free <= 0) return;
-        // §12.6 stretches free space into auto tracks only when the content
-        // alignment leaves that space undistributed. 'center'/'end'/'start'
-        // and the space-* distributions each consume it themselves, so the
-        // tracks stay content-sized and the alignment is visible.
-        string key = (contentAlignment ?? "normal").Trim().ToLowerInvariant().Replace("-", "");
-        if (key is not ("normal" or "stretch")) return;
         int autoCount = 0;
         foreach (var t in tracks)
             if (t.SizeType == TrackSizeType.Auto) autoCount++;
