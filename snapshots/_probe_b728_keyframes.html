@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@keyframes multi{
+  0%{opacity:0;transform:translateX(0)}
+  50%{opacity:0.5;transform:translateX(50px)}
+  100%{opacity:1;transform:translateX(100px)}
+}
+@keyframes fromto{from{color:red}to{color:blue}}
+@keyframes same{0%{opacity:0}100%{opacity:1}}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// multi-stop animation
+const a1=document.createElement("div");a1.style.animation="multi 2s linear";document.body.appendChild(a1);
+const anims1=a1.getAnimations();
+L("multi-count",anims1.length);
+if(anims1.length>0){
+  L("multi-duration",anims1[0].effect.getTiming().duration);
+  L("multi-easing",anims1[0].effect.getTiming().easing);
+}
+a1.remove();
+// from/to shorthand
+const a2=document.createElement("div");a2.style.animation="fromto 1s";document.body.appendChild(a2);
+const anims2=a2.getAnimations();
+L("fromto-count",anims2.length);
+a2.remove();
+// paused state
+const a3=document.createElement("div");a3.style.animation="same 2s paused";document.body.appendChild(a3);
+L("paused-state",getComputedStyle(a3).animationPlayState);
+a3.remove();
+// animation-delay
+const a4=document.createElement("div");a4.style.animation="same 2s 1s";document.body.appendChild(a4);
+L("delay-value",getComputedStyle(a4).animationDelay);
+a4.remove();
+// animation-iteration-count infinite
+const a5=document.createElement("div");a5.style.animation="same 2s 0s infinite";document.body.appendChild(a5);
+L("iteration-inf",getComputedStyle(a5).animationIterationCount);
+a5.remove();
+// animation-direction alternate
+const a6=document.createElement("div");a6.style.animation="same 2s alternate";document.body.appendChild(a6);
+L("direction-alt",getComputedStyle(a6).animationDirection);
+a6.remove();
+// animation-fill-mode both
+const a7=document.createElement("div");a7.style.animation="same 2s both";document.body.appendChild(a7);
+L("fill-both",getComputedStyle(a7).animationFillMode);
+a7.remove();
+// animation-fill-mode backwards
+const a8=document.createElement("div");a8.style.animation="same 2s backwards";document.body.appendChild(a8);
+L("fill-backwards",getComputedStyle(a8).animationFillMode);
+a8.remove();
+// multiple animations
+const a9=document.createElement("div");a9.style.animation="same 1s, fromto 2s";document.body.appendChild(a9);
+L("multi-anim-name",getComputedStyle(a9).animationName.split(" ").join("_"));
+a9.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
