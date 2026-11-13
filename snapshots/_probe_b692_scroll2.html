@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:12px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// test scrollTop setter on various overflow containers
+function testScroll(w,h,innerH,scrollTop){
+  const s=document.createElement("div");
+  s.style.cssText=`width:${w}px;height:${h}px;overflow:auto`;
+  const inner=document.createElement("div");inner.style.height=innerH+"px";inner.textContent="content";
+  s.appendChild(inner);document.body.appendChild(s);
+  s.scrollTop=scrollTop;
+  const result={scrollTop:s.scrollTop,scrollHeight:s.scrollHeight,clientHeight:s.clientHeight};
+  s.remove();return result;
+}
+// case 1: matches first sc that worked
+let r=testScroll(100,80,200,50);
+L("case1-100x80-inner200",r.scrollTop+"/"+r.scrollHeight);
+// case 2: narrower container
+r=testScroll(80,50,150,30);
+L("case2-80x50-inner150",r.scrollTop+"/"+r.scrollHeight);
+// case 3: wider
+r=testScroll(200,100,300,50);
+L("case3-200x100-inner300",r.scrollTop+"/"+r.scrollHeight);
+// check if scrollLeft also fails
+const s=document.createElement("div");
+s.style.cssText="width:50px;height:50px;overflow:auto";
+s.innerHTML="<div style='width:200px;height:50px'>wide</div>";
+document.body.appendChild(s);
+s.scrollLeft=50;
+L("scrollLeft-after",s.scrollLeft);
+s.remove();
+// scroll on window (body overflow)
+document.body.style.height="2000px";
+document.body.style.overflow="auto";
+window.scrollTo(0,100);
+L("window-scrollTo",window.scrollY);
+document.body.style.height="";document.body.style.overflow="";
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

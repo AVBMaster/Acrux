@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// scrollable container
+const sc=document.createElement("div");
+sc.style.cssText="width:100px;height:80px;overflow:auto";
+sc.innerHTML="<div style='height:200px;background:#fcc'>Tall content</div>";
+document.body.appendChild(sc);
+L("scroll-clientH",sc.clientHeight);
+L("scroll-scrollH",sc.scrollHeight);
+L("scroll-offsetH",sc.offsetHeight);
+sc.scrollTop=50;
+L("scroll-after-set",sc.scrollTop);
+sc.remove();
+// scrollIntoView
+const tall=document.createElement("div");tall.style.height="500px";
+const target=document.createElement("div");target.id="sitarget";target.textContent="target";tall.appendChild(target);
+document.body.appendChild(tall);
+target.scrollIntoView();
+L("scrollIntoView-ok",typeof target.scrollIntoView==="function");
+tall.remove();
+// window.scrollY / scrollX
+L("window-scrollY",typeof window.scrollY==="number");
+L("window-pageYOffset",typeof window.pageYOffset==="number");
+L("window-innerWidth",window.innerWidth>0);
+L("window-innerHeight",window.innerHeight>0);
+// element scroll properties
+const s2=document.createElement("div");s2.style.cssText="width:80px;height:50px;overflow:auto";
+s2.innerHTML="<div style='height:150px'>x</div>";
+document.body.appendChild(s2);
+s2.scrollTop=30;s2.scrollLeft=10;
+L("elem-scrollTop",s2.scrollTop);
+L("elem-scrollLeft",s2.scrollLeft);
+L("elem-scrollWidth",s2.scrollWidth);
+s2.remove();
+// getBoundingClientRect after scroll on inner element
+const s3=document.createElement("div");s3.style.cssText="width:80px;height:50px;overflow:auto;position:relative";
+const inner=document.createElement("div");inner.style.height="150px";inner.textContent="inner";
+s3.appendChild(inner);document.body.appendChild(s3);
+s3.scrollTop=25;
+L("inner-rect-y",Math.round(inner.getBoundingClientRect().y));
+s3.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
