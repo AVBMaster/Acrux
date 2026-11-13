@@ -100,7 +100,7 @@ public class GridLayoutAlgorithm
         if (inlineKind is { } kk)
             SolveIntrinsicTracks(explicitColumns, items, columnGap, isColumn: true, kk);
         else
-            ResolveTracks(explicitColumns, items, _containerWidth, columnGap, isColumn: true);
+            ResolveTracks(explicitColumns, items, _containerWidth, columnGap, isColumn: true, _containerStyle.JustifyContent.ToString());
 
         // The grid's content inline size (non-collapsed column bases + gaps). The
         // adapter reads this back to shrink a 'width: min/max-content' container.
@@ -111,7 +111,7 @@ public class GridLayoutAlgorithm
         // PositionItems reuses these boxes instead of laying out a second time.
         MeasureItems(items, explicitColumns, columnGap, containerBox);
 
-        ResolveTracks(explicitRows, items, _containerHeight, rowGap, isColumn: false);
+        ResolveTracks(explicitRows, items, _containerHeight, rowGap, isColumn: false, _containerStyle.AlignContent.ToString());
 
         PositionItems(items, explicitColumns, explicitRows, containerBox, columnGap, rowGap);
 
@@ -1004,7 +1004,7 @@ public class GridLayoutAlgorithm
         _ => Math.Max(baseMin, maxContrib),
     };
 
-    private void ResolveTracks(List<GridTrack> tracks, List<GridItem> items, float containerSize, float gap, bool isColumn)
+    private void ResolveTracks(List<GridTrack> tracks, List<GridItem> items, float containerSize, float gap, bool isColumn, string contentAlignment = "normal")
     {
         if (tracks.Count == 0) return;
 
@@ -1162,8 +1162,13 @@ public class GridLayoutAlgorithm
 
         // Step 4: Stretch auto tracks. Only when there is no flexible (fr) track to
         // compete for the leftover space; otherwise fr must resolve first (§12.7), or
-        // an auto track would absorb all free space and starve the fr track.
-        if (freeSpace > 0 && !tracks.Any(IsFlexible))
+        // an auto track would absorb all free space and starve the fr track. And only
+        // when the content alignment leaves that space undistributed — 'center',
+        // 'end' and the space-* values consume it themselves, so the tracks must stay
+        // content-sized for the alignment to be visible (measured: a single auto
+        // column under 'justify-content: center' lands centred, not stretched).
+        if (freeSpace > 0 && !tracks.Any(IsFlexible)
+            && LeavesFreeSpaceUndistributed(contentAlignment))
         {
             int autoCount = tracks.Count(t => t.SizeType == TrackSizeType.Auto);
             if (autoCount > 0)
@@ -1189,6 +1194,16 @@ public class GridLayoutAlgorithm
         // Clamp
         foreach (var t in tracks)
             t.BaseSize = Math.Max(t.BaseSize, 0);
+    }
+
+    /// <summary>Whether a content-alignment value leaves the free track space undistributed, so
+    /// §12.6 may stretch it into the auto tracks. 'normal' and 'stretch' do; every keyword that
+    /// positions or distributes the tracks ('center', 'end', 'space-between', …) consumes that
+    /// space itself, so the tracks must stay content-sized for the alignment to be visible.</summary>
+    private static bool LeavesFreeSpaceUndistributed(string contentAlignment)
+    {
+        var key = (contentAlignment ?? "normal").Trim().ToLowerInvariant().Replace("-", "");
+        return key is "normal" or "stretch";
     }
 
     /// <summary>
