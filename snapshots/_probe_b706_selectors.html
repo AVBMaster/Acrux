@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// :has()
+const has=document.createElement("div");has.className="h";has.innerHTML="<p>child</p>";
+document.body.appendChild(has);
+L("has-p",has.matches(":has(p)"));
+L("has-span",has.matches(":has(span)"));
+has.remove();
+// :is()
+const isd=document.createElement("div");isd.className="target";document.body.appendChild(isd);
+L("is-match",isd.matches(":is(.target,.other)"));
+L("is-nomatch",isd.matches(":is(.a,.b)"));
+isd.remove();
+// :where() — zero specificity but matches
+const wd=document.createElement("div");wd.className="w";document.body.appendChild(wd);
+L("where-match",wd.matches(":where(.w)"));
+wd.remove();
+// :scope
+const scope=document.createElement("div");
+scope.innerHTML="<span>in</span>";
+document.body.appendChild(scope);
+L("scope-self",scope.querySelectorAll(":scope > span").length);
+scope.remove();
+// :part (shadow DOM)
+const host=document.createElement("div");document.body.appendChild(host);
+const sr=host.attachShadow({mode:"open"});
+sr.innerHTML='<span part="label">SL</span>';
+L("part-match",sr.querySelector("span").matches("::part(label)"));
+host.remove();
+// :empty
+const empty=document.createElement("div");document.body.appendChild(empty);
+L("empty-true",empty.matches(":empty"));
+empty.textContent="x";
+L("empty-false",empty.matches(":empty"));
+empty.remove();
+// :not with list
+const nd=document.createElement("div");nd.className="a";document.body.appendChild(nd);
+L("not-list",nd.matches(":not(.b,.c)"));
+L("not-nomatch",nd.matches(":not(.a,.b)"));
+nd.remove();
+// :root
+L("root-html",document.documentElement.matches(":root"));
+// :only-child / :only-of-type
+const oc=document.createElement("div");oc.innerHTML="<p>only</p>";document.body.appendChild(oc);
+L("only-child",oc.querySelector("p").matches(":only-child"));
+oc.remove();
+// :first-of-type / :last-of-type
+const fop=document.createElement("div");fop.innerHTML="<p>1</p><p>2</p><p>3</p>";document.body.appendChild(fop);
+L("first-of-type",fop.children[0].matches(":first-of-type"));
+L("last-of-type",fop.children[2].matches(":last-of-type"));
+fop.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
