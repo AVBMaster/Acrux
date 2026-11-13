@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// CSS wide keywords
+gc("initial","color:initial","color");
+gc("inherit","color:inherit","color");
+gc("unset","color:unset","color");
+gc("revert","color:revert","color");
+gc("revert-layer","color:revert-layer","color");
+// color functions
+gc("rgb-space","color:rgb(255 0 0)","color");
+gc("rgb-pct","color:rgb(100% 0% 0%)","color");
+gc("hsl-space","color:hsl(0 100% 50%)","color");
+gc("hsl-deg","color:hsl(0deg 100% 50%)","color");
+gc("oklch","color:oklch(0.7 0.15 180)","color");
+gc("oklab","color:oklab(0.5 0.1 -0.1)","color");
+gc("lab","color:lab(50% 40 -30)","color");
+gc("lch","color:lch(50% 40 180)","color");
+gc("color-fn","color:color(display-p3 1 0 0)","color");
+gc("color-srgb","color:color(srgb 1 0 0)","color");
+// color-mix percentages
+gc("cm-25-75","color:color-mix(in srgb,red 25%,blue)","color");
+gc("cm-50-50","color:color-mix(in oklab,red,blue)","color");
+gc("cm-pct-both","color:color-mix(in srgb,red 30%,blue 70%)","color");
+// system colors
+gc("canvas","color:Canvas","color");
+gc("canvastext","color:CanvasText","color");
+gc("buttontext","color:ButtonText","color");
+gc("highlight","color:Highlight","color");
+// alpha
+gc("rgb-alpha","color:rgba(255,0,0,0.5)","color");
+gc("hex-alpha","color:#ff000080","color");
+gc("hsl-alpha","color:hsl(0,100%,50%,0.5)","color");
+// transparent / currentcolor
+gc("transparent","color:transparent","color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
