@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:16px monospace}
+.mc{column-width:150px;column-gap:20px;height:200px;border:1px solid #ccc}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// multicolumn with column-width, fixed height to force columns
+const mc=document.createElement("div");mc.className="mc";mc.style.width="600px";
+mc.textContent="lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur excepteur sint occaecat cupidatat non proident sunt in culpa qui officia deserunt mollit anim id est laborum";
+document.body.appendChild(mc);
+const cs=getComputedStyle(mc);
+L("column-count",cs.columnCount);
+L("column-width",cs.columnWidth);
+L("column-gap",cs.columnGap);
+L("width",Math.round(mc.getBoundingClientRect().width));
+L("height",Math.round(mc.getBoundingClientRect().height));
+// count visual columns by detecting text at different x positions
+const r=document.createRange();r.selectNodeContents(mc);
+const rects=[...r.getClientRects()].filter(x=>x.width>0);
+const tops=new Set(rects.map(x=>Math.round(x.top)));
+const lefts=[...new Set(rects.map(x=>Math.round(x.left)))].sort((a,b)=>a-b);
+L("line-tops",tops.size);
+L("distinct-lefts",lefts.length+":"+lefts.slice(0,5).join("/"));
+mc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

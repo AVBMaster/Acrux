@@ -1,0 +1,80 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+
+// #301 multicolumn column-width shapes shrink-to-fit
+const mc=document.createElement("div");mc.style.columnWidth="100px";mc.style.columnGap="20px";
+mc.textContent="lorem ipsum dolor sit amet ".repeat(20);
+document.body.appendChild(mc);
+const mcw=mc.getBoundingClientRect().width;
+L("multicol-cw100",Math.round(mcw));
+mc.remove();
+// shrink-to-fit parent
+const sp=document.createElement("div");sp.style.display="inline-block";sp.style.columnWidth="80px";
+sp.textContent="lorem ipsum dolor sit ".repeat(10);
+document.body.appendChild(sp);
+L("multicol-shrink",Math.round(sp.getBoundingClientRect().width));
+sp.remove();
+
+// #264 empty inline split parent fragment
+const em=document.createElement("div");em.style.width="200px";
+em.innerHTML="before<span></span>after";
+document.body.appendChild(em);
+L("empty-inline-h",Math.round(em.getBoundingClientRect().height));
+em.remove();
+
+// #321 multicolumn child bg
+const mcbg=document.createElement("div");mcbg.style.columns="2";mcbg.style.width="300px";mcbg.style.height="80px";
+mcbg.innerHTML="<p style='background:#fcc'>A</p><p style='background:#ccf'>B</p>";
+document.body.appendChild(mcbg);
+L("multicol-bg-h",Math.round(mcbg.getBoundingClientRect().height));
+mcbg.remove();
+
+// #305 width from used value in fixed-point grid
+const fp=document.createElement("div");fp.style.width="100.7px";document.body.appendChild(fp);
+const fpr=fp.getBoundingClientRect();
+L("fp-width",fpr.width.toFixed(3));
+fp.remove();
+
+// #306 comment out of whitespace in math
+const mm=document.createElement("div");
+try{mm.style.width="calc(10px/*c*/+5px)";mm.style.fontSize="16px";document.body.appendChild(mm);
+L("calc-comment",getComputedStyle(mm).width);mm.remove();}
+catch(e){L("calc-comment","err:"+e.message);}
+
+// #307 bare number not length
+const bn=document.createElement("div");
+try{bn.style.width="100";document.body.appendChild(bn);
+L("bare-number-width",getComputedStyle(bn).width);bn.remove();}
+catch(e){L("bare-number-width","err:"+e.message);}
+
+// #308 SVG geometry
+const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
+s.setAttribute("width","100");s.setAttribute("height","50");
+document.body.appendChild(s);
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx","50");c.setAttribute("cy","25");c.setAttribute("r","20");
+c.setAttribute("fill","red");
+s.appendChild(c);
+L("svg-rect",rect(s));
+s.remove();
+
+// #317 paint corner-shape
+const cs=document.createElement("div");cs.style.width="100px";cs.style.height="50px";
+cs.style.cornerShape="bevel";cs.style.background="#fcc";
+document.body.appendChild(cs);
+L("corner-bevel-w",Math.round(cs.getBoundingClientRect().width));
+cs.remove();
+
+// #316 calc-size arithmetic
+const csz=document.createElement("div");csz.style.width="calc-size(auto,size)";
+try{document.body.appendChild(csz);L("calc-size",getComputedStyle(csz).width);csz.remove();}
+catch(e){L("calc-size","err:"+e.message);}
+
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
