@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}.f{display:flex;width:200px;height:80px}.it{width:30px;height:20px;background:tomato}</style></head><body><div id="out"></div>
+<script>
+const h=document.createElement("div");h.className="f";h.style.justifyContent="space-around";
+for(let i=0;i<2;i++){const k=document.createElement("div");k.className="it";h.appendChild(k);}
+document.body.appendChild(h);
+const kids=[...h.children].map((k,i)=>{const r=k.getBoundingClientRect();return "k"+i+"@x"+Math.round(r.x);}).join(",");
+document.getElementById("out").textContent="L~sa~jc="+getComputedStyle(h).justifyContent+"~kids="+kids;
+</script></body></html>

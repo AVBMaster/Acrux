@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.f{display:flex;width:200px;height:80px;border:1px solid #999}
+.it{width:30px;height:20px;background:tomato}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+const jcVals=["flex-start","flex-end","center","space-between","space-around","space-evenly","start","end","left","right"];
+for(const v of jcVals){
+  const h=document.createElement("div");h.className="f";h.style.justifyContent=v;
+  for(let i=0;i<2;i++){const k=document.createElement("div");k.className="it";h.appendChild(k);}
+  document.body.appendChild(h);
+  const kids=[...h.children].map((k,i)=>{const r=k.getBoundingClientRect();return "k"+i+"@x"+Math.round(r.x);}).join(",");
+  out.push(["L","jc="+v.replace(/ /g,"_"),"kids="+kids].join("~"));
+  h.remove();
+}
+const acVals=["flex-start","flex-end","center","stretch","space-between","space-around","start","end"];
+for(const v of acVals){
+  const h=document.createElement("div");h.className="f";h.style.alignContent=v;
+  for(let i=0;i<2;i++){const k=document.createElement("div");k.className="it";h.appendChild(k);}
+  document.body.appendChild(h);
+  const kids=[...h.children].map((k,i)=>{const r=k.getBoundingClientRect();return "k"+i+"@y"+Math.round(r.y);}).join(",");
+  out.push(["L","ac="+v.replace(/ /g,"_"),"kids="+kids].join("~"));
+  h.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
