@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+input::placeholder{color:gray}
+li::marker{color:red}
+p::first-line{font-weight:bold}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// ::placeholder
+const inp=document.createElement("input");inp.placeholder="hint";document.body.appendChild(inp);
+const ph=getComputedStyle(inp,"::placeholder");
+L("placeholder-color",ph.color.split(" ").join("_"));
+inp.remove();
+// ::marker
+const li=document.createElement("li");li.textContent="item";document.body.appendChild(li);
+const mk=getComputedStyle(li,"::marker");
+L("marker-color",mk.color.split(" ").join("_"));
+li.remove();
+// ::first-line
+const p=document.createElement("p");p.textContent="Hello world this is a test";document.body.appendChild(p);
+const fl=getComputedStyle(p,"::first-line");
+L("firstline-weight",fl.fontWeight);
+p.remove();
+// ::first-letter
+const pl=document.createElement("p");pl.textContent="Hello";document.body.appendChild(pl);
+const fle=getComputedStyle(pl,"::first-letter");
+L("firstletter-weight",fle.fontWeight);
+L("firstletter-float",fle.float);
+pl.remove();
+// ::selection
+const sel=document.createElement("div");sel.textContent="selectable";document.body.appendChild(sel);
+const selection=getComputedStyle(sel,"::selection");
+L("selection-bg",selection.backgroundColor.split(" ").join("_"));
+sel.remove();
+// :lang()
+const en=document.createElement("div");en.lang="en";en.textContent="Hello";document.body.appendChild(en);
+L("lang-en-match",en.matches(":lang(en)"));
+L("lang-fr-nomatch",en.matches(":lang(fr)"));
+en.remove();
+// :dir()
+const rt=document.createElement("div");rt.dir="rtl";rt.textContent="x";document.body.appendChild(rt);
+L("dir-rtl",rt.matches(":dir(rtl)"));
+L("dir-ltr",rt.matches(":dir(ltr)"));
+rt.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
