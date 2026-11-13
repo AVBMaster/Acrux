@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function mkFlex(dir,wrap,children,extra){
+  const f=document.createElement("div");
+  f.style.cssText="display:flex;flex-direction:"+dir+";flex-wrap:"+wrap+";width:300px;height:200px;"+(extra||"");
+  children.forEach(c=>{const e=document.createElement("div");e.textContent=c.t;e.style.cssText=c.s;f.appendChild(e);});
+  document.body.appendChild(f);
+  const info=[...f.children].map(c=>Math.round(c.getBoundingClientRect().width)+"x"+Math.round(c.getBoundingClientRect().height)+"@"+Math.round(c.getBoundingClientRect().x)+","+Math.round(c.getBoundingClientRect().y));
+  f.remove();return info;
+}
+// basis auto vs 0
+let r=mkFlex("row","nowrap",[{t:"A",s:"flex-basis:100px"},{t:"B",s:"flex-basis:100px"}]);
+L("basis-100-100",r.join("_"));
+// shrink
+r=mkFlex("row","nowrap",[{t:"A",s:"width:200px;flex-shrink:1"},{t:"B",s:"width:200px;flex-shrink:1"}]);
+L("shrink-equal",r.join("_"));
+// shrink ratio
+r=mkFlex("row","nowrap",[{t:"A",s:"width:200px;flex-shrink:2"},{t:"B",s:"width:200px;flex-shrink:1"}]);
+L("shrink-2-1",r.join("_"));
+// grow
+r=mkFlex("row","nowrap",[{t:"A",s:"flex-grow:1"},{t:"B",s:"flex-grow:3"}],"gap:0");
+L("grow-1-3",r.join("_"));
+// wrap two rows
+r=mkFlex("row","wrap",[{t:"A",s:"width:150px;height:30px"},{t:"B",s:"width:150px;height:30px"},{t:"C",s:"width:150px;height:30px"}]);
+L("wrap-3-150",r.join("_"));
+// column direction
+r=mkFlex("column","nowrap",[{t:"A",s:"flex:1"},{t:"B",s:"flex:2"}]);
+L("column-1-2",r.join("_"));
+// order
+r=mkFlex("row","nowrap",[{t:"A",s:"order:2;width:50px"},{t:"B",s:"order:1;width:50px"}]);
+L("order-2-1",r.join("_"));
+// justify-content center
+r=mkFlex("row","nowrap",[{t:"A",s:"width:50px"},{t:"B",s:"width:50px"}],"justify-content:center");
+L("jc-center",r.join("_"));
+// align-items stretch (default)
+r=mkFlex("row","nowrap",[{t:"A",s:"width:50px"},{t:"B",s:"width:50px;height:60px"}]);
+L("ai-stretch",r.join("_"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
