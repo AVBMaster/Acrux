@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// float left + clear
+let d=document.createElement("div");d.style.width="200px";
+d.innerHTML="<div style='float:left;width:50px;height:30px;background:#fcc'>F</div><div style='background:#ccf'>Text beside float</div><div style='clear:both;background:#cfc'>After clear</div>";
+document.body.appendChild(d);
+const afterClear=d.children[2];
+L("float-clear-y",Math.round(afterClear.getBoundingClientRect().y));
+L("float-y",Math.round(d.children[0].getBoundingClientRect().y));
+d.remove();
+// position sticky (static read)
+const sc=document.createElement("div");sc.style.height="200px";sc.style.overflow="auto";
+const st=document.createElement("div");st.style.position="sticky";st.style.top="0";st.textContent="Sticky";
+sc.appendChild(st);document.body.appendChild(sc);
+L("sticky-pos",getComputedStyle(st).position);
+L("sticky-top",getComputedStyle(st).top);
+sc.remove();
+// overflow hidden/auto/scroll/visible
+function ofTest(ov){const e=document.createElement("div");e.style.width="50px";e.style.height="30px";e.style.overflow=ov;e.innerHTML="long text here";document.body.appendChild(e);const r=getComputedStyle(e).overflow;e.remove();return r;}
+L("overflow-hidden",ofTest("hidden"));
+L("overflow-auto",ofTest("auto"));
+L("overflow-scroll",ofTest("scroll"));
+L("overflow-visible",ofTest("visible"));
+// text-overflow ellipsis with nowrap
+const te=document.createElement("div");te.style.width="60px";te.style.overflow="hidden";te.style.textOverflow="ellipsis";te.style.whiteSpace="nowrap";te.textContent="very long text";document.body.appendChild(te);
+L("text-ellipsis-w",Math.round(te.getBoundingClientRect().width));
+te.remove();
+// z-index stacking
+const zs=document.createElement("div");zs.style.position="relative";zs.style.zIndex="10";document.body.appendChild(zs);
+L("zindex-10",getComputedStyle(zs).zIndex);
+zs.remove();
+const za=document.createElement("div");za.style.position="relative";document.body.appendChild(za);
+L("zindex-auto",getComputedStyle(za).zIndex);
+za.remove();
+// overflow-wrap / word-break long word
+const lw=document.createElement("div");lw.style.width="60px";lw.style.overflowWrap="break-word";lw.textContent="aaaaaaaaaaaa";document.body.appendChild(lw);
+L("word-break-h",Math.round(lw.getBoundingClientRect().height));
+lw.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

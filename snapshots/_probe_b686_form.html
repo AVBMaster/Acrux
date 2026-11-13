@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// form controls styling
+function mkInput(type,css){
+  const i=document.createElement("input");i.type=type;i.setAttribute("style",css||"");
+  document.body.appendChild(i);return i;
+}
+const ti=mkInput("text");L("input-text-w",Math.round(ti.getBoundingClientRect().width));
+ti.remove();
+const cb=mkInput("checkbox");L("checkbox-w",Math.round(cb.getBoundingClientRect().width));
+cb.remove();
+const rd=mkInput("radio");L("radio-w",Math.round(rd.getBoundingClientRect().width));
+rd.remove();
+// input width from attribute
+const iw=mkInput("text","");iw.setAttribute("size","10");
+L("input-size10-w",Math.round(iw.getBoundingClientRect().width));
+iw.remove();
+// select
+const sel=document.createElement("select");sel.innerHTML="<option>A</option><option>B</option>";
+document.body.appendChild(sel);
+L("select-h",Math.round(sel.getBoundingClientRect().height));
+sel.remove();
+// textarea
+const ta=document.createElement("textarea");ta.rows=3;ta.cols=20;document.body.appendChild(ta);
+L("textarea-w",Math.round(ta.getBoundingClientRect().width));
+L("textarea-h",Math.round(ta.getBoundingClientRect().height));
+ta.remove();
+// fieldset + legend
+const fs=document.createElement("fieldset");fs.innerHTML="<legend>Title</legend><p>Body</p>";
+document.body.appendChild(fs);
+L("fieldset-w",Math.round(fs.getBoundingClientRect().width));
+L("legend-display",getComputedStyle(fs.querySelector("legend")).display);
+fs.remove();
+// label
+const lb=document.createElement("label");lb.textContent="Label";document.body.appendChild(lb);
+L("label-display",getComputedStyle(lb).display);
+lb.remove();
+// button
+const btn=document.createElement("button");btn.textContent="Click";document.body.appendChild(btn);
+L("button-display",getComputedStyle(btn).display);
+L("button-w",Math.round(btn.getBoundingClientRect().width));
+btn.remove();
+// progress / meter
+const pg=document.createElement("progress");pg.value=50;pg.max=100;document.body.appendChild(pg);
+L("progress-w",Math.round(pg.getBoundingClientRect().width));
+pg.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
