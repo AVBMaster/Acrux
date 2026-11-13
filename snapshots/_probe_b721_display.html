@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// all display values
+gc("disp-block","display:block","display");
+gc("disp-inline","display:inline","display");
+gc("disp-inline-block","display:inline-block","display");
+gc("disp-flex","display:flex","display");
+gc("disp-inline-flex","display:inline-flex","display");
+gc("disp-grid","display:grid","display");
+gc("disp-inline-grid","display:inline-grid","display");
+gc("disp-table","display:table","display");
+gc("disp-table-cell","display:table-cell","display");
+gc("disp-table-row","display:table-row","display");
+gc("disp-none","display:none","display");
+gc("disp-contents","display:contents","display");
+gc("disp-flow-root","display:flow-root","display");
+gc("disp-list-item","display:list-item","display");
+gc("disp-ruby","display:ruby","display");
+gc("disp-table-caption","display:table-caption","display");
+// display none hides element
+const dn=document.createElement("div");dn.style.display="none";dn.textContent="x";document.body.appendChild(dn);
+L("none-rect-w",Math.round(dn.getBoundingClientRect().width));
+dn.remove();
+// display contents flattens
+const dc=document.createElement("div");dc.style.cssText="display:contents;background:red";
+const child=document.createElement("span");child.textContent="child";
+dc.appendChild(child);document.body.appendChild(dc);
+L("contents-child-visible",child.getBoundingClientRect().width>0);
+dc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
