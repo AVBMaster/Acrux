@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// font-family
+gc("ff-serif","font-family:serif","font-family");
+gc("ff-sans","font-family:sans-serif","font-family");
+gc("ff-mono","font-family:monospace","font-family");
+gc("ff-cursive","font-family:cursive","font-family");
+gc("ff-fantasy","font-family:fantasy","font-family");
+gc("ff-multi","font-family:Arial,Helvetica,sans-serif","font-family");
+gc("ff-quoted","font-family:\"Times New Roman\",serif","font-family");
+// font-size
+gc("fs-medium","font-size:medium","font-size");
+gc("fs-large","font-size:large","font-size");
+gc("fs-x-large","font-size:x-large","font-size");
+gc("fs-xx-small","font-size:xx-small","font-size");
+gc("fs-larger","font-size:larger","font-size");
+gc("fs-smaller","font-size:smaller","font-size");
+gc("fs-em","font-size:2em","font-size");
+gc("fs-pct","font-size:150%","font-size");
+gc("fs-px","font-size:20px","font-size");
+gc("fs-rem","font-size:1.5rem","font-size");
+// font-weight
+gc("fw-normal","font-weight:normal","font-weight");
+gc("fw-bold","font-weight:bold","font-weight");
+gc("fw-bolder","font-weight:bolder","font-weight");
+gc("fw-lighter","font-weight:lighter","font-weight");
+gc("fw-100","font-weight:100","font-weight");
+gc("fw-900","font-weight:900","font-weight");
+// font-style
+gc("fst-normal","font-style:normal","font-style");
+gc("fst-italic","font-style:italic","font-style");
+gc("fst-oblique","font-style:oblique","font-style");
+gc("fst-oblique-10","font-style:oblique 10deg","font-style");
+// line-height computed
+gc("lh-normal","line-height:normal","line-height");
+gc("lh-number","line-height:1.5","line-height");
+gc("lh-px","line-height:20px","line-height");
+gc("lh-pct","line-height:150%","line-height");
+// font shorthand roundtrip
+gc("font-bold-16","font:bold 16px serif","font-weight");
+gc("font-italic-sm","font:italic small-caps bold 16px/1.5 Georgia","font-style");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
