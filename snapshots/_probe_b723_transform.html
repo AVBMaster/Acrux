@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// individual transform properties
+gc("tx-translate","translate:10px 20px","translate");
+gc("tx-rotate","rotate:45deg","rotate");
+gc("tx-scale","scale:2","scale");
+gc("tx-scale-xy","scale:2 3","scale");
+gc("tx-none","translate:none","translate");
+gc("ty-none","rotate:none","rotate");
+// transform-origin
+gc("to-center","transform-origin:center center","transform-origin");
+gc("to-top-left","transform-origin:top left","transform-origin");
+gc("to-px","transform-origin:10px 20px","transform-origin");
+gc("to-percent","width:200px;transform-origin:25% 75%","transform-origin");
+gc("to-3d","transform-origin:10px 20px 5px","transform-origin");
+// backface-visibility
+gc("bf-visible","backface-visibility:visible","backface-visibility");
+gc("bf-hidden","backface-visibility:hidden","backface-visibility");
+// perspective
+gc("persp","perspective:1000px","perspective");
+gc("persp-none","perspective:none","perspective");
+// transform-style
+gc("ts-flat","transform-style:flat","transform-style");
+gc("ts-3d","transform-style:preserve-3d","transform-style");
+// will-change
+gc("wc-auto","will-change:auto","will-change");
+gc("wc-single","will-change:transform","will-change");
+gc("wc-multi","will-change:transform,opacity,filter","will-change");
+// transform-box
+gc("tb-view-box","transform-box:view-box","transform-box");
+gc("tb-fill-box","transform-box:fill-box","transform-box");
+gc("tb-border-box","transform-box:border-box","transform-box");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
