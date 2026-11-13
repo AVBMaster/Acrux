@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// matchMedia results
+function mq(q){try{return matchMedia(q).matches;}catch(e){return "ERR";}}
+L("mm-screen",mq("screen"));
+L("mm-print",mq("print"));
+L("mm-not-print",mq("not print"));
+L("mm-min-width",mq("(min-width:100px)"));
+L("mm-max-width",mq("(max-width:99999px)"));
+L("mm-width-range",mq("(100px <= width <= 2000px)"));
+L("mm-orientation-landscape",mq("(orientation:landscape)"));
+L("mm-orientation-portrait",mq("(orientation:portrait)"));
+L("mm-hover-hover",mq("(hover:hover)"));
+L("mm-hover-none",mq("(hover:none)"));
+L("mm-pointer-fine",mq("(pointer:fine)"));
+L("mm-prefers-color-dark",mq("(prefers-color-scheme:dark)"));
+L("mm-prefers-color-light",mq("(prefers-color-scheme:light)"));
+L("mm-prefers-reduced",mq("(prefers-reduced-motion:reduce)"));
+L("mm-resolution",mq("(min-resolution:96dpi)"));
+L("mm-bogus",mq("bogus-query"));
+// CSS.supports at-rule
+L("sup-display-grid",CSS.supports("display:grid"));
+L("sup-selector-has",CSS.supports("selector(:has(a))"));
+L("sup-selector-not",CSS.supports("selector(:not(a,b))"));
+// media list serialisation
+const mql=matchMedia("(min-width:100px) and (max-width:2000px)");
+L("mql-media",mql.media.split(" ").join("_"));
+L("mql-matches",mql.matches);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
