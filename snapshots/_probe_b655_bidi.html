@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+.rtl{direction:rtl}
+.bdo{unicode-bidi:bidi-override}
+.bo{unicode-bidi:override}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// unicode-bidi computed values
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v===""?"(empty)":v.split(" ").join("_"));d.remove();
+}
+gc("ub-normal","unicode-bidi:normal","unicode-bidi");
+gc("ub-override","unicode-bidi:bidi-override","unicode-bidi");
+gc("ub-embed","unicode-bidi:embed","unicode-bidi");
+gc("ub-isolate","unicode-bidi:isolate","unicode-bidi");
+gc("ub-isolate-override","unicode-bidi:isolate-override","unicode-bidi");
+gc("ub-plaintext","unicode-bidi:plaintext","unicode-bidi");
+// text order via Range rects on a RTL override string
+function order(d){
+  const r=document.createRange();r.selectNodeContents(d);
+  const rects=[...r.getClientRects()].filter(x=>x.width>0).sort((a,b)=>a.left-b.left);
+  return rects.map(x=>Math.round(x.left));
+}
+const t1=document.createElement("div");t1.className="rtl bdo";t1.textContent="ABC";document.body.appendChild(t1);
+L("rtl-override-lefts",order(t1).join("/"));t1.remove();
+const t2=document.createElement("div");t2.textContent="ABC";document.body.appendChild(t2);
+L("ltr-normal-lefts",order(t2).join("/"));t2.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

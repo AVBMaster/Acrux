@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:16px monospace}
+.rtl{direction:rtl}
+.bdo{unicode-bidi:bidi-override}
+span{display:inline}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function charOrder(d){
+  const spans=[...d.querySelectorAll("span")];
+  const info=spans.map((s,i)=>({i,ch:s.textContent,left:Math.round(s.getBoundingClientRect().left),top:Math.round(s.getBoundingClientRect().top)}));
+  const lines=new Map();
+  info.forEach(x=>{if(!lines.has(x.top))lines.set(x.top,[]);lines.get(x.top).push(x);});
+  const res=[];
+  [...lines.keys()].sort((a,b)=>a-b).forEach(t=>{
+    res.push(lines.get(t).sort((a,b)=>a.left-b.left).map(x=>x.ch).join(""));
+  });
+  return res.join("|");
+}
+function make(cls){const d=document.createElement("div");d.className=cls;["A","B","C","D"].forEach(ch=>{const s=document.createElement("span");s.textContent=ch;d.appendChild(s);});document.body.appendChild(d);return d;}
+const a=make("");L("ltr-normal",charOrder(a));a.remove();
+const b=make("rtl bdo");L("rtl-bdo",charOrder(b));b.remove();
+const c=make("rtl");L("rtl-normal",charOrder(c));c.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
