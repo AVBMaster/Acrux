@@ -465,13 +465,12 @@ public class TableLayoutAlgorithm : LayoutAlgorithm
             int startColumn = tabulator.CurrentColumn;
             int colspan = TableLayoutUtils.CellColspan(cell);
             int rowspan = TableLayoutUtils.CellRowspan(cell);
-            int effectiveRowspan = rowspan;
-            if (effectiveRowspan > 1)
-            {
-                int maxRows = sectionRowCount - (rowIndex - section.start_row_index);
-                if (maxRows < 1) maxRows = 1;
-                effectiveRowspan = Math.Min(maxRows, effectiveRowspan);
-            }
+            // A rowspan may cross section boundaries (HTML §4.9.11): a rowspan=2 cell starting
+            // in the last row of a bare-tr implicit tbody covers the first row of the next
+            // section. Cap the span against the full table row count, not just this section's,
+            // which a bare <tr> per-row section would otherwise wrongly clamp to 1.
+            int effectiveRowspan = Math.Min(rowspan, rows.Count - rowIndex);
+            if (effectiveRowspan < 1) effectiveRowspan = 1;
 
             int start = Math.Clamp(startColumn, 0, columnLocations.Count - 1);
             int endColumn = Math.Min(start + Math.Max(1, colspan) - 1, columnLocations.Count - 1);

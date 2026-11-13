@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+table{border-collapse:separate;border-spacing:2px}
+td,th{border:1px solid #999;padding:2px;font-size:12px}
+.r{background:#fcc}.h{background:#ccf}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(tag,val){out.push("L~"+tag+"~"+val);}
+// td offsetWidth now measurable — test row/cell geometry across table variants
+function cellBox(tbodyWrap,extra){
+  const t=document.createElement("table");t.style.borderSpacing="2px";
+  let host=t;
+  if(tbodyWrap){const tb=document.createElement(tbodyWrap);t.appendChild(tb);host=tb;}
+  const tr=document.createElement("tr");host.appendChild(tr);
+  const td=document.createElement("td");td.textContent="x";tr.appendChild(td);
+  const td2=document.createElement("td");td2.textContent="yy";tr.appendChild(td2);
+  document.body.appendChild(t);
+  const r=td.getBoundingClientRect();
+  return Math.round(r.width)+"x"+Math.round(r.height)+"@"+Math.round(r.x)+","+Math.round(r.y);
+}
+L("bare-tr",cellBox(null));
+L("explicit-tbody",cellBox("tbody"));
+L("explicit-thead",cellBox("thead"));
+L("explicit-tfoot",cellBox("tfoot"));
+// thead styling reaches cells
+const t2=document.createElement("table");
+const th2=document.createElement("thead");t2.appendChild(th2);
+const tr2=document.createElement("tr");th2.appendChild(tr2);
+const thc=document.createElement("th");thc.textContent="head";tr2.appendChild(thc);
+document.body.appendChild(t2);
+L("th-bg",getComputedStyle(thc).backgroundColor);
+L("th-bold",getComputedStyle(thc).fontWeight);
+// rowspan / colspan geometry
+const t3=document.createElement("table");t3.style.borderSpacing="2px";
+const tr3=document.createElement("tr");t3.appendChild(tr3);
+const a=document.createElement("td");a.textContent="a";a.rowSpan=2;tr3.appendChild(a);
+const b=document.createElement("td");b.textContent="b";tr3.appendChild(b);
+const tr4=document.createElement("tr");t3.appendChild(tr4);
+const c=document.createElement("td");c.textContent="c";tr4.appendChild(c);
+document.body.appendChild(t3);
+const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect(),rc=c.getBoundingClientRect();
+L("rowspan-a",Math.round(ra.height));
+L("rowspan-b",Math.round(rb.height));
+L("rowspan-c",Math.round(rc.height));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(tag,v){out.push("L~"+tag+"~"+v);}
+// rowspan=2 across two rows
+const t=document.createElement("table");
+t.setAttribute("style","border-collapse:separate;border-spacing:0px");
+const tr1=document.createElement("tr");t.appendChild(tr1);
+const a=document.createElement("td");a.textContent="a";a.setAttribute("rowspan","2");tr1.appendChild(a);
+const b=document.createElement("td");b.textContent="b<br>b";tr1.appendChild(b);
+const tr2=document.createElement("tr");t.appendChild(tr2);
+const c=document.createElement("td");c.textContent="c<br>c<br>c";tr2.appendChild(c);
+document.body.appendChild(t);
+const ga=x=>{const r=x.getBoundingClientRect();return Math.round(r.height)+"@"+Math.round(r.y);};
+L("rowspan-attr",a.rowSpan);
+L("cell-a-h",ga(a));
+L("cell-b-h",ga(b));
+L("cell-c-h",ga(c));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
