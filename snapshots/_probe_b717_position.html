@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// static (default)
+let d=document.createElement("div");d.style.position="static";d.textContent="static";document.body.appendChild(d);
+L("pos-static",getComputedStyle(d).position);L("pos-static-rect",rect(d));d.remove();
+// relative
+d=document.createElement("div");d.style.cssText="position:relative;top:10px;left:20px";d.textContent="rel";
+document.body.appendChild(d);
+L("pos-relative",getComputedStyle(d).position);L("pos-relative-rect",rect(d));d.remove();
+// absolute in positioned parent
+const parent=document.createElement("div");parent.style.cssText="position:relative;width:200px;height:100px";
+const abs=document.createElement("div");abs.style.cssText="position:absolute;top:10px;left:20px;width:50px;height:30px;background:#fcc";
+parent.appendChild(abs);document.body.appendChild(parent);
+L("pos-abs-in-rel",rect(abs));parent.remove();
+// fixed
+d=document.createElement("div");d.style.cssText="position:fixed;top:5px;left:5px;width:30px;height:20px;background:#ccf";
+document.body.appendChild(d);
+L("pos-fixed",getComputedStyle(d).position);L("pos-fixed-rect",rect(d));d.remove();
+// sticky
+const sc=document.createElement("div");sc.style.cssText="height:200px;overflow:auto";
+const stk=document.createElement("div");stk.style.cssText="position:sticky;top:0;background:#cfc";stk.textContent="sticky";
+sc.appendChild(stk);document.body.appendChild(sc);
+L("pos-sticky",getComputedStyle(stk).position);L("pos-sticky-top",getComputedStyle(stk).top);
+sc.remove();
+// z-index stacking
+const z1=document.createElement("div");z1.style.cssText="position:absolute;z-index:5;width:50px;height:50px;background:#fcc";
+const z2=document.createElement("div");z2.style.cssText="position:absolute;z-index:10;width:50px;height:50px;background:#ccf";
+document.body.appendChild(z1);document.body.appendChild(z2);
+L("zindex-5",getComputedStyle(z1).zIndex);
+L("zindex-10",getComputedStyle(z2).zIndex);
+z1.remove();z2.remove();
+// z-index auto vs explicit
+const za=document.createElement("div");za.style.cssText="position:relative;z-index:auto";document.body.appendChild(za);
+L("zindex-auto",getComputedStyle(za).zIndex);
+za.remove();
+// inset shorthand
+d=document.createElement("div");d.style.cssText="position:absolute;inset:10px 20px 30px 40px";document.body.appendChild(d);
+L("inset-t",getComputedStyle(d).top);L("inset-r",getComputedStyle(d).right);
+L("inset-b",getComputedStyle(d).bottom);L("inset-l",getComputedStyle(d).left);
+d.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
