@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// font-variant
+gc("fv-small-caps","font-variant:small-caps","font-variant");
+gc("fv-normal","font-variant:normal","font-variant");
+gc("fv-ordinal","font-variant-numeric:ordinal","font-variant-numeric");
+gc("fv-ligatures","font-variant-ligatures:common-ligatures","font-variant-ligatures");
+gc("fv-eastasian","font-variant-east-asian:full-width","font-variant-east-asian");
+// font-feature-settings
+gc("ffr","font-feature-settings:\"liga\" on","font-feature-settings");
+// font-kerning
+gc("fk-normal","font-kerning:normal","font-kerning");
+// font-size-adjust
+gc("fsa","font-size-adjust:0.5","font-size-adjust");
+// text-rendering
+gc("tr-optimize","text-rendering:optimizeLegibility","text-rendering");
+// font-stretch
+gc("fst-condensed","font-stretch:condensed","font-stretch");
+// font-optical-sizing
+gc("fos-auto","font-optical-sizing:auto","font-optical-sizing");
+// letter-spacing
+gc("ls-normal","letter-spacing:normal","letter-spacing");
+gc("ls-1em","letter-spacing:1em","letter-spacing");
+// word-spacing
+gc("ws-percentage","word-spacing:10%","word-spacing");
+// line-height
+gc("lh-normal","line-height:normal","line-height");
+gc("lh-1_5","line-height:1.5","line-height");
+gc("lh-20px","line-height:20px","line-height");
+// font shorthand computed
+gc("font-short","font:bold 16px/1.2 serif","font");
+gc("font-weight-bold","font-weight:bold","font-weight");
+gc("font-style-italic","font-style:italic","font-style");
+// text-shadow
+gc("ts","text-shadow:1px 1px 2px red","text-shadow");
+gc("ts-none","text-shadow:none","text-shadow");
+// text-decoration line
+gc("td-underline","text-decoration:underline","text-decoration-line");
+gc("td-line-through","text-decoration:line-through","text-decoration-line");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
