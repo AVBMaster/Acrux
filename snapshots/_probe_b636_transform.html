@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+div{width:60px;height:40px;background:#eef;border:1px solid #000}
+</style></head><body>
+<div id="out"></div>
+<script>
+const cases=[
+  ["translate(10px,20px)","translate"],
+  ["translateX(15px)","translate"],
+  ["scale(2)","scale"],
+  ["scaleX(-1)","scale"],
+  ["rotate(45deg)","rotate"],
+  ["skewX(20deg)","skew"],
+  ["matrix(1,0,0,1,5,5)","matrix"],
+  ["translate(10px,20px) rotate(30deg)","combo"],
+  ["perspective(100px) rotateY(30deg)","3d"],
+  ["rotateY(45deg)","3d"],
+  ["translateZ(10px)","3d"],
+  ["scale3d(2,2,2)","3d"],
+];
+let i=0;
+for(const [v,tag] of cases){
+  i++;
+  const el=document.createElement("div");el.id="t"+i;
+  el.style.transform=v;document.body.appendChild(el);
+}
+for(const [v,tag] of cases){
+  i++;
+}
+i=0;
+for(const [v,tag] of cases){
+  i++;
+  const el=document.getElementById("t"+i);
+  const c=getComputedStyle(el);
+  const tf=c.transform==="none"?"none":c.transform.replace(/[ ,]+/g,"_").replace("matrix_","matrix(").replace(/_\(/,"(");
+  const r=el.getBoundingClientRect();
+  document.getElementById("out").insertAdjacentHTML("beforeend",
+    "<div class=\"row\">L|"+tag+"|"+v.replace(/[ ,]+/g,"_")+"|rect="+Math.round(r.width)+"x"+Math.round(r.height)+"|tf="+tf.replace(/[ ,]+/g,"_")+"</div>");
+}
+</script></body></html>
