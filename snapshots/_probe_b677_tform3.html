@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("tf-skewx","width:100px;transform:skewX(30deg)","transform");
+gc("tf-rotatex","width:100px;transform:rotateX(45deg)","transform");
+gc("tf-rotatey","width:100px;transform:rotateY(45deg)","transform");
+gc("tf-translate3d","width:100px;transform:translate3d(10px,20px,30px)","transform");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

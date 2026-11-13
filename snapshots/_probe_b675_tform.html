@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// transform-origin on constrained element
+gc("to-center","width:100px;height:50px;transform-origin:50% 50%","transform-origin");
+gc("to-left","width:100px;height:50px;transform-origin:left top","transform-origin");
+gc("to-px","width:100px;height:50px;transform-origin:10px 20px","transform-origin");
+gc("to-percent","width:200px;height:100px;transform-origin:25% 75%","transform-origin");
+// translate/scale computed (space-truncated)
+gc("tf-translate","width:100px;transform:translate(10px,20px)","transform");
+gc("tf-scale","width:100px;transform:scale(2)","transform");
+gc("tf-skew","width:100px;transform:skewX(30deg)","transform");
+// transition shorthand components
+gc("trans-width","transition:width 0.2s linear","transition");
+gc("trans-property","transition-property:width,height","transition-property");
+// animation-name
+gc("anim-name","animation-name:myanim","animation-name");
+gc("anim-direction","animation-direction:reverse","animation-direction");
+// offset-path / backface
+gc("offset-path","offset-path:path('M 0 0 L 100 100')","offset-path");
+gc("backface","backface-visibility:hidden","backface-visibility");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

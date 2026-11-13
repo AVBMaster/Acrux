@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// transform-origin
+gc("to-origin","transform-origin:50% 50%","transform-origin");
+gc("to-px","transform-origin:10px 20px","transform-origin");
+// transform computed (matrix)
+gc("tf-none","transform:none","transform");
+gc("tf-translate","transform:translate(10px,20px)","transform");
+gc("tf-rotate","transform:rotate(45deg)","transform");
+gc("tf-scale","transform:scale(2)","transform");
+gc("tf-matrix","transform:matrix(1,0,0,1,10,20)","transform");
+// transition
+gc("trans-all","transition:all 0.3s ease","transition");
+gc("trans-width","transition:width 0.2s linear","transition");
+gc("trans-duration","transition-duration:0.3s","transition-duration");
+gc("trans-timing","transition-timing-function:ease-in-out","transition-timing-function");
+gc("trans-property","transition-property:width,height","transition-property");
+gc("trans-delay","transition-delay:0.1s","transition-delay");
+// animation
+gc("anim-name","animation:myanim 2s linear","animation");
+gc("anim-name-only","animation-name:myanim","animation-name");
+gc("anim-dur","animation-duration:2s","animation-duration");
+gc("anim-iter","animation-iteration-count:infinite","animation-iteration-count");
+gc("anim-direction","animation-direction:reverse","animation-direction");
+gc("anim-fill","animation-fill-mode:forwards","animation-fill-mode");
+gc("anim-play","animation-play-state:paused","animation-play-state");
+// will-change
+gc("wc","will-change:transform,opacity","will-change");
+// offset properties (Motion Path)
+gc("offset-path","offset-path:path('M 0 0 L 100 100')","offset-path");
+gc("offset-distance","offset-distance:50%","offset-distance");
+gc("offset-rotate","offset-rotate:auto","offset-rotate");
+// backface-visibility
+gc("backface","backface-visibility:hidden","backface-visibility");
+// perspective
+gc("perspective","perspective:1000px","perspective");
+gc("transform-style","transform-style:preserve-3d","transform-style");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
