@@ -63,6 +63,7 @@ public class StyleComputer
     public void AddStylesheet(Stylesheet stylesheet, CascadeOrigin origin = CascadeOrigin.Author, Element? owner = null)
     {
         _stylesheets.Add(stylesheet);
+        System.Console.Error.WriteLine($"[AS] AddStylesheet modern=[{stylesheet.ModernContents!=null}] propRules=[{stylesheet.PropertyRules.Count}]");
 
         // Prefer the token-parsed sheet attached by CssParser.Parse so the modern
         // pipeline never re-parses the CSS text. The legacy model is retained only
@@ -80,7 +81,7 @@ public class StyleComputer
                 OwnerText = owner?.TextContent,
             };
             SeedMedia(sheet);
-            RegisterPropertyInitialValues(modern);
+            RegisterPropertyInitialValues(stylesheet);
             _authorSheets.Add(sheet);
             if (owner != null) owner.AssociatedStyleSheet = modern;
         }
@@ -89,14 +90,16 @@ public class StyleComputer
     /// <summary>Register the initial value each @property rule declares (CSS Properties 5 §3.2): a
     /// registered custom property answers that initial for any box that never wrote it, so
     /// getComputedStyle falls back to it when the element has no such custom property.</summary>
-    private static void RegisterPropertyInitialValues(StyleSheetContents sheet)
+    private static void RegisterPropertyInitialValues(Stylesheet sheet)
     {
-        foreach (var rule in sheet.ChildRules)
+        foreach (var property in sheet.PropertyRules)
         {
-            if (rule is not StyleRuleProperty property) continue;
             if (!property.Descriptors.TryGetValue("initial-value", out var initial)) continue;
             if (string.IsNullOrWhiteSpace(initial)) continue;
-            Acrux.Core.Css.CssFunctionEvaluator.SetCustomProperty(property.Name, initial.Trim());
+            // The evaluator's table is keyed by the bare name (the same key var() and the cascade
+            // look up), so register under the name without its '--' sigil (measured: storing the
+            // full name made every read-back miss).
+            Acrux.Core.Css.CssFunctionEvaluator.SetCustomProperty(property.Name[2..], initial.Trim());
         }
     }
 
