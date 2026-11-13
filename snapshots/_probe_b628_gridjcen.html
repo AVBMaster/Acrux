@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.g{display:grid;width:200px;height:80px;border:1px solid #000}
+.it{width:30px;height:20px;background:tomato}
+</style></head><body>
+<div id="out"></div>
+<div class="g" id="a" style="justify-content:center"><div class="it"></div><div class="it"></div></div>
+<div class="g" id="b" style="align-content:space-between"><div class="it"></div><div class="it"></div></div>
+<div class="g" id="c" style="place-content:space-between center"><div class="it"></div><div class="it"></div></div>
+<script>
+const out=[];
+for(const id of ["a","b","c"]){
+  const h=document.getElementById(id);
+  const kids=[...h.children].map((k,i)=>{const r=k.getBoundingClientRect();return "k"+i+"@x"+Math.round(r.x)+"_y"+Math.round(r.y);}).join(",");
+  const g=n=>getComputedStyle(h).getPropertyValue(n);
+  out.push(["L",id,"jc="+g("justify-content"),"ac="+g("align-content"),"pc="+g("place-content"),"kids="+kids].join("~"));
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

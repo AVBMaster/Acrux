@@ -1401,7 +1401,7 @@ public class GridLayoutAlgorithm
     /// size in an axis, the leftover space is shared equally between the
     /// auto-sized tracks of that axis (fr tracks were already grown).
     /// </summary>
-    private static void StretchAutoTracks(List<GridTrack> tracks, float definiteContainer, float gap, float paddingBleed)
+    private static void StretchAutoTracks(List<GridTrack> tracks, float definiteContainer, float gap, float paddingBleed, string contentAlignment)
     {
         if (tracks.Count == 0 || float.IsNaN(definiteContainer) || float.IsInfinity(definiteContainer))
             return;
@@ -1409,6 +1409,12 @@ public class GridLayoutAlgorithm
         foreach (var t in tracks) used += t.BaseSize;
         float free = definiteContainer - used;
         if (free <= 0) return;
+        // §12.6 stretches free space into auto tracks only when the content
+        // alignment leaves that space undistributed. 'center'/'end'/'start'
+        // and the space-* distributions each consume it themselves, so the
+        // tracks stay content-sized and the alignment is visible.
+        string key = (contentAlignment ?? "normal").Trim().ToLowerInvariant().Replace("-", "");
+        if (key is not ("normal" or "stretch")) return;
         int autoCount = 0;
         foreach (var t in tracks)
             if (t.SizeType == TrackSizeType.Auto) autoCount++;
@@ -1479,8 +1485,15 @@ public class GridLayoutAlgorithm
 
         // §12.6 auto track stretching first, so `align-content: stretch` (the
         // default) grows auto tracks instead of leaving them content-sized.
-        StretchAutoTracks(columns, containerBox.ContentBox.Width, columnGap, 0f);
-        StretchAutoTracks(rows, containerBox.ContentBox.Height, rowGap, 0f);
+        // A column only stretches when `justify-content` leaves the free space to
+        // distribute: with `center`/`end`/a distribution value the tracks keep
+        // their content size and that free space is what the content alignment
+        // centres or spreads (measured: a single auto column under
+        // 'justify-content: center' stays content-sized and lands centred).
+        StretchAutoTracks(columns, containerBox.ContentBox.Width, columnGap, 0f,
+            containerStyle0.JustifyContent.ToString());
+        StretchAutoTracks(rows, containerBox.ContentBox.Height, rowGap, 0f,
+            containerStyle0.AlignContent.ToString());
 
         float colFree = containerBox.ContentBox.Width - TrackGroupSize(columns, columnGap);
         float rowFree = containerBox.ContentBox.Height - TrackGroupSize(rows, rowGap);
