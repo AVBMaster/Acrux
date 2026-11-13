@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// border-width WITH a style present (so it takes effect)
+gc("bw-with-style","border-style:solid;border-width:3px","border-width");
+gc("bw-thin-styled","border-style:solid;border-width:thin","border-width");
+gc("bw-medium-styled","border-style:solid;border-width:medium","border-width");
+gc("bw-thick-styled","border-style:solid;border-width:thick","border-width");
+// border shorthand
+gc("b-2px","border:2px solid blue","border-width");
+gc("b-thick","border:thick solid blue","border-width");
+// individual
+gc("bl-w-5","border-style:solid;border-left-width:5px","border-left-width");
+gc("bl-w-5-nostyle","border-left-width:5px","border-left-width");
+// border-width without style should still store the value
+gc("bw-nostyle-3px","border-width:3px","border-width");
+gc("bw-nostyle-thin","border-width:thin","border-width");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// border-style all keywords
+gc("bs-none","border-style:none","border-style");
+gc("bs-solid","border-style:solid","border-style");
+gc("bs-dashed","border-style:dashed","border-style");
+gc("bs-dotted","border-style:dotted","border-style");
+gc("bs-double","border-style:double","border-style");
+gc("bs-groove","border-style:groove","border-style");
+gc("bs-ridge","border-style:ridge","border-style");
+gc("bs-inset","border-style:inset","border-style");
+gc("bs-outset","border-style:outset","border-style");
+gc("bs-hidden","border-style:hidden","border-style");
+// border-width
+gc("bw-thin","border-width:thin","border-width");
+gc("bw-medium","border-width:medium","border-width");
+gc("bw-thick","border-width:thick","border-width");
+gc("bw-px","border-width:3px","border-width");
+// individual sides
+gc("bl-style","border-left-style:dashed","border-left-style");
+gc("bl-width","border-left-width:5px","border-left-width");
+gc("bt-color","border-top-color:red","border-top-color");
+// shorthand roundtrip
+gc("b-short","border:2px solid blue","border");
+gc("b-short-style",getComputedStyle(document.body).borderStyle==="","x")||L("b-short-style","(see below)");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
