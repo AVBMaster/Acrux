@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.bal{width:120px;text-wrap:balance}
+.plain{width:120px}
+span{background:rgba(0,0,0,0.08)}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+const words=["the","quick","brown","fox","jumps","over","the","lazy","dog","again"];
+function make(cls){
+  const d=document.createElement("div");d.className=cls;
+  words.forEach((w,i)=>{const s=document.createElement("span");s.textContent=w;if(i<words.length-1)d.appendChild(document.createTextNode(" "));d.appendChild(s);});
+  document.body.appendChild(d);return d;
+}
+function rows(d){
+  const spans=[...d.querySelectorAll("span")];
+  const m=new Map();
+  spans.forEach(s=>{const t=Math.round(s.offsetTop);const r=s.offsetLeft+s.offsetWidth;if(!m.has(t)||r>m.get(t))m.set(t,r);});
+  return [...m.values()].sort((a,b)=>a-b).map(x=>Math.round(x));
+}
+const p=make("plain");out.push("L|plain-rows|"+rows(p).join("/"));p.remove();
+const b=make("bal");out.push("L|bal-rows|"+rows(b).join("/"));b.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

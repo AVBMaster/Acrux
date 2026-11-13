@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:10px;font:16px Arial,sans-serif}
+.row{white-space:pre;font:12px monospace}
+.bal{width:300px;text-wrap:balance;background:#eef;margin-bottom:14px}
+.plain{width:300px;background:#fee}
+</style></head><body>
+<div class="plain" id="p">Balance wraps each line to minimize the raggedness of the text.</div>
+<div class="bal" id="b">Balance wraps each line to minimize the raggedness of the text.</div>
+<div id="out"></div>
+<script>
+const out=[];
+function maxLine(d){
+  const r=document.createRange();r.selectNodeContents(d);
+  const m=new Map();
+  for(const rect of r.getClientRects()){const t=Math.round(rect.top);if(!m.has(t)||rect.right>m.get(t))m.set(t,rect.right);}
+  return [...m.values()].sort((a,b)=>a-b).map(x=>Math.round(x));
+}
+const p=document.getElementById("p");const b=document.getElementById("b");
+out.push("L|plain|"+maxLine(p).join("/"));
+out.push("L|balance|"+maxLine(b).join("/"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

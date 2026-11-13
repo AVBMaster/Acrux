@@ -342,7 +342,11 @@ public class InlineLayoutAlgorithm : LayoutAlgorithm
         List<LineInfo> lines;
         if (floatContext == null)
         {
-            bool balance = (Style.TextWrap ?? string.Empty).Contains("balance", StringComparison.OrdinalIgnoreCase);
+            // text-wrap: balance lives on TextWrapStyle (Balanced), not the TextWrap string,
+            // which carries only the shorthand's fallback keyword — comparing against TextWrap
+            // never matched, so balance never balanced (measured: a balanced box's widest line
+            // equalled the greedy box's).
+            bool balance = Style.TextWrapStyle == TextWrapStyleType.Balanced;
             lines = balance
                 ? ComputeBalancedLines(lineBreaker, data, availInline, Style)
                 : lineBreaker.BreakLines(data, availInline, Style);
