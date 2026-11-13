@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+.pe::before{content:"B";color:red}
+.pe::after{content:"A";color:blue}
+.pseudo-target:target{background:#cfc}
+.anchor:target{color:green}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// ::before/::after content + color
+const pe=document.createElement("div");pe.className="pe";pe.textContent="mid";document.body.appendChild(pe);
+const peBefore=getComputedStyle(pe,"::before");
+const peAfter=getComputedStyle(pe,"::after");
+L("before-content",peBefore.content);
+L("before-color",peBefore.color.split(" ").join("_"));
+L("after-content",peAfter.content);
+L("after-color",peAfter.color.split(" ").join("_"));
+pe.remove();
+// :target
+const tgt=document.createElement("div");tgt.id="sect1";tgt.className="anchor";tgt.textContent="section1";document.body.appendChild(tgt);
+L("target-match",getComputedStyle(tgt).color);
+tgt.remove();
+// :not / :has / :is
+const d=document.createElement("div");d.className="x";document.body.appendChild(d);
+L("matches-x",d.matches(".x"));
+L("matches-not",d.matches(":not(.y)"));
+L("closest-self",d.closest(".x")===d);
+d.remove();
+// :nth-child / :nth-of-type
+const ul=document.createElement("ul");
+ul.innerHTML="<li>1</li><li>2</li><li>3</li>";
+document.body.appendChild(ul);
+L("nth-child-2",ul.children[1].matches(":nth-child(2)"));
+L("nth-child-odd",ul.children[0].matches(":nth-child(odd)"));
+L("nth-of-type-3",ul.children[2].matches(":nth-of-type(3)"));
+ul.remove();
+// pseudo-element getComputedStyle
+const p=document.createElement("p");p.className="pe";document.body.appendChild(p);
+const pBefore=getComputedStyle(p,"::before");
+L("pe-before-display",pBefore.display);
+L("pe-before-pos",pBefore.position);
+p.remove();
+// ::first-line / ::first-letter
+const fl=document.createElement("p");fl.textContent="Hello World";fl.style.fontSize="16px";document.body.appendChild(fl);
+const firstLetter=getComputedStyle(fl,"::first-letter");
+L("first-letter-fs",firstLetter.fontSize);
+fl.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
