@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+v);}
+function w(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// img with width attr
+const i1=document.createElement("img");i1.src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAEALAAAAAABAAEAAAIBRAA7";i1.width=100;i1.height=50;document.body.appendChild(i1);
+L("img-w100",w(i1));i1.remove();
+// img natural size
+const i2=document.createElement("img");i2.src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAEALAAAAAABAAEAAAIBRAA7";document.body.appendChild(i2);
+L("img-natural",w(i2));i2.remove();
+// video UA default
+const v1=document.createElement("video");v1.width=200;v1.height=100;document.body.appendChild(v1);
+L("video-w200",w(v1));v1.remove();
+const v2=document.createElement("video");document.body.appendChild(v2);
+L("video-default",w(v2));v2.remove();
+// canvas
+const c1=document.createElement("canvas");c1.width=150;c1.height=80;document.body.appendChild(c1);
+L("canvas-w150",w(c1));c1.remove();
+// object
+const o1=document.createElement("object");o1.width=180;o1.height=90;document.body.appendChild(o1);
+L("object-w180",w(o1));o1.remove();
+// img max-width:100% inside 200px parent
+const par=document.createElement("div");par.style.width="200px";document.body.appendChild(par);
+const i3=document.createElement("img");i3.src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAEALAAAAAABAAEAAAIBRAA7";i3.style.maxWidth="100%";i3.style.width="400px";par.appendChild(i3);
+L("img-mw100",w(i3));par.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

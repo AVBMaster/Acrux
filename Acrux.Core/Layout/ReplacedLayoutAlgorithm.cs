@@ -90,9 +90,17 @@ public class ReplacedLayoutAlgorithm : LayoutAlgorithm
 
         if (tag == "CANVAS")
         {
+            // The canvas's width/height content attributes are its intrinsic size (HTML §4.12.4);
+            // they default to 300x150 when absent. A CSS width/height on the element overrides
+            // them at used-value time, which ComputeReplacedSize applies, so the intrinsic is the
+            // attribute size — reading ComputedStyle here ignored the attributes entirely and every
+            // canvas measured 300x150 regardless of its width= / height=.
             float w = 300, h = 150;
-            if (element.ComputedStyle?.Width is PixelLength pw) w = pw.Value;
-            if (element.ComputedStyle?.Height is PixelLength ph) h = ph.Value;
+            if (element is HTMLCanvasElement canvas)
+            {
+                if (canvas.Width > 0) w = canvas.Width;
+                if (canvas.Height > 0) h = canvas.Height;
+            }
             return new IntrinsicSizingInfo(new PhysicalSize(w, h), new PhysicalSize(w, h), true, true);
         }
 

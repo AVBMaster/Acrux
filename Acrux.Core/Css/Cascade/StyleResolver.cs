@@ -223,8 +223,12 @@ public class StyleResolver
 
     private void MatchPresentationalHints(Element element, CascadeResolverState state)
     {
-        // Same priority treatment as legacy AnalyzePresentationalHints: UA origin.
-        var priority = new CascadePriority(CascadeOrigin.UserAgent, 0, _treeOrderCounter++, 0, false);
+        // A presentational hint carries attribute-level specificity (0,1,0), matching how the
+        // reference engine ranks the width/height attributes: they must beat the UA stylesheet's
+        // element selectors (0,0,1 — 'object{width:300px}'), or an <object width=180> would
+        // measure 300 instead of 180. Being in the UA origin, any author rule still overrides it.
+        var priority = new CascadePriority(CascadeOrigin.UserAgent, 0, _treeOrderCounter++, 0, false,
+            specificityB: 1);
         string tag = element.TagName.ToUpperInvariant();
         var props = new CssPropertyValueSet();
 
