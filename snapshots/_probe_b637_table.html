@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+table{width:200px;border:1px solid #000}
+td{border:1px solid #999;padding:4px;font-size:12px}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function mk(caption,tableStyle,cellStyle){
+  const t=document.createElement("table");t.setAttribute("style",tableStyle);
+  const tr=document.createElement("tr");t.appendChild(tr);
+  const td=document.createElement("td");td.setAttribute("style",cellStyle||"");td.textContent="cell";tr.appendChild(td);
+  const td2=document.createElement("td");td2.textContent="cell2";tr.appendChild(td2);
+  document.body.appendChild(t);
+  const s=getComputedStyle(t);
+  const tdS=getComputedStyle(td);
+  const r=t.getBoundingClientRect();
+  out.push(["L",caption,"tw="+Math.round(r.width),"layout="+s.tableLayout,"collapse="+s.borderCollapse,"tdw="+Math.round(td.getBoundingClientRect().width)].join("~"));
+  t.remove();
+}
+mk("auto","table-layout:auto");
+mk("fixed","table-layout:fixed");
+mk("collapse","border-collapse:collapse");
+mk("separate","border-collapse:separate");
+mk("sep-gap","border-collapse:separate;border-spacing:10px");
+mk("empty-hide","border-collapse:separate;empty-cells:hide");
+mk("caption-top","caption-side:top");
+mk("caption-bottom","caption-side:bottom");
+mk("td-pad","border-collapse:collapse","padding:10px");
+mk("td-w","border-collapse:collapse","width:80px");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
