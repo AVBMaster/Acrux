@@ -53,6 +53,22 @@ public static class AuroraFragmentConverter
         float absX = parentContentX + borderBoxLeft;
         float absY = parentContentY + borderBoxTop;
 
+        // A fixed box's containing block is the viewport (the initial containing block),
+        // whose origin is 0,0 — not the nearest positioned ancestor. The layout pass
+        // resolves its insets against that origin, so adding a parent content origin
+        // here would double-count the body's margin: 'top:20px' measured 28px because
+        // the converter added the body's 8px top (CSS 2.1 §10.1, 'fixed').
+        // The same holds for an absolute box with no positioned ancestor: its containing
+        // block is also the initial containing block, so an unanchored 'top:60px' would
+        // otherwise measure 68px by the same double-count.
+        bool anchoredToViewport = selfStyle?.Position == PositionType.Fixed
+            || (selfStyle?.Position == PositionType.Absolute && !HasPositionedAncestor(parent));
+        if (anchoredToViewport)
+        {
+            absX = borderBoxLeft;
+            absY = borderBoxTop;
+        }
+
         // Margin box sits outside the border box by the margins.
         float marginBoxLeft = absX - ml;
         float marginBoxTop = absY - mt;
@@ -287,6 +303,21 @@ public static class AuroraFragmentConverter
         style.OverflowY is OverflowType.Auto or OverflowType.Scroll
         || style.OverflowX is OverflowType.Auto or OverflowType.Scroll
         || style.Overflow is OverflowType.Auto or OverflowType.Scroll;
+
+    /// <summary>Whether any LayoutBox ancestor is a positioned containing block. An absolute box
+    /// with one is anchored to that ancestor's padding box; with none its containing block is the
+    /// initial containing block (the viewport), so the converter must not add a parent content
+    /// origin to its already viewport-relative inset.</summary>
+    private static bool HasPositionedAncestor(Dom.LayoutBox? parent)
+    {
+        for (var p = parent; p != null; p = p.Parent)
+        {
+            if (p.Dimensions?.Style?.Position is PositionType.Relative
+                or PositionType.Absolute or PositionType.Fixed)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>Relative displacement of an inline element's own fragments. Only the run
     /// moves: the line box and its neighbours keep their static geometry (CSS 2.1 §9.4),
