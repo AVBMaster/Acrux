@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(100px)}}
+.anim{animation:slide 1s linear forwards}
+.trans{transition:width 0.5s;width:50px;background:#fcc}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// animation applied
+const a=document.createElement("div");a.className="anim";a.style.width="50px";a.style.height="30px";
+document.body.appendChild(a);
+L("anim-name",getComputedStyle(a).animationName);
+L("anim-duration",getComputedStyle(a).animationDuration);
+L("anim-fill",getComputedStyle(a).animationFillMode);
+L("anim-timing",getComputedStyle(a).animationTimingFunction);
+// getAnimations
+const anims=a.getAnimations();
+L("getAnimations-count",anims.length);
+a.remove();
+// transition applied
+const t=document.createElement("div");t.className="trans";document.body.appendChild(t);
+L("trans-width-computed",getComputedStyle(t).transition);
+L("trans-duration",getComputedStyle(t).transitionDuration);
+L("trans-timing",getComputedStyle(t).transitionTimingFunction);
+t.remove();
+// animation-play-state control
+const a2=document.createElement("div");a2.className="anim";document.body.appendChild(a2);
+L("play-state-running",getComputedStyle(a2).animationPlayState);
+a2.style.animationPlayState="paused";
+L("play-state-paused",getComputedStyle(a2).animationPlayState);
+a2.remove();
+// animation-direction / iteration
+const a3=document.createElement("div");a3.className="anim";
+a3.style.animationDirection="reverse";a3.style.animationIterationCount="infinite";
+document.body.appendChild(a3);
+L("anim-direction",getComputedStyle(a3).animationDirection);
+L("anim-iteration",getComputedStyle(a3).animationIterationCount);
+a3.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
