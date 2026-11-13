@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("hp-first","hanging-punctuation:first","hanging-punctuation");
+gc("hp-none","hanging-punctuation:none","hanging-punctuation");
+gc("hp-last","hanging-punctuation:last allow-end","hanging-punctuation");
+gc("va-super","vertical-align:super","vertical-align");
+gc("va-super-bs","vertical-align:super","baseline-shift");
+gc("va-top","vertical-align:top","vertical-align");
+gc("va-middle","vertical-align:middle","vertical-align");
+gc("va-pct","vertical-align:20%","vertical-align");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

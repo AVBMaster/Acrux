@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v===""?"(empty)":v.split(" ").join("_"));d.remove();
+}
+// text-overflow
+gc("to-ellipsis","overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:50px","text-overflow");
+// overflow-wrap / word-break
+gc("ow-break","overflow-wrap:break-word","overflow-wrap");
+gc("wb-breakall","word-break:break-all","word-break");
+gc("wb-keepall","word-break:keep-all","word-break");
+// hyphens
+gc("hyphens-auto","hyphens:auto","hyphens");
+// hanging-punctuation
+gc("hp-first","hanging-punctuation:first","hanging-punctuation");
+// quotes
+gc("quotes","quotes:auto","quotes");
+// counter-reset/increment computed
+gc("cr","counter-reset:section 2","counter-reset");
+gc("ci","counter-increment:section","counter-increment");
+// content with counter (rendered)
+const c=document.createElement("div");c.style.counterReset="x 3";
+const c2=document.createElement("div");c2.style.counterIncrement="x";c2.style.content="counter(x)";c.appendChild(c2);
+document.body.appendChild(c);
+L("counter-render",getComputedStyle(c2).content);
+c.remove();
+// text-orientation
+gc("to-mixed","text-orientation:mixed","text-orientation");
+// line-break
+gc("lb-loose","line-break:loose","line-break");
+// word-spacing
+gc("ws-5px","word-spacing:5px","word-spacing");
+// letter-spacing
+gc("ls-2px","letter-spacing:2px","letter-spacing");
+// text-indent
+gc("ti-20px","text-indent:20px","text-indent");
+// vertical-align
+gc("va-super","vertical-align:super","vertical-align");
+gc("va-5px","vertical-align:5px","vertical-align");
+// white-space pre-wrap
+gc("ws-prewrap","white-space:pre-wrap","white-space");
+// text-align-last
+gc("tal-right","text-align-last:right","text-align-last");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
