@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+v);}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v.split(" ").join("_"));d.remove();
+}
+// field-sizing (#210)
+gc("fs-content","field-sizing:content","field-sizing");
+gc("fs-fixed","field-sizing:fixed","field-sizing");
+// text-box family (#212)
+gc("tb-normal","text-box:normal","text-box");
+gc("tb-trim-both","text-box:trim-both cap alphabetic","text-box");
+gc("tb-trim-start","text-box:trim-start ex alphabetic","text-box");
+// corner-shape (#317)
+gc("cs-round","corner-shape:round","corner-shape");
+gc("cs-bevel","corner-shape:bevel","corner-shape");
+gc("cs-scoop","corner-shape:scoop","corner-shape");
+// font-synthesis order
+gc("fso-weight","font-synthesis-weight:none","font-synthesis-weight");
+gc("fso-style","font-synthesis-style:none","font-synthesis-style");
+gc("fso-smallcaps","font-synthesis-small-caps:none","font-synthesis-small-caps");
+// caret-shape (#b270)
+gc("caret-auto","caret-shape:auto","caret-shape");
+gc("caret-bar","caret-shape:bar","caret-shape");
+gc("caret-underscore","caret-shape:underscore","caret-shape");
+// text-emphasis position
+gc("tep-over","text-emphasis-position:over right","text-emphasis-position");
+gc("tep-under","text-emphasis-position:under left","text-emphasis-position");
+// anchor scope
+gc("anchor-scope","anchor-scope:all","anchor-scope");
+// animation-trigger
+gc("at-none","animation-trigger:none","animation-trigger");
+// text-security
+gc("ts-dot","text-security:disc","text-security");
+// will-change
+gc("wc-transform","will-change:transform","will-change");
+// paint-order
+gc("po-normal","paint-order:normal","paint-order");
+gc("po-stroke","paint-order:stroke","paint-order");
+// mix-blend-mode
+gc("mbm-multiply","mix-blend-mode:multiply","mix-blend-mode");
+// isolation
+gc("iso-auto","isolation:auto","isolation");
+gc("iso-isolate","isolation:isolate","isolation");
+// contain (#5)
+gc("contain-layout","contain:layout","contain");
+gc("contain-paint","contain:paint","contain");
+// text-orientation
+gc("to-mixed","text-orientation:mixed","text-orientation");
+gc("to-upright","text-orientation:upright","text-orientation");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px}
+.wk{ -webkit-text-security:disc; }
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,el,prop){
+  const v=getComputedStyle(el).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v));
+}
+const a=document.createElement("input");a.type="text";a.value="x";a.className="wk";document.body.appendChild(a);
+gc("wk-disc",a,"-webkit-text-security");a.remove();
+const b=document.createElement("input");b.type="text";b.value="x";b.style.webkitTextSecurity="circle";document.body.appendChild(b);
+gc("wk-inline",b,"-webkit-text-security");b.remove();
+const c=document.createElement("input");c.type="text";c.value="x";c.style.webkitTextSecurity="none";document.body.appendChild(c);
+gc("wk-none",c,"-webkit-text-security");c.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

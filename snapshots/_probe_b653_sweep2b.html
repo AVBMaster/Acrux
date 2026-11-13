@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+v.split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,v);d.remove();
+}
+gc("cs-scoop","corner-shape:scoop","corner-shape");
+gc("tep-over","text-emphasis-position:over right","text-emphasis-position");
+gc("tep-under","text-emphasis-position:under left","text-emphasis-position");
+gc("ts-dot","text-security:disc","text-security");
+gc("ts-none","text-security:none","text-security");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
