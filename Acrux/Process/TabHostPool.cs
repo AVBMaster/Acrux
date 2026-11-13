@@ -29,18 +29,23 @@ internal sealed class TabHostPool : IDisposable
 
     /// <summary>A host whose engine is already built, or null when none is standing by
     /// (a warm-up is started for the next tab in either case).</summary>
-    public RemoteTabProcess? TryTake()
+    public RemoteTabProcess? TryTake() => TryTake(warmUp: true);
+
+    /// <summary>Take a ready spare, or null. <paramref name="warmUp"/> false skips the refill,
+    /// so a host the user is about to wait on (the first tab) does not also kick off a spare
+    /// that would bootstrap alongside it on the same cores.</summary>
+    public RemoteTabProcess? TryTake(bool warmUp)
     {
         while (_ready.TryDequeue(out var p))
         {
             if (!p.IsDead && p.IsConnected)
             {
-                Refill();
+                if (warmUp) Refill();
                 return p;
             }
             try { p.Dispose(); } catch { }
         }
-        Refill();
+        if (warmUp) Refill();
         return null;
     }
 

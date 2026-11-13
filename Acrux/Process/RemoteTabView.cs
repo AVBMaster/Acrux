@@ -37,6 +37,10 @@ internal sealed class RemoteTabView : IDisposable
     /// still has the boot default, and a cold host gets its first frames at that size until
     /// the next pump syncs it. Consumed once by PumpRemoteTabs.</summary>
     public bool NeedsViewportSync;
+    /// <summary>True once this tab's first frame triggered the pool's next warm-up. The
+    /// shell only wants one spare kicked off per tab — the flag keeps the per-frame
+    /// FrameArrived callback from calling Refill on every frame.</summary>
+    public bool WarmedSpare;
     // Crash bookkeeping: the budget decides whether to relaunch, and a spent budget shows
     // the user a card instead of restarting the same crash forever. The policy instance is
     // carried over when a tab is relaunched — a fresh one would make the budget endless.

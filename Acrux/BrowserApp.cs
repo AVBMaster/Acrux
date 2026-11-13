@@ -140,6 +140,9 @@ namespace Acrux;
     // composites the child's rendered frames and forwards input + scroll.
     private readonly bool _processTabs;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, RemoteTabView> _remoteTabs = new();
+    // Standing supply of warm page-host processes so a new tab does not pay child startup
+    // and realm bootstrap in front of the user (process mode only).
+    private readonly Acrux.Process.TabHostPool? _tabPool;
     private long _lastRemoteMoveTick;
     // Wheel arbitration: the child gets first refusal for element scrollers;
     // accumulated deltas fall back to page scroll on WheelResult/timeout.
@@ -310,12 +313,24 @@ namespace Acrux;
         _processTabs = _renderingSettings.TabMode == "process";
         _threadedTabs = _renderingSettings.TabMode == "threaded";
         if (_processTabs)
+        {
             Console.WriteLine("[Startup] Multi-process tab mode enabled");
+            _tabPool = new Acrux.Process.TabHostPool(_dpiScale, _renderingSettings.ResolutionScale);
+            // No warm-up at startup: the initial tab cold-launches its own host, and a spare
+            // started now would bootstrap in parallel on the same cores, roughly doubling the
+            // time to the first frame (measured 20.9s for the spare vs ~5s alone under load).
+            // TryTake refills after each take, so the next tab gets a host that warmed while
+            // the first page was already up and being looked at.
+        }
         else if (_threadedTabs)
             Console.WriteLine("[Startup] Threaded-tab mode enabled");
 
         LogCtor("JavaScriptEngine");
-        _jsEngine = new JavaScriptEngine(-1);
+        // A process-mode shell owns no page: its own engine is a parked null-adapter shell,
+        // so the UI thread never pays the realm bootstrap that belongs to a page host.
+        _jsEngine = _processTabs
+            ? _parkEngine ??= new JavaScriptEngine(NullJsEngineAdapter.Instance)
+            : new JavaScriptEngine(-1);
         LogCtorDone("JavaScriptEngine");
 
         LogCtor("EventLoop");
@@ -1874,8 +1889,25 @@ namespace Acrux;
     {
         return _remoteTabs.GetOrAdd(tabIndex, idx =>
         {
-            var view = new RemoteTabView(new RemoteTabProcess(idx, url, _dpiScale, _renderingSettings.ResolutionScale));
-            view.Proc.OnFrameArrived += () => _eventLoop.PostTask(() => _input.NeedsRedraw = true);
+            // A warm host from the pool has already paid process start + realm bootstrap;
+            // a cold launch stays the fallback (pool empty, or the spare died). Taking
+            // without warming: the pool's refill after the first page is set up below is
+            // what stocks the next spare, so no host bootstraps alongside the one the user
+            // is waiting on.
+            var proc = _tabPool?.TryTake(warmUp: false);
+            proc ??= new RemoteTabProcess(idx, url, _dpiScale, _renderingSettings.ResolutionScale);
+            var view = new RemoteTabView(proc);
+            view.NeedsViewportSync = true;
+            // The first frame this host ships is the moment the user is looking at a page,
+            // so it is the first point where cores are free to spend on a spare. Warming
+            // before that would make a second bootstrap race the one being waited on.
+            view.Proc.OnFrameArrived += () => _eventLoop.PostTask(() =>
+            {
+                if (view.WarmedSpare) return;
+                view.WarmedSpare = true;
+                _tabPool?.Refill();
+                _input.NeedsRedraw = true;
+            });
             // The child connects asynchronously: a startup navigation queued while
             // the pipe was down only goes out from PumpRemoteTabs, which runs on a
             // redraw pass. Wake one on Ready or PendingInitial could stall forever.
@@ -1946,6 +1978,7 @@ namespace Acrux;
         if (string.IsNullOrEmpty(url)) return;
         var view = EnsureRemoteTab(tab, url);
         view.PendingInitial = url;
+        view.PendingInitialHtml = null;
         view.InitialSent = false;
         view.LastUrl = url;
         _chrome.SetTabUrl(tab, url);
@@ -2058,13 +2091,26 @@ namespace Acrux;
                 continue;
             }
 
+            // A host built before the window told it anything — a pool spare especially —
+            // still holds the boot viewport. Sync it once, before any navigation rides out.
+            if (v.NeedsViewportSync && v.Proc.IsConnected)
+            {
+                v.NeedsViewportSync = false;
+                v.Proc.Resize(windowWidth, contentViewportHeight);
+            }
+
             if (v.Proc.IsDead || v.InitialSent) continue;
             if (v.PendingInitial != null && v.Proc.IsConnected)
             {
                 var url = v.PendingInitial;
                 v.PendingInitial = null;
                 v.InitialSent = true;
-                if (url.StartsWith("acrux://", StringComparison.Ordinal))
+                if (v.PendingInitialHtml != null)
+                {
+                    v.Proc.NavigateHtml(v.PendingInitialHtml, url);
+                    v.PendingInitialHtml = null;
+                }
+                else if (url.StartsWith("acrux://", StringComparison.Ordinal))
                     v.Proc.NavigateHtml(SpecialPageHtml(url), url);
                 else
                     v.Proc.Navigate(url);
@@ -2186,6 +2232,7 @@ namespace Acrux;
         nv.Restart = carry;
         nv.LastUrl = url;
         nv.PendingInitial = url;
+        nv.PendingInitialHtml = null;
         nv.InitialSent = false;
         _input.NeedsRedraw = true;
     }
@@ -2601,7 +2648,20 @@ namespace Acrux;
         if (_processTabs)
         {
             var view = EnsureRemoteTab(_chrome.ActiveTabIndex, baseUrl ?? "acrux://local");
-            view.Proc.NavigateHtml(html, baseUrl ?? "acrux://local");
+            string burl = baseUrl ?? "acrux://local";
+            if (view.Proc.IsConnected)
+            {
+                view.Proc.NavigateHtml(html, burl);
+            }
+            else
+            {
+                // A cold host drops Send while its pipe is down; the pump delivers this once connected.
+                view.PendingInitial = burl;
+                view.PendingInitialHtml = html;
+                view.InitialSent = false;
+            }
+            view.LastUrl = burl;
+            _input.NeedsRedraw = true;
             return;
         }
         _currentHtml = html;
@@ -6729,6 +6789,7 @@ namespace Acrux;
             try { kv.Value.Dispose(); } catch { }
         }
         _remoteTabs.Clear();
+        _tabPool?.Dispose();
 #if USE_MULTIPLE_JS_ENGINE
         EngineProcessManager.Release(-1);
 #endif
