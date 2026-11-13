@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font:12px monospace;margin:8px}
+.row{white-space:pre;font:12px monospace}
+.g{display:grid;width:200px;height:80px;border:1px solid #999}
+.it{width:30px;height:20px;background:tomato}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+const vals=[
+  "center","end","start","space-between","space-around","space-evenly","stretch",
+  "center start","space-between center","normal center","center normal","stretch center",
+];
+for(const v of vals){
+  const h=document.createElement("div");h.className="g";
+  h.style.placeContent=v;
+  for(let i=0;i<2;i++){const k=document.createElement("div");k.className="it";h.appendChild(k);}
+  document.body.appendChild(h);
+  const kids=[...h.children].map((k,i)=>{const r=k.getBoundingClientRect();
+    return "k"+i+"@x"+Math.round(r.x)+"_y"+Math.round(r.y);}).join(",");
+  const g=n=>getComputedStyle(h).getPropertyValue(n);
+  out.push(["L","pc="+v.replace(/ /g,"_"),"jc="+g("justify-content"),"ac="+g("align-content"),"kids="+kids].join("~"));
+  h.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
