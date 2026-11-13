@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(label, got, wantValue) {
+        window.__T(label, String(got) === String(wantValue),
+            'got=[' + String(got) + '] want=[' + String(wantValue) + ']');
+    }
+    // ── A. the media track interfaces the checklist names are window globals ──
+    eq('A1 AudioTrack', typeof window.AudioTrack, 'function');
+    eq('A2 VideoTrack', typeof window.VideoTrack, 'function');
+    eq('A3 FileReaderSync', typeof window.FileReaderSync, 'function');
+    eq('A4 FontFaceSetLoadEvent', typeof window.FontFaceSetLoadEvent, 'function');
+
+    // ── B. the prefixed animation-frame aliases the checklist still lists ────
+    eq('B1 webkitRequestAnimationFrame', typeof window.webkitRequestAnimationFrame, 'function');
+    eq('B2 webkitCancelAnimationFrame', typeof window.webkitCancelAnimationFrame, 'function');
+    eq('B3 the webkit rAF alias is callable', typeof window.webkitRequestAnimationFrame(function () { }), 'number');
+    eq('B4 the unprefixed rAF still answers an id', typeof window.requestAnimationFrame(function () { }), 'number');
+
+    // ── C. the names Chrome deliberately does NOT put on the window stay absent ──
+    eq('C1 GeneratorFunction is not a window global', typeof window.GeneratorFunction, 'undefined');
+    eq('C2 AsyncFunction is not a window global', typeof window.AsyncFunction, 'undefined');
+    eq('C3 AsyncGenerator is not a window global', typeof window.AsyncGenerator, 'undefined');
+    eq('C4 CryptoKeyPair is not a window global', typeof window.CryptoKeyPair, 'undefined');
+    eq('C5 DOMRectInit is not a window global', typeof window.DOMRectInit, 'undefined');
+    eq('C6 ScrollToOptions is not a window global', typeof window.ScrollToOptions, 'undefined');
+    eq('C7 the other engines moz/ms rAF aliases stay absent', typeof window.mozRequestAnimationFrame, 'undefined');
+    eq('C8 the other engines ms rAF aliases stay absent', typeof window.msRequestAnimationFrame, 'undefined');
+
+    // ── D. the neighbouring names the sweep must not regress still answer ────
+    eq('D1 CryptoKey', typeof window.CryptoKey, 'function');
+    eq('D2 AnimationPlaybackEvent', typeof window.AnimationPlaybackEvent, 'function');
+    eq('D3 MediaKeyMessageEvent', typeof window.MediaKeyMessageEvent, 'function');
+    eq('D4 requestAnimationFrame', typeof window.requestAnimationFrame, 'function');
+    eq('D5 FileReader (the sync-less one)', typeof window.FileReader, 'function');
+    eq('D6 FontFace (the face, not the set)', typeof window.FontFace, 'function');
+})();
+</script></body></html>

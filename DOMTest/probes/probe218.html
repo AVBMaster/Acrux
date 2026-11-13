@@ -1,0 +1,5 @@
+<!DOCTYPE html><html><body><script>
+function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+try { var e = new FontFaceSetLoadEvent('x'); eq('ctor ok, type', e.type, 'x'); }
+catch(err){ eq('ctor threw', err.constructor.name + ':' + err.message.slice(0,40), 'ok'); }
+</script></body></html>

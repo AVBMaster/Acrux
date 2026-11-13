@@ -19775,12 +19775,16 @@ public class JavaScriptEngine : IDisposable
                 ['CryptoKey', 'AnimationPlaybackEvent',
                     'MediaKeySystemAccess', 'MediaKeyStatusMap', 'MediaKeyMessageEvent',
                     'ServiceWorkerContainer', 'ServiceWorkerRegistration', 'PerformanceLayoutShift',
-                    'PerformanceLargestContentfulPaint'].forEach(function (name) {
-                        level(name, name === 'FontFaceSet' ? 'EventTarget'
-                            : (name === 'AnimationPlaybackEvent' || name === 'MediaKeyMessageEvent'
-                                || name === 'FontFaceSetLoadEvent'
-                                    ? 'Event' : 'EventTarget'));
+                    'PerformanceLargestContentfulPaint',
+                    'AudioTrack', 'VideoTrack', 'FileReaderSync'].forEach(function (name) {
+                        level(name, name === 'AnimationPlaybackEvent' || name === 'MediaKeyMessageEvent'
+                            || name === 'FontFaceSetLoadEvent'
+                                ? 'Event' : 'EventTarget');
                     });
+                // The load event a finished font face set dispatches is an Event, and it is a name a
+                // page feature-tests. Naming it does not touch the face set the document hands out
+                // (that object's prototype is set from levels.FontFaceSet separately below).
+                level('FontFaceSetLoadEvent', 'Event');
                     // Indexed Database §4.2 and URL §6: the factory the window hands out and the
                     // prefixed alias the documentation still lists. The engine has no database to
                     // open, so a request a page makes is refused rather than left waiting.
@@ -19832,6 +19836,20 @@ public class JavaScriptEngine : IDisposable
                 if (window.webkitURL === undefined && typeof window.URL === 'function') {
                     Object.defineProperty(window, 'webkitURL', { value: window.URL,
                         writable: false, enumerable: true, configurable: true });
+                }
+                // The animation-frame aliases the documentation still lists: a page written for the
+                // prefixed era reaches them and answers the same function the unprefixed name does.
+                if (typeof window.requestAnimationFrame === 'function'
+                        && typeof window.webkitRequestAnimationFrame === 'undefined') {
+                    Object.defineProperty(window, 'webkitRequestAnimationFrame',
+                        { value: window.requestAnimationFrame, writable: false,
+                            enumerable: true, configurable: true });
+                }
+                if (typeof window.cancelAnimationFrame === 'function'
+                        && typeof window.webkitCancelAnimationFrame === 'undefined') {
+                    Object.defineProperty(window, 'webkitCancelAnimationFrame',
+                        { value: window.cancelAnimationFrame, writable: false,
+                            enumerable: true, configurable: true });
                 }
 
                 // The three pickers the file-system handles are chosen through (File System Access

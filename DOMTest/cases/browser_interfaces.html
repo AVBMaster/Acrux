@@ -533,9 +533,11 @@ function tag(o) { try { return Object.prototype.toString.call(o); } catch (e) { 
             .getContext('webgl')), tag(window.indexedDB),
             String(window.SharedArrayBuffer)].join('/');
     });
-    ck('Z2 the two face-set names the engine keeps private are recorded as gaps', function () {
-        return typeof window.FontFaceSet === 'undefined'
-            && typeof window.FontFaceSetLoadEvent === 'undefined'
+    ck('Z2 the face-set object the document hands out brands itself and the load event is a window global', function () {
+        // Chrome puts FontFaceSetLoadEvent on the window (CSS Font Loading §4.3), and so does the
+        // engine now; the face-set object itself is still the document's own, and that one name is
+        // the engine's gap rather than a page-reachable constructor.
+        return typeof window.FontFaceSetLoadEvent === 'function'
             && tag(document.fonts) === '[object FontFaceSet]'
             && typeof document.fonts.add === 'function'
             && typeof document.fonts.load === 'function';
