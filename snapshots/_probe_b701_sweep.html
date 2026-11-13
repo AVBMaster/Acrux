@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// container query properties
+gc("cq-type","container-type:inline-size","container-type");
+gc("cq-name","container-name:sidebar","container-name");
+// anchor positioning
+gc("ap-anchor","position-anchor:--foo","position-anchor");
+gc("ap-name","anchor-name:--foo","anchor-name");
+// view-transition
+gc("vt-name","view-transition-name:page","view-transition-name");
+// timeline
+gc("tl-scroll","scroll-timeline-name:--s","scroll-timeline-name");
+gc("tl-view","view-timeline-name:--v","view-timeline-name");
+gc("tl-axis","scroll-timeline-axis:block","scroll-timeline-axis");
+// animation-timeline
+gc("at-scroll","animation-timeline:--s","animation-timeline");
+// forced-color-adjust
+gc("fca-none","forced-color-adjust:none","forced-color-adjust");
+// print-color-adjust
+gc("pca-exact","print-color-adjust:exact","print-color-adjust");
+// color-scheme
+gc("cs-light","color-scheme:light","color-scheme");
+gc("cs-dark","color-scheme:dark","color-scheme");
+// fill / stroke (SVG-ish but on div)
+gc("fill","fill:red","fill");
+gc("stroke","stroke:blue","stroke");
+// accent-color
+gc("accent","accent-color:#00ff00","accent-color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// list-style variants
+function mkLi(ulStyle,liCount){
+  const ul=document.createElement("ul");ul.style.cssText=ulStyle;
+  for(let i=0;i<liCount;i++){const li=document.createElement("li");li.textContent="Item "+(i+1);ul.appendChild(li);}
+  document.body.appendChild(ul);
+  const first=ul.children[0];
+  const m=first.getBoundingClientRect();
+  ul.remove();return{first:Math.round(m.x)+","+Math.round(m.y),h:Math.round(ul.getBoundingClientRect().height)};
+}
+let r=mkLi("list-style-type:disc",3);
+L("li-disc-x",r.first);L("li-disc-h",r.h);
+r=mkLi("list-style-type:none",3);
+L("li-none-x",r.first);L("li-none-h",r.h);
+r=mkLi("list-style-type:decimal",3);
+L("li-decimal-x",r.first);
+r=mkLi("list-style-position:inside",3);
+L("li-inside-x",r.first);
+r=mkLi("list-style-position:outside",3);
+L("li-outside-x",r.first);
+r=mkLi("list-style:none;padding:0;margin:0",3);
+L("li-no-pad-x",r.first);
+// ol start attribute
+const ol=document.createElement("ol");ol.start=5;ol.innerHTML="<li>a</li><li>b</li>";
+document.body.appendChild(ol);
+L("ol-start",ol.start);
+L("ol-items",ol.children.length);
+ol.remove();
+// li value attribute
+const li=document.createElement("li");li.value=42;document.body.appendChild(li);
+L("li-value",li.value);
+li.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

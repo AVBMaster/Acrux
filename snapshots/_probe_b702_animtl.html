@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("at-none","animation-timeline:none","animation-timeline");
+gc("at-auto","animation-timeline:auto","animation-timeline");
+gc("at-scroll","animation-timeline:scroll()","animation-timeline");
+gc("vt-name","view-transition-name:page","view-transition-name");
+gc("cs-dark","color-scheme:dark","color-scheme");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
