@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// cursor values
+gc("cur-auto","cursor:auto","cursor");
+gc("cur-default","cursor:default","cursor");
+gc("cur-pointer","cursor:pointer","cursor");
+gc("cur-crosshair","cursor:crosshair","cursor");
+gc("cur-text","cursor:text","cursor");
+gc("cur-wait","cursor:wait","cursor");
+gc("cur-progress","cursor:progress","cursor");
+gc("cur-help","cursor:help","cursor");
+gc("cur-move","cursor:move","cursor");
+gc("cur-not-allowed","cursor:not-allowed","cursor");
+gc("cur-none","cursor:none","cursor");
+gc("cur-url","cursor:url(x.png),auto","cursor");
+// user-select
+gc("us-auto","user-select:auto","user-select");
+gc("us-text","user-select:text","user-select");
+gc("us-none","user-select:none","user-select");
+gc("us-all","user-select:all","user-select");
+gc("us-contain","user-select:contain","user-select");
+// pointer-events
+gc("pe-auto","pointer-events:auto","pointer-events");
+gc("pe-none","pointer-events:none","pointer-events");
+gc("pe-visiblepainted","pointer-events:visiblePainted","pointer-events");
+gc("pe-all","pointer-events:all","pointer-events");
+// visibility
+gc("vis-visible","visibility:visible","visibility");
+gc("vis-hidden","visibility:hidden","visibility");
+gc("vis-collapse","visibility:collapse","visibility");
+// object-fit / object-position
+gc("of-fill","object-fit:fill","object-fit");
+gc("of-contain","object-fit:contain","object-fit");
+gc("of-cover","object-fit:cover","object-fit");
+gc("of-none","object-fit:none","object-fit");
+gc("of-scaledown","object-fit:scale-down","object-fit");
+gc("op-center","object-position:center center","object-position");
+gc("op-px","object-position:10px 20px","object-position");
+gc("op-pct","object-position:50% 50%","object-position");
+// touch-action
+gc("ta-auto","touch-action:auto","touch-action");
+gc("ta-none","touch-action:none","touch-action");
+gc("ta-panx","touch-action:pan-x","touch-action");
+gc("ta-piny","touch-action:pan-y","touch-action");
+gc("ta- manipulation","touch-action:manipulation","touch-action");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
