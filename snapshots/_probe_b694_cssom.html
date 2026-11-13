@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// Create element and style dynamically
+const d=document.createElement("div");d.id="target";d.textContent="test";
+document.body.appendChild(d);
+d.style.color="red";
+L("inline-color",getComputedStyle(d).color.split(" ").join("_"));
+d.style.color="";
+d.style.backgroundColor="yellow";
+L("set-bg",getComputedStyle(d).backgroundColor.split(" ").join("_"));
+d.style.removeProperty("background-color");
+L("remove-bg",getComputedStyle(d).backgroundColor.split(" ").join("_"));
+// CSS.supports edge cases
+L("supports-true",CSS.supports("width","10px"));
+L("supports-false",CSS.supports("width","bogus"));
+L("supports-decl",CSS.supports("display:flex"));
+// insertRule / deleteRule
+const st=document.createElement("style");document.head.appendChild(st);
+const ss=st.sheet;
+ss.insertRule("div{color:purple}",0);
+L("insertRule-bg",getComputedStyle(d).color.split(" ").join("_"));
+ss.deleteRule(0);
+st.remove();
+// style.cssText roundtrip
+d.style.cssText="color:green;font-size:20px";
+L("cssText-color",getComputedStyle(d).color.split(" ").join("_"));
+L("cssText-fs",getComputedStyle(d).fontSize);
+d.style.cssText="";
+L("cssText-clear",getComputedStyle(d).color.split(" ").join("_"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
