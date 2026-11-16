@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// content-visibility + contain-intrinsic-size
+const cvh=document.createElement("div");
+cvh.style.cssText="content-visibility:hidden;contain-intrinsic-size:200px 100px;width:300px";
+cvh.textContent="Hidden content";
+document.body.appendChild(cvh);
+L("cv-hidden-w",Math.round(cvh.getBoundingClientRect().width));
+L("cv-hidden-h",Math.round(cvh.getBoundingClientRect().height));
+L("cv-hidden-cis",getComputedStyle(cvh).containIntrinsicSize);
+cvh.remove();
+// content-visibility visible
+const cvv=document.createElement("div");
+cvv.style.cssText="content-visibility:visible;width:200px";
+cvv.textContent="Visible";
+document.body.appendChild(cvv);
+L("cv-visible-h",Math.round(cvv.getBoundingClientRect().height));
+cvv.remove();
+// content-visibility auto (skipped)
+const cva=document.createElement("div");
+cva.style.cssText="content-visibility:auto;contain-intrinsic-size:0 50px;width:200px";
+cva.textContent="Auto skip";
+document.body.appendChild(cva);
+L("cv-auto-h",Math.round(cva.getBoundingClientRect().height));
+cva.remove();
+// contain: size on auto-size element
+const cs=document.createElement("div");
+cs.style.cssText="contain:size;width:100px;height:50px";
+cs.textContent="Sized";
+document.body.appendChild(cs);
+L("contain-size-w",Math.round(cs.getBoundingClientRect().width));
+L("contain-size-h",Math.round(cs.getBoundingClientRect().height));
+cs.remove();
+// contain: layout
+const cl=document.createElement("div");
+cl.style.cssText="contain:layout;width:200px";
+cl.innerHTML="<p>Child text</p>";
+document.body.appendChild(cl);
+L("contain-layout-w",Math.round(cl.getBoundingClientRect().width));
+cl.remove();
+// contain: paint
+const cp=document.createElement("div");
+cp.style.cssText="contain:paint;width:100px;height:50px;overflow:hidden";
+cp.innerHTML="<div style='width:200px;height:100px;background:#fcc'>overflow</div>";
+document.body.appendChild(cp);
+L("contain-paint-w",Math.round(cp.getBoundingClientRect().width));
+cp.remove();
+// contain: content (= layout + paint)
+const cc=document.createElement("div");
+cc.style.cssText="contain:content;width:150px";
+cc.textContent="Content containment";
+document.body.appendChild(cc);
+L("contain-content-w",Math.round(cc.getBoundingClientRect().width));
+cc.remove();
+// contain: strict (= size + layout + paint + style)
+const cst=document.createElement("div");
+cst.style.cssText="contain:strict;width:100px;height:50px";
+document.body.appendChild(cst);
+L("contain-strict-w",Math.round(cst.getBoundingClientRect().width));
+cst.remove();
+// will-change values
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("wc-transform","will-change:transform","will-change");
+gc("wc-opacity","will-change:opacity","will-change");
+gc("wc-scroll","will-change:scroll-position","will-change");
+gc("wc-contents","will-change:contents","will-change");
+gc("wc-multi","will-change:transform,opacity","will-change");
+gc("wc-auto","will-change:auto","will-change");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
