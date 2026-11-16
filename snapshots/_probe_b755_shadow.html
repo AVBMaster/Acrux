@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// Shadow DOM CSS
+const host=document.createElement("div");host.id="shadow-host";document.body.appendChild(host);
+const sr=host.attachShadow({mode:"open"});
+sr.innerHTML=`
+<style>
+:host{display:block;background:#eee}
+:host(.special){background:#fcc}
+p{color:blue}
+::slotted(span){color:green}
+</style>
+<p>Shadow text</p>
+<slot></slot>`;
+// :host
+L("host-display",getComputedStyle(host).display);
+L("host-bg",getComputedStyle(host).backgroundColor.split(" ").join("_"));
+// shadow root querySelector
+const sp=sr.querySelector("p");
+L("shadow-p-color",getComputedStyle(sp).color.split(" ").join("_"));
+// :slotted
+const slotted=document.createElement("span");slotted.textContent="slotted";
+host.appendChild(slotted);
+L("slotted-color",getComputedStyle(slotted).color.split(" ").join("_"));
+// :defined
+L("host-defined",host.matches(":defined"));
+const unknown=document.createElement("my-element");document.body.appendChild(unknown);
+L("unknown-not-defined",unknown.matches(":defined"));
+unknown.remove();
+host.remove();
+// Grid template areas
+const ga=document.createElement("div");
+ga.style.cssText="display:grid;grid-template-areas:'header header' 'side main';grid-template-columns:1fr 2fr;gap:5px;width:300px";
+const gh=document.createElement("div");gh.style.cssText="grid-area:header;background:#fcc";gh.textContent="H";
+const gs=document.createElement("div");gs.style.cssText="grid-area:side;background:#ccf";gs.textContent="S";
+const gm=document.createElement("div");gm.style.cssText="grid-area:main;background:#cfc";gm.textContent="M";
+ga.appendChild(gh);ga.appendChild(gs);ga.appendChild(gm);document.body.appendChild(ga);
+const ghR=gh.getBoundingClientRect(),gsR=gs.getBoundingClientRect(),gmR=gm.getBoundingClientRect();
+L("grid-area-header",Math.round(ghR.width)+"x"+Math.round(ghR.height));
+L("grid-area-side",Math.round(gsR.width)+"x"+Math.round(gsR.height));
+L("grid-area-main",Math.round(gmR.width)+"x"+Math.round(gmR.height));
+ga.remove();
+// grid-auto-flow dense
+const gd=document.createElement("div");
+gd.style.cssText="display:grid;grid-template-columns:repeat(3,1fr);grid-auto-flow:dense;gap:5px;width:300px";
+const gd1=document.createElement("div");gd1.style.cssText="grid-column:span 2;background:#fcc";gd1.textContent="span2";gd.appendChild(gd1);
+const gd2=document.createElement("div");gd2.style.cssText="background:#ccf";gd2.textContent="1";gd.appendChild(gd2);
+const gd3=document.createElement("div");gd3.style.cssText="background:#cfc";gd3.textContent="2";gd.appendChild(gd3);
+document.body.appendChild(gd);
+L("grid-dense-w1",Math.round(gd1.getBoundingClientRect().width));
+L("grid-dense-w2",Math.round(gd2.getBoundingClientRect().width));
+L("grid-dense-w3",Math.round(gd3.getBoundingClientRect().width));
+gd.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
