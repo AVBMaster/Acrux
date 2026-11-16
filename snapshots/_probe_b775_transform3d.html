@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.box{width:60px;height:40px;background:#fcc;display:inline-block;margin:10px;vertical-align:top}
+.persp{perspective:200px;display:inline-block;vertical-align:top;margin:5px}
+</style></head><body>
+<div id="out" style="font:12px monospace"></div>
+<div>
+<div class="persp"><div class="box" style="transform:rotateX(45deg)">RX</div></div>
+<div class="persp"><div class="box" style="transform:rotateY(45deg)">RY</div></div>
+<div class="persp"><div class="box" style="transform:rotateZ(45deg)">RZ</div></div>
+<div class="persp"><div class="box" style="transform:translate3d(10px,5px,20px)">T3D</div></div>
+<div class="persp"><div class="box" style="transform:scale3d(1,0.5,1)">S3D</div></div>
+<div class="persp" style="perspective:100px"><div class="box" style="transform:rotateY(30deg)">P100</div></div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+const boxes=document.querySelectorAll(".box");
+L("rotateX-w",rect(boxes[0]));
+L("rotateY-w",rect(boxes[1]));
+L("rotateZ-w",rect(boxes[2]));
+L("translate3d",rect(boxes[3]));
+L("scale3d",rect(boxes[4]));
+L("persp-100-w",rect(boxes[5]));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
