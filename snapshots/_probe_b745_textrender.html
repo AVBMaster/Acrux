@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// text-wrap
+gc("tw-wrap","text-wrap:wrap","text-wrap");
+gc("tw-nowrap","text-wrap:nowrap","text-wrap");
+gc("tw-balance","text-wrap:balance","text-wrap");
+gc("tw-pretty","text-wrap:pretty","text-wrap");
+gc("tw-stable","text-wrap:stable","text-wrap");
+// text-wrap-mode
+gc("twm-wrap","text-wrap-mode:wrap","text-wrap-mode");
+gc("twm-nowrap","text-wrap-mode:nowrap","text-wrap-mode");
+// text-wrap-style
+gc("tws-auto","text-wrap-style:auto","text-wrap-style");
+gc("tws-balance","text-wrap-style:balance","text-wrap-style");
+gc("tws-pretty","text-wrap-style:pretty","text-wrap-style");
+gc("tws-stable","text-wrap-style:stable","text-wrap-style");
+// overflow-wrap
+gc("ow-normal","overflow-wrap:normal","overflow-wrap");
+gc("ow-break-word","overflow-wrap:break-word","overflow-wrap");
+gc("ow-anywhere","overflow-wrap:anywhere","overflow-wrap");
+// word-break
+gc("wb-normal","word-break:normal","word-break");
+gc("wb-break-all","word-break:break-all","word-break");
+gc("wb-keep-all","word-break:keep-all","word-break");
+gc("wb-break-word","word-break:break-word","word-break");
+// hyphens
+gc("hyph-none","hyphens:none","hyphens");
+gc("hyph-manual","hyphens:manual","hyphens");
+gc("hyph-auto","hyphens:auto","hyphens");
+// line-break
+gc("lb-auto","line-break:auto","line-break");
+gc("lb-loose","line-break:loose","line-break");
+gc("lb-normal","line-break:normal","line-break");
+gc("lb-strict","line-break:strict","line-break");
+gc("lb-anywhere","line-break:anywhere","line-break");
+// text-orientation
+gc("to-mixed","text-orientation:mixed","text-orientation");
+gc("to-upright","text-orientation:upright","text-orientation");
+gc("to-sideways","text-orientation:sideways","text-orientation");
+// paint-order
+gc("po-normal","paint-order:normal","paint-order");
+gc("po-fill","paint-order:fill stroke markers","paint-order");
+gc("po-stroke","paint-order:stroke fill markers","paint-order");
+// image-orientation
+gc("io-from-image","image-orientation:from-image","image-orientation");
+gc("io-none","image-orientation:none","image-orientation");
+// image-rendering
+gc("ir-auto","image-rendering:auto","image-rendering");
+gc("ir-smooth","image-rendering:smooth","image-rendering");
+gc("ir-crisp","image-rendering:crisp-edges","image-rendering");
+gc("ir-pixelated","image-rendering:pixelated","image-rendering");
+// forced-color-adjust
+gc("fca-auto","forced-color-adjust:auto","forced-color-adjust");
+gc("fca-none","forced-color-adjust:none","forced-color-adjust");
+gc("fca-preserve","forced-color-adjust:preserve-user-colors","forced-color-adjust");
+// print-color-adjust
+gc("pca-economy","print-color-adjust:economy","print-color-adjust");
+gc("pca-exact","print-color-adjust:exact","print-color-adjust");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
