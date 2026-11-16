@@ -1,0 +1,58 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. WebSocket ─────────────────────────────────────────────────────────
+    eq('A1 WebSocket is fn', typeof WebSocket, 'function');
+    eq('A2 CONNECTING', WebSocket.CONNECTING, '0');
+    eq('A3 OPEN', WebSocket.OPEN, '1');
+    eq('A4 CLOSING', WebSocket.CLOSING, '2');
+    eq('A5 CLOSED', WebSocket.CLOSED, '3');
+    var ws;
+    try { ws = new WebSocket('ws://localhost:1'); } catch(e) {}
+    if (ws) {
+        eq('A6 url', ws.url, 'ws://localhost:1/');
+        eq('A7 readyState connecting', ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.CLOSED, 'true');
+        eq('A8 bufferedAmount', ws.bufferedAmount, '0');
+        eq('A9 binaryType', ws.binaryType, 'blob');
+        eq('A10 send is fn', typeof ws.send, 'function');
+        eq('A11 close is fn', typeof ws.close, 'function');
+        eq('A12 addEventListener is fn', typeof ws.addEventListener, 'function');
+    }
+    // ── B. WebSocket error handling ───────────────────────────────────────────
+    eq('B1 no-arg throws', (function(){ try { new WebSocket(); return 'no-throw'; } catch(e) { return e.name; } })(), 'TypeError');
+    // ── C. WebSocket URL parsing ──────────────────────────────────────────────
+    eq('C1 invalid scheme throws', (function(){ try { new WebSocket('http://example.com'); return 'no-throw'; } catch(e) { return e.name; } })(), 'SyntaxError');
+    // ── D. WebSocket close codes ──────────────────────────────────────────────
+    if (ws) {
+        ws.close(1000, 'normal');
+        eq('D1 close code 1000', ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED, 'true');
+    }
+    // ── E. WebSocket on* handlers ─────────────────────────────────────────────
+    if (ws) {
+        eq('E1 onopen null', ws.onopen === null, 'true');
+        eq('E2 onmessage null', ws.onmessage === null, 'true');
+        eq('E3 onerror null', ws.onerror === null, 'true');
+        eq('E4 onclose null', ws.onclose === null, 'true');
+    }
+    // ── F. EventSource ────────────────────────────────────────────────────────
+    eq('F1 EventSource is fn', typeof EventSource, 'function');
+    eq('F2 CONNECTING', EventSource.CONNECTING, '0');
+    eq('F3 OPEN', EventSource.OPEN, '1');
+    eq('F4 CLOSED', EventSource.CLOSED, '2');
+    var es;
+    try { es = new EventSource('/sse'); } catch(e) {}
+    if (es) {
+        eq('F5 url resolves against base', es.url.slice(-4), '/sse');
+        eq('F6 readyState', typeof es.readyState, 'number');
+    }
+    // ── G. BroadcastChannel ───────────────────────────────────────────────────
+    eq('G1 BroadcastChannel is fn', typeof BroadcastChannel, 'function');
+    var bc = new BroadcastChannel('test');
+    eq('G2 name', bc.name, 'test');
+    eq('G3 postMessage is fn', typeof bc.postMessage, 'function');
+    eq('G4 close is fn', typeof bc.close, 'function');
+    bc.close();
+    eq('G5 closed no-throw', 'ok', 'ok');
+})();
+</script></body></html>
