@@ -1,0 +1,72 @@
+<!DOCTYPE html><html><body><div id="root"><div id="child"><span id="grand">text</span></div></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. CustomEvent ───────────────────────────────────────────────────────
+    eq('A1 CustomEvent is fn', typeof CustomEvent, 'function');
+    var ce = new CustomEvent('test', {detail: {x: 42}, bubbles: true});
+    eq('A2 type', ce.type, 'test');
+    eq('A3 detail', ce.detail.x, '42');
+    eq('A4 bubbles', ce.bubbles, 'true');
+    eq('A5 cancelable default', ce.cancelable, 'false');
+    eq('A6 defaultPrevented', ce.defaultPrevented, 'false');
+    // ── B. addEventListener / removeEventListener ───────────────────────────
+    var el = document.getElementById('root');
+    var calls = [];
+    function handler(e) { calls.push(e.type); }
+    el.addEventListener('custom', handler);
+    el.dispatchEvent(new CustomEvent('custom'));
+    eq('B1 listener fired', calls.length, '1');
+    el.removeEventListener('custom', handler);
+    el.dispatchEvent(new CustomEvent('custom'));
+    eq('B2 removed', calls.length, '1');
+    el.addEventListener('custom', handler);
+    el.addEventListener('custom', handler);
+    el.dispatchEvent(new CustomEvent('custom'));
+    eq('B3 duplicate ignored', calls.length, '2');
+    el.removeEventListener('custom', handler);
+    // ── C. capture / bubble ─────────────────────────────────────────────────
+    var log = [];
+    var root = document.getElementById('root');
+    var child = document.getElementById('child');
+    var grand = document.getElementById('grand');
+    root.addEventListener('evt', function(){ log.push('root-bubble'); }, false);
+    root.addEventListener('evt', function(){ log.push('root-capture'); }, true);
+    child.addEventListener('evt', function(){ log.push('child-bubble'); }, false);
+    grand.addEventListener('evt', function(){ log.push('grand-target'); }, false);
+    grand.dispatchEvent(new CustomEvent('evt', {bubbles:true}));
+    eq('C1 capture-then-bubble', log.join(','), 'root-capture,grand-target,child-bubble,root-bubble');
+    // ── D. stopPropagation ───────────────────────────────────────────────────
+    log.length = 0;
+    child.addEventListener('stop', function(e){ e.stopPropagation(); log.push('child'); });
+    root.addEventListener('stop', function(){ log.push('root'); });
+    grand.dispatchEvent(new CustomEvent('stop', {bubbles:true}));
+    eq('D1 stopPropagation blocks root', log.join(','), 'child');
+    // ── E. preventDefault ────────────────────────────────────────────────────
+    var el2 = document.createElement('button');
+    el2.addEventListener('click', function(e){ e.preventDefault(); });
+    var ev = new CustomEvent('click', {cancelable:true});
+    el2.dispatchEvent(ev);
+    eq('E1 defaultPrevented', ev.defaultPrevented, 'true');
+    // ── F. event.target / currentTarget ──────────────────────────────────────
+    var targetIs = null;
+    var currentIs = null;
+    grand.addEventListener('tg', function(e){ targetIs = e.target.id; currentIs = e.currentTarget.id; }, false);
+    grand.dispatchEvent(new CustomEvent('tg'));
+    eq('F1 target is grand', targetIs, 'grand');
+    eq('F2 currentTarget is grand (in listener)', currentIs, 'grand');
+    // ── G. eventPhase ────────────────────────────────────────────────────────
+    var phase = null;
+    root.addEventListener('ph', function(e){ phase = e.eventPhase; }, true);
+    grand.dispatchEvent(new CustomEvent('ph', {bubbles:true}));
+    eq('G1 eventPhase capturing', phase, '1');
+    phase = null;
+    root.addEventListener('ph2', function(e){ phase = e.eventPhase; }, false);
+    grand.dispatchEvent(new CustomEvent('ph2', {bubbles:true}));
+    eq('G2 eventPhase bubbling', phase, '3');
+    phase = null;
+    grand.addEventListener('ph3', function(e){ phase = e.eventPhase; });
+    grand.dispatchEvent(new CustomEvent('ph3'));
+    eq('G3 eventPhase at target', phase, '2');
+})();
+</script></body></html>

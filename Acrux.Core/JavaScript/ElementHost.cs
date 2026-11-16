@@ -1544,7 +1544,9 @@ public partial class ElementHost : IDomPrototypeHost
         _listenerCapture.Remove(cbId);
         _onceCallbacks.Remove(cbId);
         _listenerSignal.Remove(cbId);
-        engine.RemoveCallback(cbId);
+        // The callback stays in the adapter's store: removing it here breaks re-adding the same
+        // handler, because __g_store returns the same id for the same function and InvokeCallback
+        // needs it alive. The adapter cleans up its own store when the page is torn down.
     }
 
     /// <summary>Asks the script side, by the token it handed back at registration, whether the signal a
