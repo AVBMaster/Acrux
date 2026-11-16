@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// aspect-ratio + max-width
+const mw=document.createElement("div");mw.style.cssText="width:200px;max-width:100px;aspect-ratio:1/1";
+document.body.appendChild(mw);
+L("ar-max-width",rect(mw));
+mw.remove();
+// aspect-ratio + min-width
+const nw=document.createElement("div");nw.style.cssText="width:50px;min-width:100px;aspect-ratio:2/1";
+document.body.appendChild(nw);
+L("ar-min-width",rect(nw));
+nw.remove();
+// aspect-ratio + max-height
+const mh=document.createElement("div");mh.style.cssText="width:100px;aspect-ratio:1/1;max-height:50px";
+document.body.appendChild(mh);
+L("ar-max-height",rect(mh));
+mh.remove();
+// aspect-ratio + min-height
+const nh=document.createElement("div");nh.style.cssText="width:100px;aspect-ratio:4/1;min-height:50px";
+document.body.appendChild(nh);
+L("ar-min-height",rect(nh));
+nh.remove();
+// aspect-ratio with padding
+const pw=document.createElement("div");pw.style.cssText="width:100px;aspect-ratio:1/1;padding:10px";
+document.body.appendChild(pw);
+L("ar-padding",rect(pw));
+pw.remove();
+// aspect-ratio with border
+const bw=document.createElement("div");bw.style.cssText="width:100px;aspect-ratio:2/1;border:5px solid";
+document.body.appendChild(bw);
+L("ar-border",rect(bw));
+bw.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
