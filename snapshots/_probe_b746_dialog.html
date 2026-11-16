@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+dialog::backdrop{background:rgba(0,0,0,0.5)}
+dialog:modal{border:2px solid red}
+:fullscreen{background:#000}
+:popover-open{background:#cfc}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// dialog ::backdrop
+const dlg=document.createElement("dialog");document.body.appendChild(dlg);
+const bd=getComputedStyle(dlg,"::backdrop");
+L("backdrop-bg",bd.backgroundColor.split(" ").join("_"));
+L("backdrop-display",bd.display);
+dlg.remove();
+// :modal
+const dlg2=document.createElement("dialog");document.body.appendChild(dlg2);
+L("modal-nonopen",dlg2.matches(":modal"));
+dlg2.remove();
+// :fullscreen
+const fs=document.createElement("div");document.body.appendChild(fs);
+L("fullscreen-not",fs.matches(":fullscreen"));
+fs.remove();
+// :popover-open
+const po=document.createElement("div");po.setAttribute("popover","auto");document.body.appendChild(po);
+L("popover-closed",po.matches(":popover-open"));
+po.remove();
+// :target
+const tgt=document.createElement("div");tgt.id="target-section";document.body.appendChild(tgt);
+L("target-not",tgt.matches(":target"));
+tgt.remove();
+// :in-range / :out-of-range on range input
+const rng=document.createElement("input");rng.type="range";rng.min="0";rng.max="100";rng.value="50";document.body.appendChild(rng);
+L("range-in-range",rng.matches(":in-range"));
+L("range-out-of-range",rng.matches(":out-of-range"));
+rng.remove();
+// :default on button
+const btn=document.createElement("button");btn.textContent="Submit";document.body.appendChild(btn);
+L("button-default",btn.matches(":default"));
+btn.remove();
+// :placeholder-shown
+const ph=document.createElement("input");ph.placeholder="type here";document.body.appendChild(ph);
+L("placeholder-shown",ph.matches(":placeholder-shown"));
+ph.value="has value";
+L("placeholder-has-value",ph.matches(":placeholder-shown"));
+ph.remove();
+// :autofill
+const af=document.createElement("input");af.type="text";document.body.appendChild(af);
+L("autofill-not",af.matches(":autofill"));
+af.remove();
+// :read-only
+const ro=document.createElement("input");ro.readOnly=true;document.body.appendChild(ro);
+L("read-only-match",ro.matches(":read-only"));
+L("read-write-match",ro.matches(":read-write"));
+ro.remove();
+// :required / :optional
+const rq=document.createElement("input");rq.required=true;document.body.appendChild(rq);
+L("required-match",rq.matches(":required"));
+L("optional-match",rq.matches(":optional"));
+rq.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
