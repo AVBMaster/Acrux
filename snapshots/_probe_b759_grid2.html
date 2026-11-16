@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// grid with row span
+const g=document.createElement("div");g.style.cssText="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,40px);gap:5px;width:300px";
+const spanRow=document.createElement("div");spanRow.style.cssText="grid-row:span 2;background:#fcc";spanRow.textContent="rowspan";
+g.appendChild(spanRow);
+const c2=document.createElement("div");c2.style.cssText="background:#ccf";c2.textContent="2";g.appendChild(c2);
+const c3=document.createElement("div");c3.style.cssText="background:#cfc";c3.textContent="3";g.appendChild(c3);
+const c4=document.createElement("div");c4.style.cssText="background:#ffc";c4.textContent="4";g.appendChild(c4);
+document.body.appendChild(g);
+L("rowspan-w",Math.round(spanRow.getBoundingClientRect().width));
+L("rowspan-h",Math.round(spanRow.getBoundingClientRect().height));
+L("grid-c2",rect(c2));
+L("grid-c3",rect(c3));
+L("grid-c4",rect(c4));
+g.remove();
+// grid with both row and column span
+const g2=document.createElement("div");g2.style.cssText="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,30px);gap:5px;width:300px";
+const bigItem=document.createElement("div");bigItem.style.cssText="grid-row:span 2;grid-column:span 2;background:#fcc";bigItem.textContent="big";
+g2.appendChild(bigItem);
+const g2b=document.createElement("div");g2b.style.cssText="background:#ccf";g2b.textContent="b";g2.appendChild(g2b);
+const g2c=document.createElement("div");g2c.style.cssText="background:#cfc";g2c.textContent="c";g2.appendChild(g2c);
+const g2d=document.createElement("div");g2d.style.cssText="background:#ffc";g2d.textContent="d";g2.appendChild(g2d);
+document.body.appendChild(g2);
+L("big-span-w",Math.round(bigItem.getBoundingClientRect().width));
+L("big-span-h",Math.round(bigItem.getBoundingClientRect().height));
+L("g2b",rect(g2b));
+L("g2c",rect(g2c));
+L("g2d",rect(g2d));
+g2.remove();
+// grid-auto-rows with mixed sizes
+const g3=document.createElement("div");g3.style.cssText="display:grid;grid-template-columns:1fr;grid-auto-rows:minmax(20px,auto);width:200px";
+const g3a=document.createElement("div");g3a.style.cssText="background:#fcc";g3a.textContent="short";g3.appendChild(g3a);
+const g3b=document.createElement("div");g3b.style.cssText="background:#ccf";g3b.textContent="taller content here";g3.appendChild(g3b);
+document.body.appendChild(g3);
+L("auto-rows-minmax-a",Math.round(g3a.getBoundingClientRect().height));
+L("auto-rows-minmax-b",Math.round(g3b.getBoundingClientRect().height));
+g3.remove();
+// grid-template-rows with fr
+const g4=document.createElement("div");g4.style.cssText="display:grid;grid-template-rows:1fr 2fr;width:200px;height:150px";
+const g4a=document.createElement("div");g4a.style.cssText="background:#fcc";g4a.textContent="1fr";g4.appendChild(g4a);
+const g4b=document.createElement("div");g4b.style.cssText="background:#ccf";g4b.textContent="2fr";g4.appendChild(g4b);
+document.body.appendChild(g4);
+L("grid-rows-1fr",Math.round(g4a.getBoundingClientRect().height));
+L("grid-rows-2fr",Math.round(g4b.getBoundingClientRect().height));
+g4.remove();
+// grid-column-start/end explicit
+const g5=document.createElement("div");g5.style.cssText="display:grid;grid-template-columns:repeat(4,1fr);width:300px";
+const g5a=document.createElement("div");g5a.style.cssText="grid-column:1/3;background:#fcc";g5a.textContent="1-3";g5.appendChild(g5a);
+const g5b=document.createElement("div");g5b.style.cssText="grid-column:3/5;background:#ccf";g5b.textContent="3-5";g5.appendChild(g5b);
+document.body.appendChild(g5);
+L("grid-col-1-3",rect(g5a));
+L("grid-col-3-5",rect(g5b));
+g5.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
