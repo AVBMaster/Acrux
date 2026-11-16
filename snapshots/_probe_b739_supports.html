@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// @supports nested
+const ss=document.createElement("style");document.head.appendChild(ss);
+const sheet=ss.sheet;
+try{
+  sheet.insertRule("@supports(display:flex){.sup-flex{color:blue}}",0);
+  const sf=document.createElement("div");sf.className="sup-flex";document.body.appendChild(sf);
+  L("supports-flex-color",getComputedStyle(sf).color.split(" ").join("_"));
+  sf.remove();
+}catch(e){L("supports-flex-error",e.message);}
+try{
+  sheet.insertRule("@supports not(display:grid){.sup-nogrid{color:red}}",0);
+  const sn=document.createElement("div");sn.className="sup-nogrid";document.body.appendChild(sn);
+  L("supports-nogrid-color",getComputedStyle(sn).color.split(" ").join("_"));
+  sn.remove();
+}catch(e){L("supports-nogrid-error",e.message);}
+try{
+  sheet.insertRule("@supports(display:grid){.sup-grid{color:green}}",0);
+  const sg=document.createElement("div");sg.className="sup-grid";document.body.appendChild(sg);
+  L("supports-grid-color",getComputedStyle(sg).color.split(" ").join("_"));
+  sg.remove();
+}catch(e){L("supports-grid-error",e.message);}
+// @supports and (and or)
+try{
+  sheet.insertRule("@supports(display:flex) and (display:grid){.sup-and{color:purple}}",0);
+  const sa=document.createElement("div");sa.className="sup-and";document.body.appendChild(sa);
+  L("supports-and-color",getComputedStyle(sa).color.split(" ").join("_"));
+  sa.remove();
+}catch(e){L("supports-and-error",e.message);}
+try{
+  sheet.insertRule("@supports(display:flex) or (display:bogus){.sup-or{color:orange}}",0);
+  const so=document.createElement("div");so.className="sup-or";document.body.appendChild(so);
+  L("supports-or-color",getComputedStyle(so).color.split(" ").join("_"));
+  so.remove();
+}catch(e){L("supports-or-error",e.message);}
+// cleanup
+while(sheet.cssRules.length>0)sheet.deleteRule(0);
+ss.remove();
+// :has() with different relational positions
+const h1=document.createElement("div");h1.innerHTML="<p>child</p>";document.body.appendChild(h1);
+L("has-child",h1.querySelector(":has(p)")===h1);
+L("has-nested",h1.querySelector(":has(> p)")===h1);
+L("has-descendant",h1.querySelector(":has(p ~ span)"));
+h1.remove();
+// :has with sibling combinator
+const h2=document.createElement("div");h2.innerHTML="<span class='x'>a</span><span class='y'>b</span>";
+document.body.appendChild(h2);
+L("has-next-sibling",h2.querySelectorAll(":has(+ .y)").length);
+h2.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
