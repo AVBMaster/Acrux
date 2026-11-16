@@ -1,0 +1,12 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">a</p></div>
+<script>
+function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+var root = document.getElementById('root');
+var it = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+eq('ref', it.referenceNode.id, 'root');
+eq('before', it.pointerBeforeReferenceNode, 'true');
+var n1 = it.nextNode();
+eq('first nextNode id', n1.id, 'p1');
+var it2 = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+eq('first nextNode tagName', it2.nextNode().tagName, 'P');
+</script></body></html>

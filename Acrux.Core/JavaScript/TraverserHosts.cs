@@ -139,6 +139,18 @@ public abstract class NodeTraverserHost : IDomPrototypeHost
         return null;
     }
 
+    /// <summary>The first accepted node strictly below the given one — a NodeIterator with the
+    /// pointer before its reference looks here, never at the reference itself.</summary>
+    protected DomNode? FirstAcceptedAmongChildren(DomNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            var found = FirstAcceptedIn(child);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     /// <summary>The last node the traverser accepts in the subtree, for the reads that step
     /// backwards through siblings. A node the filter accepts is answered itself and its children
     /// are looked at only when the node is skipped — measured on the reference, whose
@@ -378,7 +390,10 @@ public sealed class NodeIteratorHost : NodeTraverserHost
     public object? nextNode()
     {
         BeginStep("nextNode");
-        var found = _pointerBefore ? FirstAcceptedIn(_reference) : NextAfter(_reference);
+        // DOM §6.5.2: with the pointer before the reference the next node is looked for among the
+        // reference's descendants — the reference itself is never answered, or a fresh iterator's
+        // first nextNode() would hand back the root it was created on.
+        var found = _pointerBefore ? FirstAcceptedAmongChildren(_reference) : NextAfter(_reference);
         if (found != null)
         {
             _reference = found;

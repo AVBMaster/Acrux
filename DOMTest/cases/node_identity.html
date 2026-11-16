@@ -143,15 +143,17 @@ ck('A24 treeWalker surface', function () {
     var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ELEMENT, null);
     return 'root=' + (w.root === wroot) + ' cur=' + nm(w.currentNode) + ' mask=' + w.whatToShow + ' filter=' + String(w.filter);
 });
-ck('A25 nodeIterator offers its root first', function () {
+ck('A25 nodeIterator walks its root\'s descendants, never the root', function () {
+    // DOM §6.5.2: a fresh iterator sits before its reference (the root), so the first nextNode()
+    // descends to the first child — the root itself is never handed back.
     return forward(document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null), 9)
-        === 'ROOT,wa,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc,null';
+        === 'wa,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc,null,null';
 }, function () { return forward(document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null), 9); });
 ck('A26 filter REJECT prunes a walker, only skips an iterator', function () {
     var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
     var i = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
     return untilEnd(w) === 'wc,#text:tc'
-        && untilEnd(i) === 'ROOT,#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
+        && untilEnd(i) === '#text:ta,wb,#text:tb,#text:ta2,wc,#text:tc';
 }, function () {
     var w = document.createTreeWalker(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
     var i = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, { acceptNode: rejectWa });
@@ -176,8 +178,9 @@ ck('A29 SHOW_TEXT walks the text under masked elements', function () {
         === '#text:ta,#text:tb,#text:ta2,#text:tc';
 }, function () { return untilEnd(document.createTreeWalker(wroot, NodeFilter.SHOW_TEXT, null)); });
 ck('A30 iterator pointer sits beside its reference node', function () {
-    // measured on the reference: next, next, next, prev answers the node it had just handed back,
-    // and the next after that answers it once more before moving on.
+    // DOM §6.5.2: once nextNode() has handed a node back the reference is that node with the pointer
+    // after it, so previousNode() returns it again before stepping back — and the reference is never
+    // the root, which a fresh iterator skips.
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
     var out = [];
     out.push(nm(it.nextNode())); out.push(nm(it.nextNode())); out.push(nm(it.nextNode()));
@@ -185,7 +188,7 @@ ck('A30 iterator pointer sits beside its reference node', function () {
     out.push('n=' + nm(it.nextNode()));
     out.push('p=' + nm(it.previousNode()));
     out.push('p2=' + nm(it.previousNode()));
-    return out.join(',') === 'ROOT,wa,#text:ta,p=#text:ta,n=#text:ta,p=#text:ta,p2=wa';
+    return out.join(',') === 'wa,#text:ta,wb,p=wb,n=#text:tb,p=#text:tb,p2=wb';
 }, function () {
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
     var o = [];
@@ -196,12 +199,12 @@ ck('A30 iterator pointer sits beside its reference node', function () {
 });
 ck('A31 iterator previousNode before its root is null', function () {
     // measured: nothing is refused before the root — the step answers null and leaves the pointer
-    // where it was — and once nextNode() has handed the root back, the pointer sits after it.
+    // where it was — and the first nextNode() descends past the root to its first child.
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
     var before = it.previousNode();
     var atStart = before === null && it.referenceNode === wroot && it.pointerBeforeReferenceNode === true;
     var next = it.nextNode();
-    return atStart && next === wroot && it.referenceNode === wroot
+    return atStart && next === wa && it.referenceNode === wa
         && it.pointerBeforeReferenceNode === false;
 }, function () {
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ALL, null);
@@ -212,7 +215,7 @@ ck('A31 iterator previousNode before its root is null', function () {
 ck('A32 iterator detach is kept and does nothing', function () {
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ELEMENT, null);
     it.detach();
-    return nm(it.nextNode()) === 'ROOT';
+    return nm(it.nextNode()) === 'wa';
 }, function () {
     var it = document.createNodeIterator(wroot, NodeFilter.SHOW_ELEMENT, null);
     try { it.detach(); return 'ok'; } catch (e) { return 'threw ' + e.name; }

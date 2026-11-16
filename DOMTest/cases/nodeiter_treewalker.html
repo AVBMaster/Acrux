@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">a<b id="b1">c</b>d</p><span id="s1"></span><i id="i1">e</i></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    var root = document.getElementById('root');
+    // ── A. createNodeIterator basics ─────────────────────────────────────────
+    var it = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+    eq('A1 root not included (iterator starts at first child)', it.nextNode().id, 'p1');
+    var all = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+    var ids = [], n;
+    while ((n = all.nextNode())) ids.push(n.id);
+    eq('A2 element ids in order', ids.join(','), 'p1,b1,s1,i1');
+    eq('A3 whatToShow element', all.whatToShow, '1');
+    eq('A4 referenceNode is root before walking', document.createNodeIterator(root, NodeFilter.SHOW_ALL).referenceNode.id, 'root');
+    eq('A5 pointerBeforeReferenceNode true initially', document.createNodeIterator(root, 0xFFFFFFFF).pointerBeforeReferenceNode, 'true');
+
+    // ── B. nextNode/previousNode mirror ─────────────────────────────────────
+    var it2 = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+    it2.nextNode();
+    eq('B1 nextNode then previousNode returns the reference', it2.previousNode().id, 'p1');
+    eq('B2 nextNode past end is null', (function(){ var i = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT), x; while((x=i.nextNode())); return x; })(), 'null');
+    eq('B3 previousNode at start is null', document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT).previousNode(), 'null');
+
+    // ── C. NodeFilter callback ───────────────────────────────────────────────
+    var onlySpan = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT, function(n){ return n.tagName==='SPAN' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP; });
+    var spanIds=[], m; while((m=onlySpan.nextNode())) spanIds.push(m.id);
+    eq('C1 filter skips non-span', spanIds.join(','), 's1');
+    var rejectAll = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT, function(){ return NodeFilter.FILTER_REJECT; });
+    eq('C2 reject yields nothing', rejectAll.nextNode(), 'null');
+    eq('C3 filter is exposed as .filter', typeof document.createNodeIterator(root, 0xFFFFFFFF, function(){ return 1; }).filter, 'function');
+
+    // ── D. createTreeWalker basics ───────────────────────────────────────────
+    var tw = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    eq('D1 currentNode starts at root', tw.currentNode.id, 'root');
+    eq('D2 firstChild descends', tw.firstChild().id, 'p1');
+    eq('D3 nextSibling within parent', tw.nextSibling().id, 's1');
+    eq('D4 parentNode ascends', tw.parentNode().id, 'root');
+    var tw2 = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    var tids=[], t; while((t=tw2.nextNode())) tids.push(t.id);
+    eq('D5 nextNode walks all elements', tids.join(','), 'p1,b1,s1,i1');
+    eq('D6 TreeWalker has filter', typeof document.createTreeWalker(root, 0xFFFFFFFF, function(){return 1;}).filter, 'function');
+
+    // ── E. SHOW_TEXT ─────────────────────────────────────────────────────────
+    var ti = document.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+    var tcount=0; while(ti.nextNode()) tcount++;
+    eq('E1 text nodes counted', tcount, '4');
+})();
+</script></body></html>
