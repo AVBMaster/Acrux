@@ -4610,6 +4610,24 @@ public class JavaScriptEngine : IDisposable
                     value.forEach(function (v) { made.add(cloneInto(v, seen, transfer)); });
                     return copyKeys(value, made, seen, transfer);
                 }
+                if (value instanceof Error) {
+                    // §2.9.4.16: an Error crosses carrying only its kind, its 'name' and its 'message',
+                    // so a cloned one is still a TypeError and still says what it said. 'stack' and any
+                    // custom own property are not part of the serialisation — the reference drops them,
+                    // and the copy answers undefined for both.
+                    made = value.name === 'TypeError' ? new TypeError()
+                        : value.name === 'RangeError' ? new RangeError()
+                        : value.name === 'ReferenceError' ? new ReferenceError()
+                        : value.name === 'SyntaxError' ? new SyntaxError()
+                        : value.name === 'EvalError' ? new EvalError()
+                        : value.name === 'URIError' ? new URIError()
+                        : value.name === 'AggregateError' && typeof AggregateError === 'function'
+                            ? new AggregateError([]) : new Error();
+                    seen.set(value, made);
+                    made.name = value.name;
+                    if (value.message !== undefined) made.message = value.message;
+                    return copyInto(value, seen, made);
+                }
                 // A MessagePort is a transferable, not a graph: it crosses only when the call named it in
                 // the transfer list, and then it crosses as the port itself, which the message's 'ports'
                 // reads (§2.9.4.14, §8.6.8.4). Left out of the list it is the refusal this algorithm gives

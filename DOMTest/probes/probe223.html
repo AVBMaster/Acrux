@@ -1,0 +1,16 @@
+<!DOCTYPE html><html><body><script>
+function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+var e = structuredClone(new TypeError('m'));
+eq('TypeError name', e.name, 'TypeError');
+eq('TypeError message', e.message, 'm');
+eq('TypeError instanceof', e instanceof TypeError, 'true');
+var r = structuredClone(new RangeError('r'));
+eq('RangeError name', r.name, 'RangeError');
+eq('RangeError instanceof', r instanceof RangeError, 'true');
+eq('plain name', structuredClone(new Error('p')).name, 'Error');
+eq('URIError name', structuredClone(new URIError('u')).name, 'URIError');
+eq('nested error in object', (function(){ var o=structuredClone({e:new RangeError('n')}); return o.e.name+'/'+o.e.message; })(), 'RangeError/n');
+eq('error inside array', (function(){ var a=structuredClone([new TypeError('t')]); return a[0].name; })(), 'TypeError');
+eq('cycle with error', (function(){ var o={e:new Error('z')}; o.self=o; var c=structuredClone(o); return c.e.name+'/'+(c.self===c); })(), 'Error/true');
+eq('Error subclass survives as Error', structuredClone(new AggregateError([])) instanceof Error, 'true');
+</script></body></html>
