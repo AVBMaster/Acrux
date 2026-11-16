@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@import url("data:text/css,.imported{color:green}");
+@namespace svg url("http://www.w3.org/2000/svg");
+svg|rect{fill:blue}
+@media (min-width:0px){
+  .media-var{color:var(--mq-color,red)}
+}
+:root{--mq-color:purple}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// @import with data URI
+const imp=document.createElement("div");imp.className="imported";document.body.appendChild(imp);
+L("import-style",getComputedStyle(imp).color.split(" ").join("_"));
+imp.remove();
+// CSS variable inside @media
+const mv=document.createElement("div");mv.className="media-var";document.body.appendChild(mv);
+L("media-var-color",getComputedStyle(mv).color.split(" ").join("_"));
+mv.remove();
+// styleSheets.length and types
+const ss=document.styleSheets[0];
+L("ss-type",ss instanceof CSSStyleSheet);
+L("ss-rules-type",ss.cssRules instanceof CSSRuleList);
+L("ss-owner",ss.ownerNode===document.head||ss.ownerNode===document);
+// CSSRule types
+if(ss.cssRules.length>0){
+  L("first-rule-type",ss.cssRules[0].constructor.name);
+}
+// CSSStyleSheet methods
+L("ss-addRule",typeof ss.addRule==="function"||typeof ss.insertRule==="function");
+L("ss-deleteRule",typeof ss.deleteRule==="function");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
