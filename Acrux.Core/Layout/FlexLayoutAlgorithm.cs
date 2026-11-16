@@ -989,6 +989,20 @@ public class FlexLayoutAlgorithm : LayoutAlgorithm
                 float v = hm.ToPixelsAgainstPercentageBase(basis, Space.RootFontSize, Space.ViewportWidth, Space.ViewportHeight);
                 if (!float.IsNaN(v)) return ContentBox(v);
             }
+            // CSS aspect-ratio §5.2: when the cross (block) size is auto and the main
+            // (inline) size is definite, derive the cross size from the ratio so it does
+            // not fall through to the content estimator (which probes at 100000px and
+            // returns a nonsensical height). Width = height × ratio → height = width ÷ ratio.
+            if (style.AspectRatio > 0)
+            {
+                float mainSize = item.HypotheticalMainSize;
+                if (!float.IsNaN(mainSize) && mainSize > 0)
+                {
+                    float mainContent = Math.Max(0, mainSize - item.MainAxisBorderPadding);
+                    float crossContent = mainContent / style.AspectRatio;
+                    if (crossContent > 0) return crossContent;
+                }
+            }
         }
         else
         {
