@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// env() function
+gc("env-safe-top","padding-top:env(safe-area-inset-top)","padding-top");
+gc("env-safe-bottom","padding-bottom:env(safe-area-inset-bottom)","padding-bottom");
+gc("env-safe-left","padding-left:env(safe-area-inset-left)","padding-left");
+gc("env-safe-right","padding-right:env(safe-area-inset-right)","padding-right");
+gc("env-calc","width:calc(100px + env(safe-area-inset-top))","width");
+// fit-content()
+gc("fit-content","width:fit-content","width");
+gc("fit-content-px","width:fit-content(100px)","width");
+gc("fit-content-pct","width:fit-content(50%)","width");
+// min-content / max-content
+gc("min-content","width:min-content","width");
+gc("max-content","width:max-content","width");
+// min/max with mixed units
+gw2("min-mixed","width:min(100px,50%,10em)");
+gw2("max-mixed","width:max(50px,10%,2em)");
+gw2("clamp-mixed","width:clamp(50px,10%,200px)");
+// attr() function
+gc("attr-basic","width:attr(data-w px)","width");
+gc("attr-type","content:attr(data-text)","content");
+// CSS-wide keyword in calc
+gw2("calc-initial","width:calc(initial)");
+gw2("calc-unset","width:calc(unset)");
+// nested functions
+gw2("min-in-calc","width:calc(min(100px,50px) + 10px)");
+gw2("max-in-calc","width:calc(max(50px,20px) * 2)");
+gw2("clamp-in-calc","width:calc(clamp(10px,50%,100px) - 5px)");
+function gw2(tag,css){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue("width").trim();
+  L(tag,v===""?"(empty)":v.split(" ").join("_"));d.remove();
+}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
