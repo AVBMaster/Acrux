@@ -1,0 +1,58 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. performance basics ────────────────────────────────────────────────
+    eq('A1 performance is object', typeof performance, 'object');
+    eq('A2 timeOrigin number', typeof performance.timeOrigin, 'number');
+    eq('A3 now returns number', typeof performance.now(), 'number');
+    eq('A4 now monotonic-ish', performance.now() >= 0, 'true');
+
+    // ── B. mark / measure ────────────────────────────────────────────────────
+    performance.mark('start');
+    var marks = performance.getEntriesByType('mark');
+    eq('B1 mark recorded', marks.length >= 1, 'true');
+    eq('B2 mark entryType', marks[0].entryType, 'mark');
+    eq('B3 mark name', marks[marks.length-1].name, 'start');
+    performance.mark('mid');
+    performance.measure('span', 'start', 'mid');
+    var meas = performance.getEntriesByType('measure');
+    eq('B4 measure recorded', meas.length >= 1, 'true');
+    eq('B5 measure entryType', meas[meas.length-1].entryType, 'measure');
+    eq('B6 measure name', meas[meas.length-1].name, 'span');
+    eq('B7 measure duration number', typeof meas[meas.length-1].duration, 'number');
+    performance.clearMarks();
+    eq('B8 clearMarks empties', performance.getEntriesByType('mark').length, '0');
+    performance.clearMeasures();
+    eq('B9 clearMeasures empties', performance.getEntriesByType('measure').length, '0');
+
+    // ── C. getEntries ────────────────────────────────────────────────────────
+    eq('C1 getEntries is array', Array.isArray(performance.getEntries()), 'true');
+    performance.mark('x');
+    eq('C2 getEntries includes mark', performance.getEntries().some(function(e){ return e.name==='x'; }), 'true');
+    eq('C3 getEntriesByName', performance.getEntriesByName('x').length >= 1, 'true');
+    performance.clearMarks();
+
+    // ── D. PerformanceEntry shape ────────────────────────────────────────────
+    performance.mark('shape');
+    var entry = performance.getEntriesByType('mark')[0];
+    eq('D1 has name', typeof entry.name, 'string');
+    eq('D2 has entryType', entry.entryType, 'mark');
+    eq('D3 has startTime number', typeof entry.startTime, 'number');
+    eq('D4 has duration number', typeof entry.duration, 'number');
+    eq('D5 PerformanceMark instance', entry instanceof PerformanceMark, 'true');
+    performance.clearMarks();
+
+    // ── E. PerformanceObserver (delivers via a queued callback) ──────────────
+    eq('E1 PO is fn', typeof PerformanceObserver, 'function');
+    var seen = [];
+    var po = new PerformanceObserver(function(list){ list.getEntries().forEach(function(e){ seen.push(e.name); }); });
+    po.observe({ entryTypes: ['mark'] });
+    performance.mark('observed');
+    // The callback is queued, not synchronous (Performance Timeline §3.2), so read it back on a tick.
+    setTimeout(function () {
+        eq('E2 observer delivered the mark', seen.indexOf('observed') !== -1, 'true');
+        po.disconnect();
+    }, 20);
+})();
+</script></body></html>
