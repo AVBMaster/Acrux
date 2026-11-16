@@ -1,0 +1,50 @@
+<!DOCTYPE html><html><body><div id="a" style="width:10px;height:10px;background:red"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. Element.animate builds an Animation ──────────────────────────────
+    var a = document.getElementById('a');
+    var anim = a.animate([{opacity:1},{opacity:0}], {duration:100});
+    eq('A1 animate returns Animation', anim instanceof Animation, 'true');
+    eq('A2 playState running', anim.playState, 'running');
+    eq('A3 effect present', anim.effect !== null, 'true');
+    anim.cancel();
+    eq('A4 after cancel playState idle', anim.playState, 'idle');
+
+    // ── B. effect timing reads ──────────────────────────────────────────────
+    var anim2 = a.animate([{opacity:0},{opacity:1}], {duration:200, delay:50, iterations:2, fill:'forwards'});
+    var timing = anim2.effect.getTiming();
+    eq('B1 duration', timing.duration, '200');
+    eq('B2 delay', timing.delay, '50');
+    eq('B3 iterations', timing.iterations, '2');
+    eq('B4 fill', timing.fill, 'forwards');
+    var ct = anim2.effect.getComputedTiming();
+    eq('B5 computed duration', ct.duration, '200');
+    eq('B6 computed delay', ct.delay, '50');
+    eq('B7 computed iterations', ct.iterations, '2');
+    eq('B8 computed fill', ct.fill, 'forwards');
+    anim2.cancel();
+
+    // ── C. keyframes ────────────────────────────────────────────────────────
+    var anim3 = a.animate([{opacity:0, transform:'translateX(0px)'},{opacity:1, transform:'translateX(100px)'}], {duration:100});
+    var kf = anim3.effect.getKeyframes();
+    eq('C1 two keyframes', kf.length, '2');
+    eq('C2 first opacity', kf[0].opacity, '0');
+    eq('C3 last opacity', kf[1].opacity, '1');
+    anim3.cancel();
+
+    // ── D. playbackRate ─────────────────────────────────────────────────────
+    var anim4 = a.animate([{opacity:0},{opacity:1}], {duration:100});
+    eq('D1 default playbackRate', anim4.playbackRate, '1');
+    anim4.playbackRate = 2;
+    eq('D2 set playbackRate', anim4.playbackRate, '2');
+    anim4.cancel();
+
+    // ── E. document.getAnimations ───────────────────────────────────────────
+    var before = document.getAnimations().length;
+    var anim5 = a.animate([{opacity:0},{opacity:1}], {duration:100});
+    eq('E1 getAnimations grows by one', document.getAnimations().length === before + 1, 'true');
+    anim5.cancel();
+    eq('E2 getAnimations shrinks after cancel', document.getAnimations().length === before, 'true');
+})();
+</script></body></html>

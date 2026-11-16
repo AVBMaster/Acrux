@@ -20419,6 +20419,12 @@ public class JavaScriptEngine : IDisposable
                         * (timing.iterations === Infinity ? 1 : Math.max(0,
                             Number(timing.iterations) || 0));
                     var made = { targetTiming: timing, activeDuration: span,
+                        // §5.4.6: the computed timing answers the effect's own delay, duration and
+                        // fill alongside the derived numbers — a page reading them back expects the
+                        // values it set (measured: duration 200 / delay 50 / fill forwards).
+                        delay: timing.delay, duration: timing.duration === 'auto' ? 'auto'
+                            : Number(timing.duration), endDelay: timing.endDelay,
+                        fill: timing.fill, easing: timing.easing, direction: timing.direction,
                         iterationStart: timing.iterateStart, iterations: timing.iterations,
                         iterationDuration: span, iterationStart_: 0, currentIteration: null,
                         iterationProgress: null, progress: null, localTime: null, startTime: null,
