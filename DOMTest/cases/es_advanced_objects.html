@@ -1,0 +1,61 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. TextEncoder ───────────────────────────────────────────────────────
+    eq('A1 TextEncoder is fn', typeof TextEncoder, 'function');
+    var enc = new TextEncoder();
+    eq('A2 encoding', enc.encoding, 'utf-8');
+    var encoded = enc.encode('hello');
+    eq('A3 encoded length', encoded.length, '5');
+    eq('A4 encoded bytes', encoded[0], '104');
+    var encodedCJK = enc.encode('日');
+    eq('A5 CJK encoded len', encodedCJK.length, '3');
+    // ── B. TextDecoder ───────────────────────────────────────────────────────
+    eq('B1 TextDecoder is fn', typeof TextDecoder, 'function');
+    var dec = new TextDecoder();
+    eq('B2 encoding', dec.encoding, 'utf-8');
+    var bytes = new Uint8Array([104, 101, 108, 108, 111]);
+    eq('B3 decode', dec.decode(bytes), 'hello');
+    var dec2 = new TextDecoder('utf-8');
+    eq('B4 named encoding', dec2.encoding, 'utf-8');
+    eq('B5 fatal option', new TextDecoder('utf-8', {fatal:true}).fatal, 'true');
+    eq('B6 ignoreBOM option', new TextDecoder('utf-8', {ignoreBOM:true}).ignoreBOM, 'true');
+    // ── C. Proxy ─────────────────────────────────────────────────────────────
+    eq('C1 Proxy is fn', typeof Proxy, 'function');
+    var target = {a:1, b:2};
+    var proxy = new Proxy(target, {
+        get: function(t, key) { return key === 'a' ? 99 : t[key]; }
+    });
+    eq('C2 proxy get trap', proxy.a, '99');
+    eq('C3 proxy passthrough', proxy.b, '2');
+    var logged = [];
+    var loggingProxy = new Proxy({}, {
+        set: function(t, key, val) { logged.push(key); t[key] = val; return true; }
+    });
+    loggingProxy.x = 1;
+    loggingProxy.y = 2;
+    eq('C4 set trap', logged.join(','), 'x,y');
+    eq('C5 set trap value', loggingProxy.x, '1');
+    // ── D. Reflect ───────────────────────────────────────────────────────────
+    eq('D1 Reflect is object', typeof Reflect, 'object');
+    eq('D2 Reflect.get', Reflect.get({x:42}, 'x'), '42');
+    eq('D3 Reflect.set', (function(){ var o={}; Reflect.set(o,'k',1); return o.k; })(), '1');
+    eq('D4 Reflect.has', Reflect.has({a:1}, 'a'), 'true');
+    eq('D5 Reflect.ownKeys', Reflect.ownKeys({a:1,b:2}).join(','), 'a,b');
+    eq('D6 Reflect.defineProperty', (function(){ var o={}; Reflect.defineProperty(o,'x',{value:9,writable:true,enumerable:true,configurable:true}); return o.x; })(), '9');
+    eq('D7 Reflect.deleteProperty', (function(){ var o={x:1}; Reflect.deleteProperty(o,'x'); return o.x; })(), 'undefined');
+    // ── E. WeakRef ───────────────────────────────────────────────────────────
+    eq('E1 WeakRef is fn', typeof WeakRef, 'function');
+    var obj = {val: 42};
+    var wr = new WeakRef(obj);
+    eq('E2 deref returns obj', wr.deref().val, '42');
+    // ── F. FinalizationRegistry ──────────────────────────────────────────────
+    eq('F1 FinalizationRegistry is fn', typeof FinalizationRegistry, 'function');
+    var cleaned = [];
+    var fr = new FinalizationRegistry(function(held){ cleaned.push(held); });
+    fr.register({}, 'test-token');
+    eq('F2 register no-throw', 'ok', 'ok');
+    eq('F3 unregister no-throw', fr.unregister({}) === false || fr.unregister({}) === true, 'true');
+})();
+</script></body></html>
