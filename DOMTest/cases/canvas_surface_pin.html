@@ -1,0 +1,66 @@
+<!DOCTYPE html><html><body><canvas id="c" width="4" height="4"></canvas>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    var ctx = document.getElementById('c').getContext('2d');
+    // ── A. context type ──────────────────────────────────────────────────────
+    eq('A1 type', ctx.constructor.name, 'CanvasRenderingContext2D');
+    eq('A2 canvas ref', ctx.canvas.id, 'c');
+    // ── B. save / restore ────────────────────────────────────────────────────
+    ctx.fillStyle = 'red';
+    ctx.save();
+    ctx.fillStyle = 'blue';
+    ctx.restore();
+    eq('B1 restore restores fillStyle to its written spelling', ctx.fillStyle, 'red');
+    // ── C. state properties ──────────────────────────────────────────────────
+    ctx.lineWidth = 3;
+    eq('C1 lineWidth', ctx.lineWidth, '3');
+    ctx.lineCap = 'round';
+    eq('C2 lineCap', ctx.lineCap, 'round');
+    ctx.globalAlpha = 0.5;
+    eq('C3 globalAlpha', ctx.globalAlpha, '0.5');
+    ctx.globalCompositeOperation = 'multiply';
+    eq('C4 composite', ctx.globalCompositeOperation, 'multiply');
+    // ── D. path ops ──────────────────────────────────────────────────────────
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(10,10); ctx.stroke();
+    eq('D1 stroke no-throw', 'ok', 'ok');
+    ctx.beginPath(); ctx.arc(5,5,3,0,Math.PI*2); ctx.fill();
+    eq('D2 fill no-throw', 'ok', 'ok');
+    ctx.clearRect(0,0,4,4);
+    eq('D3 clearRect no-throw', 'ok', 'ok');
+    // ── E. transforms ────────────────────────────────────────────────────────
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.translate(10,20);
+    ctx.rotate(Math.PI/4);
+    ctx.scale(2,2);
+    ctx.setTransform(1,0,0,1,0,0);
+    eq('E1 transforms no-throw', 'ok', 'ok');
+    // ── F. gradients and patterns ────────────────────────────────────────────
+    var grad = ctx.createLinearGradient(0,0,10,0);
+    grad.addColorStop(0,'red'); grad.addColorStop(1,'blue');
+    ctx.fillStyle = grad;
+    eq('F1 gradient as fillStyle', typeof ctx.fillStyle, 'object');
+    var rg = ctx.createRadialGradient(5,5,0,5,5,10);
+    rg.addColorStop(0,'white');
+    eq('F2 radial gradient', rg !== null, 'true');
+    // ── G. pixel ops ─────────────────────────────────────────────────────────
+    var id = ctx.createImageData(2,2);
+    eq('G1 ImageData width', id.width, '2');
+    eq('G2 ImageData height', id.height, '2');
+    eq('G3 ImageData data length', id.data.length, '16');
+    id.data[0] = 255;
+    ctx.putImageData(id, 0, 0);
+    var read = ctx.getImageData(0,0,2,2);
+    eq('G4 putImageData/getImageData roundtrip', read.data[0], '255');
+    // ── H. text ──────────────────────────────────────────────────────────────
+    ctx.font = '16px Arial';
+    eq('H1 font', ctx.font, '16px Arial');
+    var m = ctx.measureText('hello');
+    eq('H2 measureText width', typeof m.width, 'number');
+    ctx.fillText('hi', 0, 0);
+    eq('H3 fillText no-throw', 'ok', 'ok');
+    // ── I. toDataURL ─────────────────────────────────────────────────────────
+    var url = document.getElementById('c').toDataURL();
+    eq('I1 toDataURL prefix', url.slice(0,14), 'data:image/png');
+})();
+</script></body></html>
