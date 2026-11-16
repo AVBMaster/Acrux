@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// :lang matching on various lang values
+const enUS=document.createElement("div");enUS.lang="en-US";enUS.textContent="x";document.body.appendChild(enUS);
+L("lang-en-US-en",enUS.matches(":lang(en)"));
+L("lang-en-US-enUS",enUS.matches(":lang(en-US)"));
+L("lang-en-US-fr",enUS.matches(":lang(fr)"));
+enUS.remove();
+const zhCN=document.createElement("div");zhCN.lang="zh-CN";zhCN.textContent="x";document.body.appendChild(zhCN);
+L("lang-zhCN-zh",zhCN.matches(":lang(zh)"));
+L("lang-zhCN-zhCN",zhCN.matches(":lang(zh-CN)"));
+zhCN.remove();
+// inherited lang
+const langParent=document.createElement("div");langParent.lang="fr";
+const langChild=document.createElement("span");langChild.textContent="x";
+langParent.appendChild(langChild);document.body.appendChild(langParent);
+L("lang-inherited",langChild.matches(":lang(fr)"));
+langParent.remove();
+// dir attribute
+const dirParent=document.createElement("div");dirParent.dir="rtl";
+const dirChild=document.createElement("span");dirChild.textContent="x";
+dirParent.appendChild(dirChild);document.body.appendChild(dirParent);
+L("dir-inherited",dirChild.matches(":dir(rtl)"));
+L("dir-child-own",dirChild.matches(":dir(ltr)"));
+dirParent.remove();
+// :dir without dir attribute
+const noDir=document.createElement("div");noDir.textContent="x";document.body.appendChild(noDir);
+L("dir-none-not",noDir.matches(":dir(rtl)"));
+L("dir-none-ltr",noDir.matches(":dir(ltr)"));
+noDir.remove();
+// text-orientation computed on vertical writing
+const vo=document.createElement("div");vo.style.cssText="writing-mode:vertical-rl;text-orientation:upright";
+document.body.appendChild(vo);
+L("vo-upright",getComputedStyle(vo).textOrientation);
+vo.remove();
+// unicode-bidi computed
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("ub-normal","unicode-bidi:normal","unicode-bidi");
+gc("ub-embed","unicode-bidi:embed","unicode-bidi");
+gc("ub-override","unicode-bidi:bidi-override","unicode-bidi");
+gc("ub-isolate","unicode-bidi:isolate","unicode-bidi");
+gc("ub-isolate-override","unicode-bidi:isolate-override","unicode-bidi");
+gc("ub-plaintext","unicode-bidi:plaintext","unicode-bidi");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
