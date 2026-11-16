@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// isolation
+gc("iso-auto","isolation:auto","isolation");
+gc("iso-isolate","isolation:isolate","isolation");
+// mix-blend-mode
+gc("mmb-normal","mix-blend-mode:normal","mix-blend-mode");
+gc("mmb-multiply","mix-blend-mode:multiply","mix-blend-mode");
+gc("mmb-screen","mix-blend-mode:screen","mix-blend-mode");
+gc("mmb-overlay","mix-blend-mode:overlay","mix-blend-mode");
+gc("mmb-darken","mix-blend-mode:darken","mix-blend-mode");
+gc("mmb-lighten","mix-blend-mode:lighten","mix-blend-mode");
+gc("mmb-difference","mix-blend-mode:difference","mix-blend-mode");
+gc("mmb-exclusion","mix-blend-mode:exclusion","mix-blend-mode");
+gc("mmb-hue","mix-blend-mode:hue","mix-blend-mode");
+gc("mmb-saturation","mix-blend-mode:saturation","mix-blend-mode");
+gc("mmb-color","mix-blend-mode:color","mix-blend-mode");
+gc("mmb-luminosity","mix-blend-mode:luminosity","mix-blend-mode");
+gc("mmb-plus-lighter","mix-blend-mode:plus-lighter","mix-blend-mode");
+gc("mmb-plus-darker","mix-blend-mode:plus-darker","mix-blend-mode");
+// background-blend-mode
+gc("bbm-normal","background-blend-mode:normal","background-blend-mode");
+gc("bbm-multiply","background-blend-mode:multiply","background-blend-mode");
+gc("bbm-screen","background-blend-mode:screen","background-blend-mode");
+gc("bbm-multi","background-blend-mode:multiply,screen","background-blend-mode");
+// isolation on parent
+const parent=document.createElement("div");parent.style.isolation="isolate";
+const child=document.createElement("div");child.style.mixBlendMode="multiply";
+parent.appendChild(child);document.body.appendChild(parent);
+L("iso-parent",getComputedStyle(parent).isolation);
+L("iso-child-blend",getComputedStyle(child).mixBlendMode);
+parent.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
