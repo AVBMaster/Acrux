@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// column-rule rendering with snapshot
+let mc=document.createElement("div");
+mc.style.cssText="column-count:3;column-gap:20px;column-rule:2px solid #ccc;width:450px;height:60px;background:#eee";
+mc.innerHTML="<p>Col1 text here.</p><p>Col2 text here.</p><p>Col3 text here.</p>";
+document.body.appendChild(mc);
+L("rule-3col-w",Math.round(mc.getBoundingClientRect().width));
+L("rule-3col-h",Math.round(mc.getBoundingClientRect().height));
+mc.remove();
+// column-fill: auto vs balance with fixed height
+mc=document.createElement("div");
+mc.style.cssText="column-count:2;column-fill:auto;width:300px;height:80px";
+mc.innerHTML="<p>Col1a</p><p>Col1b</p><p>Col1c</p><p>Col2a</p>";
+document.body.appendChild(mc);
+const col1a=mc.children[0],col2a=mc.children[3];
+L("fill-auto-c1x",Math.round(col1a.getBoundingClientRect().x));
+L("fill-auto-c2a-x",Math.round(col2a.getBoundingClientRect().x));
+L("fill-auto-c2a-y",Math.round(col2a.getBoundingClientRect().y));
+mc.remove();
+// column-span:all before and after content
+mc=document.createElement("div");
+mc.style.cssText="column-count:2;column-gap:20px;width:300px";
+mc.innerHTML="<p id='pre'>Before</p><h3 id='mid' style='column-span:all;background:#ccf'>Middle</h3><p id='post1'>Post1</p><p id='post2'>Post2</p>";
+document.body.appendChild(mc);
+const pre=mc.querySelector("#pre"),mid=mc.querySelector("#mid"),post1=mc.querySelector("#post1"),post2=mc.querySelector("#post2");
+L("pre-span-x",Math.round(pre.getBoundingClientRect().x));
+L("pre-span-y",Math.round(pre.getBoundingClientRect().y));
+L("mid-span-x",Math.round(mid.getBoundingClientRect().x));
+L("mid-span-w",Math.round(mid.getBoundingClientRect().width));
+L("post1-x",Math.round(post1.getBoundingClientRect().x));
+L("post1-y",Math.round(post1.getBoundingClientRect().y));
+L("post2-x",Math.round(post2.getBoundingClientRect().x));
+mc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
