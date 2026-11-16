@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><body><div id="el" class="a b c"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    var el = document.getElementById('el');
+    var list = el.classList;
+    // ── A. DOMTokenList basics ───────────────────────────────────────────────
+    eq('A1 length', list.length, '3');
+    eq('A2 item(0)', list.item(0), 'a');
+    eq('A3 item(1)', list.item(1), 'b');
+    eq('A4 item(2)', list.item(2), 'c');
+    eq('A5 item(3) null', list.item(3), 'null');
+    eq('A6 item(-1) null', list.item(-1), 'null');
+    eq('A7 contains a', list.contains('a'), 'true');
+    eq('A8 contains z', list.contains('z'), 'false');
+    eq('A9 value', list.value, 'a b c');
+    eq('A10 toString', list.toString(), 'a b c');
+    // ── B. add / remove / toggle ─────────────────────────────────────────────
+    list.add('d');
+    eq('B1 add', list.length, '4');
+    eq('B2 contains d', list.contains('d'), 'true');
+    list.add('d');
+    eq('B3 add duplicate no-op', list.length, '4');
+    list.remove('d');
+    eq('B4 remove', list.length, '3');
+    eq('B5 remove non-existent no-op', (function(){ list.remove('z'); return list.length; })(), '3');
+    var wasPresent = list.toggle('a');
+    eq('B6 toggle removes', wasPresent, 'false');
+    var nowPresent = list.toggle('a');
+    eq('B7 toggle adds', nowPresent, 'true');
+    var forced = list.toggle('a', true);
+    eq('B8 toggle force add', forced, 'true');
+    var forcedRemove = list.toggle('a', false);
+    eq('B9 toggle force remove', forcedRemove, 'false');
+    // ── C. replace / supports ────────────────────────────────────────────────
+    list.add('x');
+    list.replace('x', 'y');
+    eq('C1 replace', list.contains('y'), 'true');
+    eq('C2 replace removes old', list.contains('x'), 'false');
+    eq('C3 supports returns true', list.supports('a'), 'true');
+    // ── D. iteration ─────────────────────────────────────────────────────────
+    var el2 = document.createElement('div');
+    el2.className = 'p q r';
+    var l2 = el2.classList;
+    var items = [];
+    for (var i = 0; i < l2.length; i++) items.push(l2[i]);
+    eq('D1 index access', items.join(','), 'p,q,r');
+    eq('D2 forEach', (function(){ var out=[]; l2.forEach(function(v){ out.push(v); }); return out.join(','); })(), 'p,q,r');
+    eq('D3 entries', (function(){ var out=[]; for(var e of l2.entries()) out.push(e[1]); return out.join(','); })(), 'p,q,r');
+    eq('D4 keys', (function(){ var out=[]; for(var k of l2.keys()) out.push(k); return out.join(','); })(), '0,1,2');
+    // ── E. DOMTokenList interface ────────────────────────────────────────────
+    eq('E1 DOMTokenList is fn', typeof DOMTokenList, 'function');
+    eq('E2 instanceof DOMTokenList', list instanceof DOMTokenList, 'true');
+    // ── F. dataset (DOMStringMap) ────────────────────────────────────────────
+    var dsEl = document.createElement('div');
+    dsEl.setAttribute('data-foo', 'bar');
+    eq('F1 dataset.foo', dsEl.dataset.foo, 'bar');
+    dsEl.dataset.baz = 'qux';
+    eq('F2 dataset.baz set', dsEl.getAttribute('data-baz'), 'qux');
+    delete dsEl.dataset.foo;
+    eq('F3 dataset delete', dsEl.hasAttribute('data-foo'), 'false');
+})();
+</script></body></html>
