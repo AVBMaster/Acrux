@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// logical padding in LTR
+gc("lp-pad-is-ltr","padding-inline-start:20px","padding-left");
+gc("lp-pad-ie-ltr","padding-inline-end:20px","padding-right");
+gc("lp-pad-bs","padding-block-start:10px","padding-top");
+gc("lp-pad-be","padding-block-end:10px","padding-bottom");
+// logical padding in RTL (inline-start = right in RTL)
+gc("lp-pad-is-rtl","direction:rtl;padding-inline-start:20px","padding-right");
+gc("lp-pad-ie-rtl","direction:rtl;padding-inline-end:20px","padding-left");
+// logical margin
+gc("lm-mis-ltr","margin-inline-start:15px","margin-left");
+gc("lm-mie-ltr","margin-inline-end:25px","margin-right");
+gc("lm-mbs","margin-block-start:10px","margin-top");
+gc("lm-mbe","margin-block-end:20px","margin-bottom");
+// logical border
+gc("lb-bis","border-inline-start-width:3px","border-left-width");
+gc("lb-bie","border-inline-end-width:5px","border-right-width");
+gc("lb-bbs","border-block-start-style:solid","border-top-style");
+gc("lb-bbe","border-block-end-color:red","border-bottom-color");
+// logical sizing
+gc("ls-inline","inline-size:100px","width");
+gc("ls-block","block-size:50px","height");
+gc("ls-min-inline","min-inline-size:80px","min-width");
+gc("ls-max-block","max-block-size:40px","max-height");
+// logical inset
+gc("li-is","inset-inline-start:10px","left");
+gc("li-ie","inset-inline-end:20px","right");
+gc("li-ibs","inset-block-start:5px","top");
+gc("li-ibe","inset-block-end:15px","bottom");
+// logical inset in RTL (inline-start = right)
+gc("li-is-rtl","direction:rtl;inset-inline-start:30px","right");
+gc("li-ie-rtl","direction:rtl;inset-inline-end:40px","left");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
