@@ -1,0 +1,67 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">hello world</p><p id="p2"><b>bo</b>ld</p></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. Text.data manipulation ────────────────────────────────────────────
+    var t = document.getElementById('p1').firstChild;
+    eq('A1 text data', t.data, 'hello world');
+    eq('A2 text length', t.length, '11');
+    t.data = 'hi';
+    eq('A3 data write', document.getElementById('p1').textContent, 'hi');
+    t.data = 'hello world';
+    eq('A4 appendData', (function(){ t.appendData('!'); return t.data; })(), 'hello world!');
+    t.data = 'hello world';
+    eq('A5 insertData', (function(){ t.insertData(5, ','); return t.data; })(), 'hello, world');
+    t.data = 'hello world';
+    eq('A6 deleteData', (function(){ t.deleteData(0, 6); return t.data; })(), 'world');
+    t.data = 'hello world';
+    eq('A7 replaceData', (function(){ t.replaceData(0, 5, 'Howdy'); return t.data; })(), 'Howdy world');
+    t.data = 'hello world';
+    eq('A8 substringData', t.substringData(0, 5), 'hello');
+    eq('A9 Text is a CharacterData', t instanceof CharacterData, 'true');
+    eq('A10 Text is a Text', t instanceof Text, 'true');
+
+    // ── B. splitText ─────────────────────────────────────────────────────────
+    var p2 = document.getElementById('p2');
+    var bold = p2.querySelector('b');
+    var after = bold.nextSibling;
+    var split = after.splitText(1);
+    eq('B1 splitText returns a Text', split instanceof Text, 'true');
+    eq('B2 splitText left data', after.data, 'l');
+    eq('B3 splitText right data', split.data, 'd');
+    eq('B4 splitText node inserted after', after.nextSibling === split, 'true');
+    eq('B5 parent has 3 children now', p2.childNodes.length, '3');
+
+    // ── C. wholeText ─────────────────────────────────────────────────────────
+    var w = document.createElement('p');
+    w.appendChild(document.createTextNode('ab'));
+    w.appendChild(document.createTextNode('cd'));
+    var first = w.firstChild;
+    eq('C1 wholeText joins adjacent text', first.wholeText, 'abcd');
+    eq('C2 data is just own', first.data, 'ab');
+    w.appendChild(document.createElement('b'));
+    eq('C3 wholeText stops at element boundary', first.wholeText, 'abcd');
+
+    // ── D. normalize ─────────────────────────────────────────────────────────
+    var n = document.createElement('p');
+    n.appendChild(document.createTextNode('a'));
+    n.appendChild(document.createTextNode('b'));
+    eq('D1 before normalize 2 children', n.childNodes.length, '2');
+    n.normalize();
+    eq('D2 after normalize 1 child', n.childNodes.length, '1');
+    eq('D3 merged data', n.firstChild.data, 'ab');
+    // ── E. out-of-range indices throw IndexSizeError and leave data intact ───
+    function err(f){ try { f(); return 'no-throw'; } catch(e){ return e.name; } }
+    eq('E1 deleteData past end', err(function(){ t.deleteData(99, 2); }), 'IndexSizeError');
+    eq('E2 insertData past end', err(function(){ t.insertData(99, 'x'); }), 'IndexSizeError');
+    eq('E3 splitText past end', err(function(){ t.splitText(99); }), 'IndexSizeError');
+    eq('E4 negative index', err(function(){ t.deleteData(-1, 1); }), 'IndexSizeError');
+    eq('E5 data survives the throws', t.data, 'hello world');
+
+    // ── F. Comment and the node-type names ────────────────────────────────────
+    eq('F1 Comment is a CharacterData', document.createComment('x') instanceof CharacterData, 'true');
+    eq('F2 Comment data/length', (function(){ var c=document.createComment('hi'); return c.data+'/'+c.length; })(), 'hi/2');
+    eq('F3 createTextNode type/name', (function(){ var n=document.createTextNode('z'); return n.nodeType+'/'+n.nodeName; })(), '3/#text');
+    eq('F4 Comment nodeName', document.createComment('z').nodeName, '#comment');
+})();
+</script></body></html>
