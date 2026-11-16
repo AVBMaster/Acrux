@@ -1,0 +1,72 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. URL constructor ───────────────────────────────────────────────────
+    eq('A1 URL is fn', typeof URL, 'function');
+    var u = new URL('https://example.com:8080/path?query=1#frag');
+    eq('A2 protocol', u.protocol, 'https:');
+    eq('A3 hostname', u.hostname, 'example.com');
+    eq('A4 port', u.port, '8080');
+    eq('A5 pathname', u.pathname, '/path');
+    eq('A6 search', u.search, '?query=1');
+    eq('A7 hash', u.hash, '#frag');
+    eq('A8 origin', u.origin, 'https://example.com:8080');
+    eq('A9 host', u.host, 'example.com:8080');
+    eq('A10 href', u.href, 'https://example.com:8080/path?query=1#frag');
+    eq('A11 username empty', u.username, '');
+    eq('A12 password empty', u.password, '');
+    // ── B. URL with base ─────────────────────────────────────────────────────
+    var base = new URL('https://example.com/a/b/');
+    var rel = new URL('c', base);
+    eq('B1 relative resolve', rel.href, 'https://example.com/a/b/c');
+    var parent = new URL('../d', base);
+    eq('B2 parent resolve', parent.href, 'https://example.com/a/d');
+    // ── C. URLSearchParams ───────────────────────────────────────────────────
+    eq('C1 URLSearchParams is fn', typeof URLSearchParams, 'function');
+    var sp = new URLSearchParams('a=1&b=2&a=3');
+    eq('C2 get', sp.get('a'), '1');
+    eq('C3 getAll', sp.getAll('a').join(','), '1,3');
+    eq('C4 get missing', sp.get('z'), 'null');
+    eq('C5 has', sp.has('b'), 'true');
+    eq('C6 has missing', sp.has('z'), 'false');
+    sp.set('c', '4');
+    eq('C7 set', sp.get('c'), '4');
+    sp.append('a', '9');
+    eq('C8 append', sp.getAll('a').join(','), '1,3,9');
+    sp.delete('a');
+    eq('C9 delete', sp.has('a'), 'false');
+    eq('C10 toString', (function(){ var s=new URLSearchParams(); s.set('x','1'); s.set('y','2'); return s.toString(); })(), 'x=1&y=2');
+    eq('C11 keys iteration', (function(){ var s=new URLSearchParams('a=1&b=2'); return [...s.keys()].join(','); })(), 'a,b');
+    eq('C12 values iteration', (function(){ var s=new URLSearchParams('a=1&b=2'); return [...s.values()].join(','); })(), '1,2');
+    // ── D. DOMParser ─────────────────────────────────────────────────────────
+    eq('D1 DOMParser is fn', typeof DOMParser, 'function');
+    var dp = new DOMParser();
+    var doc = dp.parseFromString('<root><child>text</child></root>', 'text/xml');
+    eq('D2 parsed root tag', doc.documentElement.tagName, 'root');
+    eq('D3 parsed child text', doc.querySelector('child').textContent, 'text');
+    var htmlDoc = dp.parseFromString('<div id="x">hi</div>', 'text/html');
+    eq('D4 HTML parse', htmlDoc.getElementById('x').textContent, 'hi');
+    // ── E. XMLSerializer ─────────────────────────────────────────────────────
+    eq('E1 XMLSerializer is fn', typeof XMLSerializer, 'function');
+    var xs = new XMLSerializer();
+    var el = document.createElement('div');
+    el.setAttribute('class', 'c');
+    el.textContent = 'hi';
+    var serialized = xs.serializeToString(el);
+    // An HTML element created on an HTML document serialises without an xmlns — the reference
+    // answers the same (DOM Parsing and Serialization §11.3, measured).
+    eq('E2 serialize div', serialized, '<div class="c">hi</div>');
+    eq('E3 serialize attr+text', (function(){ var e=document.createElement('span'); e.setAttribute('id','z'); e.textContent='t'; return xs.serializeToString(e); })(), '<span id="z">t</span>');
+    // ── F. URL manipulation ──────────────────────────────────────────────────
+    var mutable = new URL('https://example.com/old');
+    mutable.pathname = '/new';
+    eq('F1 pathname set', mutable.href, 'https://example.com/new');
+    mutable.search = '?x=1';
+    eq('F2 search set', mutable.href, 'https://example.com/new?x=1');
+    mutable.hash = '#top';
+    eq('F3 hash set', mutable.href, 'https://example.com/new?x=1#top');
+    mutable.port = '';
+    eq('F4 port cleared', mutable.href, 'https://example.com/new?x=1#top');
+})();
+</script></body></html>
