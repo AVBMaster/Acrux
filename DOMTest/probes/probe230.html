@@ -1,0 +1,65 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. Storage surface ───────────────────────────────────────────────────
+    localStorage.clear();
+    localStorage.setItem('k', 'v');
+    eq('A1 getItem', localStorage.getItem('k'), 'v');
+    eq('A2 length', localStorage.length, '1');
+    eq('A3 key(0)', localStorage.key(0), 'k');
+    eq('A4 removeItem', (function(){ localStorage.removeItem('k'); return localStorage.getItem('k'); })(), 'null');
+    eq('A5 length after remove', localStorage.length, '0');
+    localStorage.setItem('a','1'); localStorage.setItem('b','2');
+    var names=[]; for (var i=0;i<localStorage.length;i++) names.push(localStorage.key(i));
+    eq('A6 key enumeration sorted', names.sort().join(','), 'a,b');
+    localStorage.clear();
+    eq('A7 clear', localStorage.length, '0');
+    eq('A8 setItem overwrite', (function(){ localStorage.setItem('x','1'); localStorage.setItem('x','2'); return localStorage.getItem('x'); })(), '2');
+    eq('A9 typeof Storage', typeof Storage, 'function');
+    localStorage.clear();
+
+    // ── B. FileReader surface ────────────────────────────────────────────────
+    eq('B1 FileReader is fn', typeof FileReader, 'function');
+    var fr = new FileReader();
+    eq('B2 readyState initial', fr.readyState, '0');
+    eq('B3 result null initial', fr.result === null, 'true');
+    eq('B4 error null initial', fr.error === null, 'true');
+    eq('B5 onloadend is null', fr.onloadend === null, 'true');
+    eq('B6 readAsText is fn', typeof fr.readAsText, 'function');
+    eq('B7 readAsDataURL is fn', typeof fr.readAsDataURL, 'function');
+    eq('B8 readAsArrayBuffer is fn', typeof fr.readAsArrayBuffer, 'function');
+    eq('B9 abort is fn', typeof fr.abort, 'function');
+    eq('B10 FileReader.EMPTY', FileReader.EMPTY, '0');
+    eq('B11 FileReader.LOADING', FileReader.LOADING, '1');
+    eq('B12 FileReader.DONE', FileReader.DONE, '2');
+
+    // ── C. Blob / File ───────────────────────────────────────────────────────
+    var blob = new Blob(['hello'], {type:'text/plain'});
+    eq('C1 Blob size', blob.size, '5');
+    eq('C2 Blob type', blob.type, 'text/plain');
+    var f = new File(['abc'], 'f.txt', {type:'text/plain'});
+    eq('C3 File name', f.name, 'f.txt');
+    eq('C4 File size', f.size, '3');
+    eq('C5 File lastModified number', typeof f.lastModified, 'number');
+    eq('C6 Blob slice', (function(){ var s=blob.slice(0,2); return s.size+'/'+s.type; })(), '2/text/plain');
+    eq('C7 Blob is fn', typeof Blob, 'function');
+    eq('C8 File is fn', typeof File, 'function');
+    eq('C9 Blob arrayBuffer', typeof blob.arrayBuffer, 'function');
+    eq('C10 Blob text', typeof blob.text, 'function');
+
+    // ── D. FormData ──────────────────────────────────────────────────────────
+    var fd = new FormData();
+    fd.append('a','1');
+    fd.append('a','2');
+    fd.append('f', new File(['x'], 'x.txt'));
+    eq('D1 get first', fd.get('a'), '1');
+    eq('D2 getAll', fd.getAll('a').join(','), '1,2');
+    eq('D3 has', fd.has('a'), 'true');
+    eq('D4 has missing', fd.has('z'), 'false');
+    fd.delete('a');
+    eq('D5 after delete', fd.has('a'), 'false');
+    eq('D6 FormData is fn', typeof FormData, 'function');
+    eq('D7 append is fn', typeof fd.append, 'function');
+})();
+</script></body></html>
