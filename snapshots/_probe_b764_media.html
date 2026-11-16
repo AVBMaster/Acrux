@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@media screen and (min-width:100px){.ms{color:blue}}
+@media not screen{.mn{color:red}}
+@media (prefers-color-scheme:light){.mcl{color:orange}}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// @media matched rules
+const ms=document.createElement("div");ms.className="ms";document.body.appendChild(ms);
+L("media-screen-color",getComputedStyle(ms).color.split(" ").join("_"));
+ms.remove();
+const mn=document.createElement("div");mn.className="mn";document.body.appendChild(mn);
+L("media-not-screen-color",getComputedStyle(mn).color.split(" ").join("_"));
+mn.remove();
+const mcl=document.createElement("div");mcl.className="mcl";document.body.appendChild(mcl);
+L("media-light-color",getComputedStyle(mcl).color.split(" ").join("_"));
+mcl.remove();
+// MediaQueryList media serialization
+function mqMedia(q){const m=matchMedia(q);return m.media.split(" ").join("_");}
+L("mql-simple",mqMedia("screen"));
+L("mql-and",mqMedia("screen and (min-width:100px)"));
+L("mql-or",mqMedia("(min-width:100px) or (max-width:200px)"));
+L("mql-not",mqMedia("not all"));
+L("mql-range",mqMedia("(width>=100px)"));
+L("mql-only",mqMedia("only screen"));
+// MediaQueryListEvent
+const mql=matchMedia("(min-width:0px)");
+L("mql-onchange-type",typeof mql.onchange);
+L("mql-addlistener",typeof mql.addEventListener==="function");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
