@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(100px)}}
+.animated{animation:slide 1s forwards}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// CSSOM animation rules access
+const ss=document.styleSheets[0];
+let kfRule=null;
+for(let i=0;i<ss.cssRules.length;i++){
+  const r=ss.cssRules[i];
+  if(r instanceof CSSKeyframesRule){kfRule=r;break;}
+}
+if(kfRule){
+  L("kf-name",kfRule.name);
+  L("kf-rules-length",kfRule.cssRules.length);
+  if(kfRule.cssRules.length>0){
+    const first=kfRule.cssRules[0];
+    L("kf-first-key",first.keyText.split(" ").join("_"));
+    L("kf-first-css",first.cssText.split(" ").join("_").substring(0,60));
+  }
+}else{
+  L("kf-not-found","not-found");
+}
+// animation-name on animated element
+const el=document.createElement("div");el.className="animated";document.body.appendChild(el);
+L("anim-name",getComputedStyle(el).animationName);
+L("anim-duration",getComputedStyle(el).animationDuration);
+L("anim-fill",getComputedStyle(el).animationFillMode);
+el.remove();
+// CSSKeyframesRule.insertRule
+try{
+  const newKf=document.createElement("style");
+  newKf.textContent="@keyframes fadeIn{from{opacity:0}to{opacity:1}}";
+  document.head.appendChild(newKf);
+  const kfr=newKf.sheet.cssRules[0];
+  L("kf-type",kfr.constructor.name);
+  L("kf-name2",kfr.name);
+  L("kf-rules2",kfr.cssRules.length);
+  newKf.remove();
+}catch(e){L("kf-insert-error",e.message);}
+// animation shorthand longhands
+const el2=document.createElement("div");el2.style.animation="slide 2s ease-in-out 1s 3 alternate forwards";document.body.appendChild(el2);
+L("anim-long-name",getComputedStyle(el2).animationName);
+L("anim-long-dur",getComputedStyle(el2).animationDuration);
+L("anim-long-timing",getComputedStyle(el2).animationTimingFunction);
+L("anim-long-delay",getComputedStyle(el2).animationDelay);
+L("anim-long-iter",getComputedStyle(el2).animationIterationCount);
+L("anim-long-dir",getComputedStyle(el2).animationDirection);
+L("anim-long-fill",getComputedStyle(el2).animationFillMode);
+el2.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
