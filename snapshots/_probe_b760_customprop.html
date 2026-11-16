@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+#parent{--color:red;--size:20px}
+#child{color:var(--color);font-size:var(--size)}
+#fallback{color:var(--undefined-color,green)}
+#no-fallback{color:var(--undefined-no-fallback)}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// custom property on style attribute
+const d=document.createElement("div");d.style.setProperty("--x","10px");document.body.appendChild(d);
+L("style-get",d.style.getPropertyValue("--x"));
+L("computed-get",getComputedStyle(d).getPropertyValue("--x").split(" ").join("_"));
+// removeProperty
+d.style.removeProperty("--x");
+L("after-remove",getComputedStyle(d).getPropertyValue("--x")===""?"empty":"still-set");
+d.remove();
+// inheritance of custom properties
+const parent=document.createElement("div");parent.style.setProperty("--color","red");document.body.appendChild(parent);
+const child=document.createElement("span");child.style.color="var(--color)";child.textContent="x";
+parent.appendChild(child);
+L("inherit-color",getComputedStyle(child).color.split(" ").join("_"));
+parent.remove();
+// var() with fallback
+const fb=document.createElement("div");fb.style.color="var(--undefined,blue)";document.body.appendChild(fb);
+L("var-fallback",getComputedStyle(fb).color.split(" ").join("_"));
+fb.remove();
+// var() without fallback — IACVT
+const nf=document.createElement("div");nf.style.color="var(--undefined)";document.body.appendChild(nf);
+L("var-no-fallback",getComputedStyle(nf).color.split(" ").join("_"));
+nf.remove();
+// custom property used in calc
+const cc=document.createElement("div");cc.style.setProperty("--pad","10px");cc.style.width="calc(var(--pad) + 20px)";document.body.appendChild(cc);
+L("var-in-calc",getComputedStyle(cc).width);
+cc.remove();
+// custom property referencing another custom property
+const ref=document.createElement("div");ref.style.setProperty("--a","5px");ref.style.setProperty("--b","var(--a)");ref.style.width="var(--b)";document.body.appendChild(ref);
+L("var-chain",getComputedStyle(ref).width);
+ref.remove();
+// custom property case sensitivity
+const cs=document.createElement("div");cs.style.setProperty("--Case","red");cs.style.setProperty("--case","blue");cs.style.color="var(--Case)";document.body.appendChild(cs);
+L("var-case",getComputedStyle(cs).color.split(" ").join("_"));
+cs.remove();
+// setProperty with priority
+const pr=document.createElement("div");document.body.appendChild(pr);
+pr.style.setProperty("color","red","important");
+L("set-important",getComputedStyle(pr).color.split(" ").join("_"));
+pr.style.setProperty("color","blue");
+L("set-no-important-loses",getComputedStyle(pr).color.split(" ").join("_"));
+pr.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
