@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.t1{width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#fcc}
+.t2{width:80px;overflow:hidden;text-overflow:clip;white-space:nowrap;background:#ccf}
+.t3{width:80px;overflow:hidden;white-space:nowrap;background:#cfc}
+.t4{width:80px;overflow:visible;text-overflow:ellipsis;white-space:nowrap;background:#ffc}
+.t5{width:80px;overflow:hidden;white-space:normal;text-overflow:ellipsis;background:#fec}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// text-overflow with overflow:hidden + nowrap
+const t1=document.createElement("div");t1.className="t1";t1.textContent="This text is too long for the box";
+document.body.appendChild(t1);
+L("ellipsis-w",Math.round(t1.getBoundingClientRect().width));
+L("ellipsis-h",Math.round(t1.getBoundingClientRect().height));
+L("ellipsis-to",getComputedStyle(t1).textOverflow);
+t1.remove();
+// text-overflow:clip
+const t2=document.createElement("div");t2.className="t2";t2.textContent="This text is too long for the box";
+document.body.appendChild(t2);
+L("clip-to",getComputedStyle(t2).textOverflow);
+t2.remove();
+// overflow:hidden without text-overflow
+const t3=document.createElement("div");t3.className="t3";t3.textContent="This text is too long for the box";
+document.body.appendChild(t3);
+L("hidden-only-w",Math.round(t3.getBoundingClientRect().width));
+t3.remove();
+// overflow:visible — no clipping
+const t4=document.createElement("div");t4.className="t4";t4.textContent="This text overflows";
+document.body.appendChild(t4);
+L("visible-w",Math.round(t4.getBoundingClientRect().width));
+t4.remove();
+// multi-line with text-overflow (no ellipsis — requires nowrap)
+const t5=document.createElement("div");t5.className="t5";t5.textContent="This is a longer text that wraps";
+document.body.appendChild(t5);
+L("multiline-h",Math.round(t5.getBoundingClientRect().height));
+L("multiline-to",getComputedStyle(t5).textOverflow);
+t5.remove();
+// overflow-x/y independently
+const t6=document.createElement("div");t6.style.cssText="width:60px;height:30px;overflow-x:hidden;overflow-y:auto";
+t6.textContent="wide content here";document.body.appendChild(t6);
+L("of-x-hidden",getComputedStyle(t6).overflowX);
+L("of-y-auto",getComputedStyle(t6).overflowY);
+t6.remove();
+// overflow with scrollbars
+const t7=document.createElement("div");t7.style.cssText="width:60px;height:30px;overflow:scroll";
+t7.innerHTML="<div style='width:100px;height:80px'>scroll</div>";
+document.body.appendChild(t7);
+L("scroll-w",Math.round(t7.getBoundingClientRect().width));
+L("scroll-h",Math.round(t7.getBoundingClientRect().height));
+t7.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
