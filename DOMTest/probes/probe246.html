@@ -1,0 +1,93 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">Hello World</p><p id="p2">Second</p></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. window.getSelection ───────────────────────────────────────────────
+    eq('A1 getSelection is fn', typeof window.getSelection, 'function');
+    var sel = window.getSelection();
+    eq('A2 Selection is fn', typeof Selection, 'function');
+    eq('A3 instanceof Selection', sel instanceof Selection, 'true');
+    // ── B. addRange / removeAllRanges / getRangeAt ───────────────────────────
+    var range = document.createRange();
+    range.selectNodeContents(document.getElementById('p1'));
+    sel.removeAllRanges();
+    sel.addRange(range);
+    eq('B1 rangeCount', sel.rangeCount, '1');
+    var got = sel.getRangeAt(0);
+    eq('B2 getRangeAt', got.toString(), 'Hello World');
+    sel.removeAllRanges();
+    eq('B3 rangeCount after removeAll', sel.rangeCount, '0');
+    // ── C. anchorNode / anchorOffset / focusNode / focusOffset ───────────────
+    var p1 = document.getElementById('p1');
+    var r2 = document.createRange();
+    r2.setStart(p1.firstChild, 0);
+    r2.setEnd(p1.firstChild, 5);
+    sel.addRange(r2);
+    eq('C1 anchorNode', sel.anchorNode === p1.firstChild, 'true');
+    eq('C2 anchorOffset', sel.anchorOffset, '0');
+    eq('C3 focusNode', sel.focusNode === p1.firstChild, 'true');
+    eq('C4 focusOffset', sel.focusOffset, '5');
+    eq('C5 isCollapsed', sel.isCollapsed, 'false');
+    eq('C6 toString', sel.toString(), 'Hello');
+    // ── D. collapse ──────────────────────────────────────────────────────────
+    sel.collapse(p1.firstChild, 0);
+    eq('D1 collapse anchorOffset', sel.anchorOffset, '0');
+    eq('D2 collapse isCollapsed', sel.isCollapsed, 'true');
+    // ── E. collapseToEnd / collapseToStart ───────────────────────────────────
+    var r3 = document.createRange();
+    r3.selectNodeContents(p1);
+    sel.removeAllRanges();
+    sel.addRange(r3);
+    sel.collapseToEnd();
+    eq('E1 collapseToEnd isCollapsed', sel.isCollapsed, 'true');
+    sel.removeAllRanges();
+    sel.addRange(r3);
+    sel.collapseToStart();
+    eq('E2 collapseToStart isCollapsed', sel.isCollapsed, 'true');
+    // ── F. selectAllChildren ─────────────────────────────────────────────────
+    sel.removeAllRanges();
+    sel.selectAllChildren(document.getElementById('p2'));
+    eq('F1 selectAllChildren rangeCount', sel.rangeCount, '1');
+    eq('F2 selectAllChildren toString', sel.toString(), 'Second');
+    // ── G. containsNode ──────────────────────────────────────────────────────
+    sel.removeAllRanges();
+    var r4 = document.createRange();
+    r4.selectNodeContents(p1);
+    sel.addRange(r4);
+    eq('G1 containsNode true', sel.containsNode(p1.firstChild), 'true');
+    eq('G2 containsNode false', sel.containsNode(document.getElementById('p2')), 'false');
+    // ── H. deleteFromDocument ────────────────────────────────────────────────
+    sel.removeAllRanges();
+    var r5 = document.createRange();
+    r5.setStart(p1.firstChild, 0);
+    r5.setEnd(p1.firstChild, 5);
+    sel.addRange(r5);
+    sel.deleteFromDocument();
+    eq('H1 deleteFromDocument', p1.textContent, ' World');
+    // ── I. extend ────────────────────────────────────────────────────────────
+    sel.removeAllRanges();
+    var r6 = document.createRange();
+    r6.setStart(p1.firstChild, 0);
+    r6.setEnd(p1.firstChild, 0);
+    sel.addRange(r6);
+    sel.extend(p1.firstChild, 5);
+    eq('I1 extend focusOffset', sel.focusOffset, '5');
+    // ── J. type ──────────────────────────────────────────────────────────────
+    eq('J1 type Range', sel.type, 'Range');
+    sel.removeAllRanges();
+    eq('J2 type None', sel.type, 'None');
+    // ── K. modify (if supported) ─────────────────────────────────────────────
+    if (typeof sel.modify === 'function') {
+        sel.removeAllRanges();
+        var r7 = document.createRange();
+        r7.setStart(p1.firstChild, 0);
+        r7.setEnd(p1.firstChild, 0);
+        sel.addRange(r7);
+        sel.modify('extend', 'forward', 'character');
+        eq('K1 modify extend', sel.focusOffset, '1');
+    } else {
+        eq('K1 modify not supported', 'skip', 'skip');
+    }
+    sel.removeAllRanges();
+})();
+</script></body></html>
