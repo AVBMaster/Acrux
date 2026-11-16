@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. window properties ─────────────────────────────────────────────────
+    eq('A1 window === globalThis', window === globalThis, 'true');
+    eq('A2 window.window', window.window === window, 'true');
+    eq('A3 window.self', window.self === window, 'true');
+    eq('A4 window.top', window.top === window, 'true');
+    eq('A5 window.parent', window.parent === window, 'true');
+    eq('A6 window.frames', window.frames === window, 'true');
+    eq('A7 window.closed', window.closed, 'false');
+    eq('A8 window.length', window.length, '0');
+    eq('A9 window.name string', typeof window.name, 'string');
+    eq('A10 window.status string', typeof window.status, 'string');
+    eq('A11 window.origin string', typeof window.origin, 'string');
+    eq('A12 window.innerWidth number', typeof window.innerWidth, 'number');
+    eq('A13 window.innerHeight number', typeof window.innerHeight, 'number');
+    eq('A14 window.outerWidth number', typeof window.outerWidth, 'number');
+    eq('A15 window.outerHeight number', typeof window.outerHeight, 'number');
+    eq('A16 window.screenX number', typeof window.screenX, 'number');
+    eq('A17 window.screenY number', typeof window.screenY, 'number');
+    eq('A18 window.devicePixelRatio number', typeof window.devicePixelRatio, 'number');
+    eq('A19 window.isSecureContext boolean', typeof window.isSecureContext, 'boolean');
+    // ── B. window methods ────────────────────────────────────────────────────
+    eq('B1 alert is fn', typeof window.alert, 'function');
+    eq('B2 confirm is fn', typeof window.confirm, 'function');
+    eq('B3 prompt is fn', typeof window.prompt, 'function');
+    eq('B4 open is fn', typeof window.open, 'function');
+    eq('B5 close is fn', typeof window.close, 'function');
+    eq('B6 focus is fn', typeof window.focus, 'function');
+    eq('B7 blur is fn', typeof window.blur, 'function');
+    eq('B8 print is fn', typeof window.print, 'function');
+    eq('B9 scrollTo is fn', typeof window.scrollTo, 'function');
+    eq('B10 scrollBy is fn', typeof window.scrollBy, 'function');
+    eq('B11 setTimeout is fn', typeof window.setTimeout, 'function');
+    eq('B12 clearTimeout is fn', typeof window.clearTimeout, 'function');
+    eq('B13 setInterval is fn', typeof window.setInterval, 'function');
+    eq('B14 clearInterval is fn', typeof window.clearInterval, 'function');
+    eq('B15 requestAnimationFrame is fn', typeof window.requestAnimationFrame, 'function');
+    eq('B16 cancelAnimationFrame is fn', typeof window.cancelAnimationFrame, 'function');
+    eq('B17 getComputedStyle is fn', typeof window.getComputedStyle, 'function');
+    eq('B18 matchMedia is fn', typeof window.matchMedia, 'function');
+    eq('B19 postMessage is fn', typeof window.postMessage, 'function');
+    eq('B20 atob is fn', typeof window.atob, 'function');
+    eq('B21 btoa is fn', typeof window.btoa, 'function');
+    eq('B22 fetch is fn', typeof window.fetch, 'function');
+    eq('B23 structuredClone is fn', typeof window.structuredClone, 'function');
+    eq('B24 reportError is fn', typeof window.reportError, 'function');
+    eq('B25 createImageBitmap is fn', typeof window.createImageBitmap, 'function');
+    // ── C. window.event handlers ─────────────────────────────────────────────
+    eq('C1 onerror is null', window.onerror === null, 'true');
+    eq('C2 onload is null', window.onload === null, 'true');
+    eq('C3 onresize is null', window.onresize === null, 'true');
+    eq('C4 onscroll is null', window.onscroll === null, 'true');
+    // ── D. window.history / location / navigator / screen ────────────────────
+    eq('D1 history', window.history === history, 'true');
+    eq('D2 location', window.location === location, 'true');
+    eq('D3 navigator', window.navigator === navigator, 'true');
+    eq('D4 screen', window.screen === screen, 'true');
+    eq('D5 document', window.document === document, 'true');
+})();
+</script></body></html>
