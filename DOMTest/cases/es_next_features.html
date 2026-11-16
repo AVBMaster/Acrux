@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><body><script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    function ev(src){ try { return String(eval(src)); } catch(e){ return 'ERR:'+e.name; } }
+    // ── A. logical assignment operators (ES2021) ─────────────────────────────
+    eq('A1 &&=', ev('(function(){var o={a:1,b:0}; o.a&&=5; o.b&&=5; return o.a+","+o.b;})()'), '5,0');
+    eq('A2 ||=', ev('(function(){var o={a:0,b:1}; o.a||=5; o.b||=5; return o.a+","+o.b;})()'), '5,1');
+    eq('A3 ??=', ev('(function(){var o={a:null,b:2}; o.a??=5; o.b??=5; return o.a+","+o.b;})()'), '5,2');
+
+    // ── B. optional chaining and nullish coalescing ──────────────────────────
+    eq('B1 ?.', ev('var o={a:{b:1}}; [o?.a?.b, o?.x?.y, o?.a?.["b"]].join(",")'), '1,,1');
+    eq('B2 ?. call', ev('var o={f:function(){return 1}}; [o.f?.(), o.g?.()].join(",")'), '1,');
+    eq('B3 ??', ev('[null??1, undefined??2, 0??3, false??4].join(",")'), '1,2,0,false');
+    eq('B4 ?? mixes with || needs parens', ev('(function(){try{eval("0||1??2");return "no-err";}catch(e){return "SyntaxError";}})()'), 'SyntaxError');
+
+    // ── C. class static block + private members (ES2022) ─────────────────────
+    eq('C1 static block', ev('(function(){var s; class C{ static { s = 42; } } return s;})()'), '42');
+    eq('C2 private field', ev('(function(){class C{ #x=1; getX(){return this.#x;} } return new C().getX();})()'), '1');
+    eq('C3 static private', ev('(function(){class C{ static #s=7; static g(){return C.#s;} } return C.g();})()'), '7');
+    eq('C4 private method', ev('(function(){class C{ #m(){return 9;} pub(){return this.#m();} } return new C().pub();})()'), '9');
+    eq('C5 #x in obj', ev('(function(){class C{ #x=1; static has(o){return #x in o;} } return C.has(new C())+","+C.has({});})()'), 'true,false');
+
+    // ── D. newer built-ins ───────────────────────────────────────────────────
+    eq('D1 replaceAll', ev('"a-b-c".replaceAll("-","+")'), 'a+b+c');
+    eq('D2 matchAll', ev('[..."ab1cd2".matchAll(/\\d/g)].map(m=>m[0]).join("")'), '12');
+    eq('D3 String.at / Array.at', ev('"abc".at(-1)+[1,2,3].at(-1)'), 'c3');
+    eq('D4 Object.fromEntries', ev('Object.fromEntries([["a",1],["b",2]]).b'), '2');
+    eq('D5 Array.flat', ev('[1,[2,[3]]].flat(Infinity).join("")'), '123');
+    eq('D6 BigInt', ev('(2n**64n).toString()'), '18446744073709551616');
+    eq('D7 structuredClone exists', ev('typeof structuredClone'), 'function');
+    eq('D8 Promise.any', ev('typeof Promise.any+"/"+typeof Promise.allSettled'), 'function/function');
+    eq('D9 globalThis', ev('typeof globalThis'), 'object');
+    eq('D10 Symbol description', ev('Symbol("d").description'), 'd');
+})();
+</script></body></html>
