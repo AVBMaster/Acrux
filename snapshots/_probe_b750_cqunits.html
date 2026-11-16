@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.cqw{container-type:inline-size;width:200px;border:1px solid #ccc}
+.cqh{container-type:size;width:200px;height:200px;border:1px solid #ccc}
+@container (min-width:150px){.cq-w{background:#ccf}}
+@container (max-width:150px){.cq-w-sm{background:#cfc}}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// container query matching at 200px (min-width:150px matches)
+const cw=document.createElement("div");cw.className="cqw";
+const child=document.createElement("div");child.className="cq-w";child.textContent="x";
+cw.appendChild(child);document.body.appendChild(cw);
+L("cq-match-bg",getComputedStyle(child).backgroundColor.split(" ").join("_"));
+cw.remove();
+// container query size units (cqw = 1% of container inline size)
+const cu=document.createElement("div");cu.className="cqw";
+const cuChild=document.createElement("div");cuChild.style.width="50cqw";
+cu.appendChild(cuChild);document.body.appendChild(cu);
+L("50cqw-w",Math.round(cuChild.getBoundingClientRect().width));
+L("50cqw-computed",getComputedStyle(cuChild).width);
+cu.remove();
+// container query height unit (cqh)
+const ch=document.createElement("div");ch.className="cqh";
+const chChild=document.createElement("div");chChild.style.height="50cqh";
+ch.appendChild(chChild);document.body.appendChild(ch);
+L("50cqh-h",Math.round(chChild.getBoundingClientRect().height));
+ch.remove();
+// container query inline size unit (cqi)
+const ci=document.createElement("div");ci.className="cqw";
+const ciChild=document.createElement("div");ciChild.style.padding="5cqi";
+ci.appendChild(ciChild);document.body.appendChild(ci);
+L("5cqi-pad-w",Math.round(ciChild.getBoundingClientRect().width));
+ci.remove();
+// container query block size unit (cqb)
+const cb=document.createElement("div");cb.className="cqh";
+const cbChild=document.createElement("div");cbChild.style.margin="5cqb 0";
+cb.appendChild(cbChild);document.body.appendChild(cb);
+L("5cqb-margin",getComputedStyle(cbChild).marginTop);
+cb.remove();
+// @container named
+const named=document.createElement("div");
+named.style.cssText="container:sidebar/inline-size;width:300px";
+const nChild=document.createElement("div");nChild.textContent="content";
+named.appendChild(nChild);document.body.appendChild(named);
+L("named-container-type",getComputedStyle(named).containerType);
+L("named-container-name",getComputedStyle(named).containerName);
+named.remove();
+// container-type: size
+const ct=document.createElement("div");ct.style.cssText="container-type:size;width:100px;height:80px";
+document.body.appendChild(ct);
+L("container-size-type",getComputedStyle(ct).containerType);
+ct.remove();
+// container-type: inline-size
+const ci=document.createElement("div");ci.style.cssText="container-type:inline-size;width:200px";
+document.body.appendChild(ci);
+L("container-inline-type",getComputedStyle(ci).containerType);
+ci.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
