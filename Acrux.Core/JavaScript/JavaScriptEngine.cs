@@ -20946,7 +20946,7 @@ public class JavaScriptEngine : IDisposable
                                 return f('geolocation');
                             if (!nav.permissions || typeof nav.permissions.query !== 'function')
                                 return f('permissions');
-                            if (!nav.storage || typeof nav.storage.length !== 'number')
+                            if (!nav.storage || typeof nav.storage.estimate !== 'function')
                                 return f('storage');
                             if (!window.CSS || !window.CSS.highlights
                                 || typeof window.CSS.highlights.set !== 'function')
