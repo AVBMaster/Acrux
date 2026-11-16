@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// @container CSSOM access
+const ss=document.createElement("style");document.head.appendChild(ss);
+try{
+  ss.sheet.insertRule("@container (min-width:200px){.cq{color:blue}}",0);
+  const container=document.createElement("div");
+  container.style.cssText="container-type:inline-size;width:300px";
+  const child=document.createElement("div");child.className="cq";child.textContent="x";
+  container.appendChild(child);document.body.appendChild(container);
+  L("cq-rule-count",ss.sheet.cssRules.length);
+  L("cq-rule-type",ss.sheet.cssRules[0].constructor.name);
+  L("cq-child-color",getComputedStyle(child).color.split(" ").join("_"));
+  container.remove();
+}catch(e){L("cq-cssom-error",e.message);}
+// @container with name
+try{
+  ss.sheet.insertRule("@container sidebar(min-width:100px){.named{color:red}}",0);
+  const named=document.createElement("div");
+  named.style.cssText="container:sidebar/inline-size;width:300px";
+  const nChild=document.createElement("div");nChild.className="named";nChild.textContent="x";
+  named.appendChild(nChild);document.body.appendChild(named);
+  L("cq-named-color",getComputedStyle(nChild).color.split(" ").join("_"));
+  named.remove();
+}catch(e){L("cq-named-error",e.message);}
+while(ss.sheet.cssRules.length>0)ss.sheet.deleteRule(0);
+ss.remove();
+// container-type / container-name computed values
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("ct-none","container-type:normal","container-type");
+gc("ct-inline","container-type:inline-size","container-type");
+gc("ct-size","container-type:size","container-type");
+gc("cn-none","container-name:none","container-name");
+gc("cn-named","container-name:sidebar","container-name");
+gc("ct-short","container:main/inline-size","container-type");
+gc("cn-short","container:main/inline-size","container-name");
+// aspect-ratio computed variants
+gc("ar-16-9","aspect-ratio:16/9","aspect-ratio");
+gc("ar-1-1","aspect-ratio:1","aspect-ratio");
+gc("ar-decimal","aspect-ratio:1.777","aspect-ratio");
+gc("ar-auto","aspect-ratio:auto","aspect-ratio");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
