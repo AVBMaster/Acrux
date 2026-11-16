@@ -1,0 +1,73 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">Hello <b id="b1">World</b></p><p id="p2">Second</p></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. document.createRange ──────────────────────────────────────────────
+    eq('A1 createRange is fn', typeof document.createRange, 'function');
+    var r = document.createRange();
+    eq('A2 Range is fn', typeof Range, 'function');
+    eq('A3 instanceof Range', r instanceof Range, 'true');
+    r.selectNodeContents(document.getElementById('p1'));
+    eq('A4 startContainer', r.startContainer.id || r.startContainer.nodeName, 'p1');
+    eq('A5 endContainer', r.endContainer.id || r.endContainer.nodeName, 'p1');
+    eq('A6 collapsed false', r.collapsed, 'false');
+    eq('A7 commonAncestorContainer', r.commonAncestorContainer.id || r.commonAncestorContainer.nodeName, 'p1');
+    // ── B. setStart / setEnd ─────────────────────────────────────────────────
+    var p1 = document.getElementById('p1');
+    r.setStart(p1.firstChild, 0);
+    r.setEnd(p1.firstChild, 5);
+    eq('B1 toString', r.toString(), 'Hello');
+    eq('B2 startOffset', r.startOffset, '0');
+    eq('B3 endOffset', r.endOffset, '5');
+    // ── C. collapse ──────────────────────────────────────────────────────────
+    r.collapse(true);
+    eq('C1 collapsed after collapse(true)', r.collapsed, 'true');
+    eq('C2 startOffset after collapse', r.startOffset, '0');
+    r.collapse(false);
+    eq('C3 startOffset after collapse(false)', r.startOffset, r.endOffset);
+    // ── D. selectNode / selectNodeContents ───────────────────────────────────
+    r.selectNode(document.getElementById('b1'));
+    eq('D1 selectNode startContainer', r.startContainer.id || r.startContainer.nodeName, 'p1');
+    eq('D2 selectNode collapsed', r.collapsed, 'false');
+    r.selectNodeContents(document.getElementById('b1'));
+    eq('D3 selectNodeContents startContainer', r.startContainer.id || r.startContainer.nodeName, 'b1');
+    // ── E. deleteContents ────────────────────────────────────────────────────
+    var p2 = document.getElementById('p2');
+    r.setStart(p2.firstChild, 0);
+    r.setEnd(p2.firstChild, 3);
+    r.deleteContents();
+    eq('E1 deleteContents', p2.textContent, 'ond');
+    // ── F. extractContents ───────────────────────────────────────────────────
+    var frag = r.extractContents();
+    eq('F1 extractContents fragment', frag.nodeType, '11');
+    eq('F2 extractContents collapsed', r.collapsed, 'true');
+    // ── G. cloneContents ─────────────────────────────────────────────────────
+    r.setStart(p1.firstChild, 0);
+    r.setEnd(p1.firstChild, 5);
+    var cloned = r.cloneContents();
+    eq('G1 cloneContents fragment', cloned.nodeType, '11');
+    eq('G2 cloneContents text', cloned.textContent, 'Hello');
+    // ── H. cloneRange ────────────────────────────────────────────────────────
+    var r2 = r.cloneRange();
+    eq('H1 cloneRange startOffset', r2.startOffset, '0');
+    eq('H2 cloneRange endOffset', r2.endOffset, '5');
+    eq('H3 cloneRange not same', r2 !== r, 'true');
+    // ── I. compareBoundaryPoints ─────────────────────────────────────────────
+    r.setStart(p1.firstChild, 0);
+    r.setEnd(p1.firstChild, 5);
+    r2.setStart(p1.firstChild, 0);
+    r2.setEnd(p1.firstChild, 3);
+    eq('I1 START_TO_START equal', r.compareBoundaryPoints(Range.START_TO_START, r2), '0');
+    // ── J. insertNode ────────────────────────────────────────────────────────
+    r.setStart(p1.firstChild, 5);
+    r.setEnd(p1.firstChild, 5);
+    var newNode = document.createTextNode(' inserted');
+    r.insertNode(newNode);
+    eq('J1 insertNode text', p1.textContent.indexOf(' inserted') !== -1, 'true');
+    // ── K. surroundContents ──────────────────────────────────────────────────
+    r.selectNodeContents(document.getElementById('b1'));
+    var wrapper = document.createElement('em');
+    try { r.surroundContents(wrapper); eq('K1 surroundContents', wrapper.textContent, 'World'); }
+    catch(e) { eq('K1 surroundContents', 'ERR:'+e.name, 'World'); }
+})();
+</script></body></html>
