@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. StorageEvent constructor ──────────────────────────────────────────
+    eq('A1 StorageEvent is fn', typeof StorageEvent, 'function');
+    var se = new StorageEvent('storage', {
+        key: 'mykey',
+        newValue: 'newval',
+        oldValue: 'oldval',
+        url: 'https://example.com',
+        storageArea: localStorage
+    });
+    eq('A2 type', se.type, 'storage');
+    eq('A3 key', se.key, 'mykey');
+    eq('A4 newValue', se.newValue, 'newval');
+    eq('A5 oldValue', se.oldValue, 'oldval');
+    eq('A6 url', se.url, 'https://example.com');
+    eq('A7 storageArea', se.storageArea === localStorage, 'true');
+    eq('A8 bubbles default', se.bubbles, 'false');
+    // ── B. Storage methods ───────────────────────────────────────────────────
+    localStorage.clear();
+    eq('B1 getItem missing', localStorage.getItem('nope'), 'null');
+    localStorage.setItem('k', 'v');
+    eq('B2 getItem present', localStorage.getItem('k'), 'v');
+    eq('B3 length after set', localStorage.length, '1');
+    localStorage.setItem('k', 'v2');
+    eq('B4 overwrite same key', localStorage.length, '1');
+    localStorage.removeItem('k');
+    eq('B5 removeItem', localStorage.getItem('k'), 'null');
+    eq('B6 length after remove', localStorage.length, '0');
+    localStorage.clear();
+    eq('B7 clear', localStorage.length, '0');
+    // ── C. sessionStorage isolation ──────────────────────────────────────────
+    localStorage.setItem('shared', 'local');
+    sessionStorage.setItem('shared', 'session');
+    eq('C1 localStorage value', localStorage.getItem('shared'), 'local');
+    eq('C2 sessionStorage value', sessionStorage.getItem('shared'), 'session');
+    localStorage.removeItem('shared');
+    sessionStorage.removeItem('shared');
+    // ── D. Storage key enumeration ───────────────────────────────────────────
+    localStorage.setItem('a', '1');
+    localStorage.setItem('b', '2');
+    localStorage.setItem('c', '3');
+    var keys = [];
+    for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+    keys.sort();
+    eq('D1 key enumeration', keys.join(','), 'a,b,c');
+    eq('D2 key out of range', localStorage.key(99), 'null');
+    eq('D3 key negative', localStorage.key(-1), 'null');
+    localStorage.clear();
+    // ── E. Storage named access ──────────────────────────────────────────────
+    localStorage.setItem('named', 'val');
+    eq('E1 named access via bracket', localStorage['named'], 'val');
+    eq('E2 named access via dot', localStorage.named, 'val');
+    localStorage.removeItem('named');
+    eq('E3 after remove named access', localStorage['named'], 'null');
+    localStorage.clear();
+})();
+</script></body></html>
