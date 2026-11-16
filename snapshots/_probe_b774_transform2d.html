@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.box{width:60px;height:40px;background:#fcc;display:inline-block;margin:10px;vertical-align:top}
+</style></head><body>
+<div id="out" style="font:12px monospace"></div>
+<div>
+<div class="box" style="transform:translate(20px,10px)">T1</div>
+<div class="box" style="transform:scale(1.5)">S1</div>
+<div class="box" style="transform:rotate(45deg)">R1</div>
+<div class="box" style="transform:skewX(20deg)">K1</div>
+<div class="box" style="transform:matrix(1,0,0,1,20,10)">M1</div>
+<div class="box" style="transform:scaleX(2)">SX</div>
+<div class="box" style="transform:scaleY(0.5)">SY</div>
+<div class="box" style="transform:skewY(15deg)">KY</div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+const boxes=document.querySelectorAll(".box");
+L("translate",rect(boxes[0]));
+L("scale",rect(boxes[1]));
+L("rotate-w",Math.round(boxes[2].getBoundingClientRect().width));
+L("rotate-h",Math.round(boxes[2].getBoundingClientRect().height));
+L("skewX-w",Math.round(boxes[3].getBoundingClientRect().width));
+L("matrix",rect(boxes[4]));
+L("scaleX",rect(boxes[5]));
+L("scaleY",rect(boxes[6]));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
