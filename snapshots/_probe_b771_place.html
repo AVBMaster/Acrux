@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// place-items shorthand
+gc("pi-normal","display:grid;place-items:normal","place-items");
+gc("pi-start","display:grid;place-items:start","place-items");
+gc("pi-center","display:grid;place-items:center","place-items");
+gc("pi-end","display:grid;place-items:end","place-items");
+gc("pi-stretch","display:grid;place-items:stretch","place-items");
+gc("pi-start-center","display:grid;place-items:start center","place-items");
+gc("pi-center-start","display:grid;place-items:center start","place-items");
+gc("pi-baseline","display:grid;place-items:baseline","place-items");
+// place-content shorthand
+gc("pc-normal","display:grid;place-content:normal","place-content");
+gc("pc-start","display:grid;place-content:start","place-content");
+gc("pc-center","display:grid;place-content:center","place-content");
+gc("pc-end","display:grid;place-content:end","place-content");
+gc("pc-space-between","display:grid;place-content:space-between","place-content");
+gc("pc-space-around","display:grid;place-content:space-around","place-content");
+gc("pc-space-evenly","display:grid;place-content:space-evenly","place-content");
+gc("pc-stretch","display:grid;place-content:stretch","place-content");
+gc("pc-center-start","display:grid;place-content:center start","place-content");
+// place-self shorthand
+gc("ps-auto","display:grid;place-self:auto","place-self");
+gc("ps-start","display:grid;place-self:start","place-self");
+gc("ps-center","display:grid;place-self:center","place-self");
+gc("ps-end","display:grid;place-self:end","place-self");
+gc("ps-stretch","display:grid;place-self:stretch","place-self");
+gc("ps-start-center","display:grid;place-self:start center","place-self");
+// align-content in flex wrap
+gc("ac-flex-start","display:flex;flex-wrap:wrap;align-content:flex-start","align-content");
+gc("ac-flex-end","display:flex;flex-wrap:wrap;align-content:flex-end","align-content");
+gc("ac-flex-center","display:flex;flex-wrap:wrap;align-content:center","align-content");
+gc("ac-flex-between","display:flex;flex-wrap:wrap;align-content:space-between","align-content");
+gc("ac-flex-around","display:flex;flex-wrap:wrap;align-content:space-around","align-content");
+gc("ac-flex-evenly","display:flex;flex-wrap:wrap;align-content:space-evenly","align-content");
+gc("ac-flex-stretch","display:flex;flex-wrap:wrap;align-content:stretch","align-content");
+// justify-items
+gc("ji-start","display:grid;justify-items:start","justify-items");
+gc("ji-center","display:grid;justify-items:center","justify-items");
+gc("ji-end","display:grid;justify-items:end","justify-items");
+gc("ji-stretch","display:grid;justify-items:stretch","justify-items");
+// justify-self
+gc("js-auto","display:grid;justify-self:auto","justify-self");
+gc("js-start","display:grid;justify-self:start","justify-self");
+gc("js-center","display:grid;justify-self:center","justify-self");
+gc("js-end","display:grid;justify-self:end","justify-self");
+gc("js-stretch","display:grid;justify-self:stretch","justify-self");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
