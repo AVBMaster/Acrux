@@ -22162,6 +22162,11 @@ public class NavigatorHost : IDomPrototypeHost
     public bool onLine => true;
     public bool javaEnabled() => false;
 
+    /// <summary>Service Workers §3: the container the navigator hands out. The engine has no
+    /// service worker, so register answers a rejected promise and controller is null — but the
+    /// container is reachable so a page feature-testing with typeof succeeds.</summary>
+    public NavigatorServiceWorkerContainer serviceWorker => new();
+
     /// <summary>Gamepad §5: no gamepad is connected, so the interface answers four nulls — the
     /// slot count matches what the reference returns for a page with no connected gamepads.</summary>
     public object?[] getGamepads() => new object?[] { null, null, null, null };
@@ -22198,6 +22203,18 @@ public class NavigatorMediaDevices
 {
     public object getSupportedConstraints() => new { };
     public void setCaptureHandleConfig() { }
+}
+
+/// <summary>Service Workers §3: the container the navigator hands out. The engine has no service
+/// worker, so register answers a rejected promise and controller is null — but the container is
+/// reachable so a page feature-testing with typeof succeeds.</summary>
+public class NavigatorServiceWorkerContainer
+{
+    public object? controller => null;
+    public object? ready => null;
+    public object? register(string? url = null, object? options = null) => null;
+    public object? getRegistration(string? url = "") => null;
+    public object? getRegistrations() => System.Array.Empty<object>();
 }
 
 public class LocationHost : IDomPrototypeHost, IDomEnumerableHost

@@ -1,0 +1,45 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. Worker ────────────────────────────────────────────────────────────
+    eq('A1 Worker is fn', typeof Worker, 'function');
+    var w;
+    try { w = new Worker('nonexistent.js'); w.terminate(); eq('A2 Worker constructor no-throw', 'ok', 'ok'); }
+    catch(e) { eq('A2 Worker constructor', e.name, 'ok'); }
+    // ── B. SharedWorker ──────────────────────────────────────────────────────
+    eq('B1 SharedWorker is fn', typeof SharedWorker, 'function');
+    // ── C. ServiceWorker ─────────────────────────────────────────────────────
+    eq('C1 navigator.serviceWorker is object', typeof navigator.serviceWorker, 'object');
+    eq('C2 register is fn', typeof navigator.serviceWorker.register, 'function');
+    eq('C3 getRegistration is fn', typeof navigator.serviceWorker.getRegistration, 'function');
+    eq('C4 getRegistrations is fn', typeof navigator.serviceWorker.getRegistrations, 'function');
+    eq('C5 ready is defined', navigator.serviceWorker.ready !== undefined, 'true');
+    eq('C6 controller', navigator.serviceWorker.controller, 'null');
+    // ── D. Notification ──────────────────────────────────────────────────────
+    eq('D1 Notification is fn', typeof Notification, 'function');
+    eq('D2 Notification.permission', Notification.permission, 'default');
+    eq('D3 requestPermission is fn', typeof Notification.requestPermission, 'function');
+    // ── E. PushManager ───────────────────────────────────────────────────────
+    eq('E1 PushManager is fn', typeof PushManager, 'function');
+    // ── F. ServiceWorkerRegistration ─────────────────────────────────────────
+    eq('F1 ServiceWorkerRegistration is fn', typeof ServiceWorkerRegistration, 'function');
+    // ── G. Cache API ─────────────────────────────────────────────────────────
+    eq('G1 caches is object', typeof caches, 'object');
+    eq('G2 open is fn', typeof caches.open, 'function');
+    eq('G3 CacheStorage is fn', typeof CacheStorage, 'function');
+    // ── H. MessageChannel ────────────────────────────────────────────────────
+    eq('H1 MessageChannel is fn', typeof MessageChannel, 'function');
+    var mc = new MessageChannel();
+    eq('H2 port1', mc.port1 instanceof MessagePort, 'true');
+    eq('H3 port2', mc.port2 instanceof MessagePort, 'true');
+    mc.port1.postMessage('hello');
+    eq('H4 postMessage no-throw', 'ok', 'ok');
+    mc.port1.close();
+    // ── I. MessagePort ───────────────────────────────────────────────────────
+    eq('I1 MessagePort is fn', typeof MessagePort, 'function');
+    eq('I2 start is fn', typeof mc.port1.start, 'function');
+    eq('I3 close is fn', typeof mc.port1.close, 'function');
+    eq('I4 postMessage is fn', typeof mc.port1.postMessage, 'function');
+})();
+</script></body></html>
