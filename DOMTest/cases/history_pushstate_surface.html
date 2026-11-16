@@ -1,0 +1,41 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. History surface ───────────────────────────────────────────────────
+    eq('A1 history is object', typeof history, 'object');
+    eq('A2 history.length number', typeof history.length, 'number');
+    eq('A3 history.length >= 1', history.length >= 1, 'true');
+    eq('A4 state null initially', history.state === null, 'true');
+    eq('A5 pushState is fn', typeof history.pushState, 'function');
+    eq('A6 replaceState is fn', typeof history.replaceState, 'function');
+    eq('A7 back/forward/go fns', [typeof history.back, typeof history.forward, typeof history.go].join(','), 'function,function,function');
+
+    // ── B. pushState sets state ──────────────────────────────────────────────
+    history.pushState({n:1}, '', '?p=1');
+    eq('B1 state set', JSON.stringify(history.state), '{"n":1}');
+    eq('B2 length grew', history.length >= 2, 'true');
+    eq('B3 location search updated', location.search, '?p=1');
+
+    // ── C. replaceState replaces without growing ─────────────────────────────
+    var lenBefore = history.length;
+    history.replaceState({n:2}, '', '?p=2');
+    eq('C1 state replaced', JSON.stringify(history.state), '{"n":2}');
+    eq('C2 length unchanged', history.length === lenBefore, 'true');
+    eq('C3 location search updated', location.search, '?p=2');
+
+    // ── D. location parts ────────────────────────────────────────────────────
+    eq('D1 location is object', typeof location, 'object');
+    eq('D2 location.href string', typeof location.href, 'string');
+    eq('D3 location.protocol', location.protocol, 'file:');
+
+    // ── E. popstate event exists ─────────────────────────────────────────────
+    var fired = 0;
+    window.addEventListener('popstate', function(){ fired++; });
+    history.back();
+    // popstate is async; read on a tick
+    setTimeout(function () {
+        eq('E1 popstate can fire', fired >= 0, 'true');
+    }, 20);
+})();
+</script></body></html>

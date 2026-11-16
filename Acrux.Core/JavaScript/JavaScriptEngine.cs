@@ -11325,6 +11325,9 @@ public class JavaScriptEngine : IDisposable
                 // The singletons the window hands out are host objects too: they are stamped with
                 // their interface so the accessors declared above — and every accessor a family
                 // declares later — are reachable on the object a page actually holds.
+                // Jint's Object.setPrototypeOf on a CLR host wrapper silently fails to link the
+                // interface level, so the interface's methods (pushState/replaceState) are unreachable
+                // from the history global. Copy them as own properties instead (HTML §7.3).
                 var singletons = [['navigator', 'Navigator'], ['location', 'Location'],
                                   ['history', 'History'], ['screen', 'Screen']];
                 for (var i = 0; i < singletons.length; i++) {
@@ -11332,6 +11335,14 @@ public class JavaScriptEngine : IDisposable
                     var level = protoMap[singletons[i][1]];
                     if (!object || !level) continue;
                     try { Object.setPrototypeOf(object, level); } catch (e) { }
+                    Object.getOwnPropertyNames(level).forEach(function (name) {
+                        if (name === 'constructor') return;
+                        if (Object.prototype.hasOwnProperty.call(object, name)) return;
+                        var desc = Object.getOwnPropertyDescriptor(level, name);
+                        if (desc) {
+                            try { Object.defineProperty(object, name, desc); } catch (e) { }
+                        }
+                    });
                 }
 
                 // HTML §5.2.5 read with Web IDL §3.7.2: every member of the Location is unforgeable, and
@@ -22297,6 +22308,29 @@ public class HistoryHost : IDomPrototypeHost
 
     public void back() => Traverse(-1);
     public void forward() => Traverse(1);
+
+    /// <summary>HTML §5.6: the interface's 'pushState' is a real method on the host class so the
+    /// bootstrap's interface shim can install it — Jint's Object.setPrototypeOf silently fails to
+    /// link the History interface level to this CLR wrapper.</summary>
+    public void pushState(object? state, string title, string? url = null)
+    {
+        while (_stack.Count > _currentIndex + 1) _stack.RemoveAt(_stack.Count - 1);
+        _stack.Add(new Entry(state, url));
+        _currentIndex = _stack.Count - 1;
+        _location.SetStateUrl(url);
+    }
+
+    public void replaceState(object? state, string title, string? url = null)
+    {
+        if (_currentIndex >= 0 && _currentIndex < _stack.Count)
+            _stack[_currentIndex] = new Entry(state, url ?? _stack[_currentIndex].Url);
+        else
+        {
+            _stack.Add(new Entry(state, url));
+            _currentIndex = _stack.Count - 1;
+        }
+        _location.SetStateUrl(url);
+    }
 
     /// <summary>HTML §5.6: the entry the history moves to, and the 'popstate' event the window hears
     /// when it is a different one. The address moves with it, because the entry remembers the one that
