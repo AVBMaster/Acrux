@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// aspect-ratio invalid values
+gc("ar-0","width:100px;aspect-ratio:0","aspect-ratio");
+gc("ar-negative","width:100px;aspect-ratio:-1","aspect-ratio");
+// aspect-ratio with width+height both set (width wins)
+const wh=document.createElement("div");wh.style.cssText="width:100px;height:50px;aspect-ratio:2/1";
+document.body.appendChild(wh);
+L("ar-wh",rect(wh));
+wh.remove();
+// aspect-ratio with only height set
+const hOnly=document.createElement("div");hOnly.style.cssText="height:60px;aspect-ratio:2/1";
+document.body.appendChild(hOnly);
+L("ar-hOnly",rect(hOnly));
+hOnly.remove();
+// aspect-ratio auto with height
+const ah=document.createElement("div");ah.style.cssText="width:100px;height:50px;aspect-ratio:auto";
+document.body.appendChild(ah);
+L("ar-auto-h",rect(ah));
+ah.remove();
+// container query in flex child
+const cqFlex=document.createElement("div");cqFlex.style.cssText="display:flex;gap:10px";
+const cqParent=document.createElement("div");cqParent.style.cssText="container-type:inline-size;flex:1;width:200px";
+const cqChild=document.createElement("div");cqChild.style.cssText="background:#fcc";cqChild.textContent="x";
+cqParent.appendChild(cqChild);cqFlex.appendChild(cqParent);
+const cqSib=document.createElement("div");cqSib.style.cssText="flex:1;background:#ccf";
+cqFlex.appendChild(cqSib);
+document.body.appendChild(cqFlex);
+L("cq-flex-parent-w",Math.round(cqParent.getBoundingClientRect().width));
+L("cq-flex-child-w",Math.round(cqChild.getBoundingClientRect().width));
+cqFlex.remove();
+// container query with fixed width
+const cqFix=document.createElement("div");cqFix.style.cssText="container-type:inline-size;width:300px";
+const cqFixChild=document.createElement("div");cqFixChild.style.cssText="padding:20px;background:#cfc";
+cqFix.appendChild(cqFixChild);document.body.appendChild(cqFix);
+L("cq-fix-child-w",Math.round(cqFixChild.getBoundingClientRect().width));
+L("cq-fix-parent-w",Math.round(cqFix.getBoundingClientRect().width));
+cqFix.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
