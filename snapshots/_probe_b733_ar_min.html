@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// aspect-ratio + min-height
+const mh=document.createElement("div");mh.style.cssText="width:100px;aspect-ratio:2/1;min-height:80px";
+document.body.appendChild(mh);
+L("ar-min-height",rect(mh));
+mh.remove();
+// aspect-ratio + max-height
+const xh=document.createElement("div");xh.style.cssText="width:200px;aspect-ratio:1/1;max-height:50px";
+document.body.appendChild(xh);
+L("ar-max-height",rect(xh));
+xh.remove();
+// aspect-ratio + border-box + padding
+const bp=document.createElement("div");bp.style.cssText="width:100px;aspect-ratio:2/1;padding:10px;box-sizing:border-box";
+document.body.appendChild(bp);
+L("ar-border-box",rect(bp));
+bp.remove();
+// aspect-ratio fraction
+const af=document.createElement("div");af.style.cssText="width:100px;aspect-ratio:3/2";
+document.body.appendChild(af);
+L("ar-3-2",rect(af));
+af.remove();
+// aspect-ratio single number
+const an=document.createElement("div");an.style.cssText="width:100px;aspect-ratio:1.5";
+document.body.appendChild(an);
+L("ar-1-5",rect(an));
+an.remove();
+// aspect-ratio auto
+const aa=document.createElement("div");aa.style.cssText="width:100px;aspect-ratio:auto";document.body.appendChild(aa);
+L("ar-auto",rect(aa));
+aa.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

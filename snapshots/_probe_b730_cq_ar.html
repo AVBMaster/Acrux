@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.cq{container-type:inline-size;container-name:main;width:200px;border:1px solid #ccc}
+.cq-child{background:#fcc}
+@container main(min-width:150px){.cq-child{background:#ccf}}
+@container main(max-width:100px){.cq-child{background:#cfc}}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// container query matching
+const cq=document.createElement("div");cq.className="cq";
+const child=document.createElement("div");child.className="cq-child";child.textContent="content";
+cq.appendChild(child);document.body.appendChild(cq);
+L("cq-child-w",Math.round(child.getBoundingClientRect().width));
+L("cq-child-h",Math.round(child.getBoundingClientRect().height));
+L("cq-parent-w",Math.round(cq.getBoundingClientRect().width));
+cq.remove();
+// container query with inline-size
+const cq2=document.createElement("div");cq2.style.cssText="container-type:inline-size;width:300px";
+const cq2child=document.createElement("div");cq2child.style.cssText="background:#fcc";
+cq2.appendChild(cq2child);document.body.appendChild(cq2);
+L("cq-inline-w",Math.round(cq2.getBoundingClientRect().width));
+L("cq-inline-child-w",Math.round(cq2child.getBoundingClientRect().width));
+cq2.remove();
+// aspect-ratio in flex
+const af=document.createElement("div");af.style.cssText="display:flex;gap:10px";
+const a1=document.createElement("div");a1.style.cssText="flex:1;aspect-ratio:16/9;background:#fcc";af.appendChild(a1);
+const a2=document.createElement("div");a2.style.cssText="flex:1;aspect-ratio:1/1;background:#ccf";af.appendChild(a2);
+af.style.width="300px";document.body.appendChild(af);
+L("ar-16-9-w",Math.round(a1.getBoundingClientRect().width));
+L("ar-16-9-h",Math.round(a1.getBoundingClientRect().height));
+L("ar-1-1-w",Math.round(a2.getBoundingClientRect().width));
+L("ar-1-1-h",Math.round(a2.getBoundingClientRect().height));
+af.remove();
+// aspect-ratio with width only
+const aw=document.createElement("div");aw.style.cssText="width:200px;aspect-ratio:4/3;background:#cfc";
+document.body.appendChild(aw);
+L("ar-width-only-w",Math.round(aw.getBoundingClientRect().width));
+L("ar-width-only-h",Math.round(aw.getBoundingClientRect().height));
+aw.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

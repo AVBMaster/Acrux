@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// test 1: aspect-ratio + min-height
+const mh=document.createElement("div");mh.style.cssText="width:100px;aspect-ratio:2/1;min-height:80px";
+document.body.appendChild(mh);
+L("ar-min-height",rect(mh));
+mh.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
