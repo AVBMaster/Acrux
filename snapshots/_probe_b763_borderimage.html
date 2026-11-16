@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// border-image-source
+gc("bis-none","border-image-source:none","border-image-source");
+gc("bis-url","border-image-source:url('x.png')","border-image-source");
+gc("bis-gradient","border-image-source:linear-gradient(red,blue)","border-image-source");
+// border-image-slice
+gc("bisl-1","border:10px solid;border-image-slice:1","border-image-slice");
+gc("bisl-50pct","border:10px solid;border-image-slice:50%","border-image-slice");
+gc("bisl-fill","border:10px solid;border-image-slice:1 fill","border-image-slice");
+gc("bisl-multi","border:10px solid;border-image-slice:10 20 30 40","border-image-slice");
+// border-image-width
+gc("biw-auto","border:10px solid;border-image-width:auto","border-image-width");
+gc("biw-px","border:10px solid;border-image-width:5px","border-image-width");
+gc("biw-pct","border:10px solid;border-image-width:50%","border-image-width");
+// border-image-outset
+gc("bio-0","border:10px solid;border-image-outset:0","border-image-outset");
+gc("bio-px","border:10px solid;border-image-outset:5px","border-image-outset");
+gc("bio-pct","border:10px solid;border-image-outset:50%","border-image-outset");
+// border-image-repeat
+gc("bir-stretch","border:10px solid;border-image-repeat:stretch","border-image-repeat");
+gc("bir-repeat","border:10px solid;border-image-repeat:repeat","border-image-repeat");
+gc("bir-round","border:10px solid;border-image-repeat:round","border-image-repeat");
+gc("bir-space","border:10px solid;border-image-repeat:space","border-image-repeat");
+gc("bir-multi","border:10px solid;border-image-repeat:round stretch","border-image-repeat");
+// border-image shorthand computed
+gc("bi-short","border-image:linear-gradient(red,blue) 1","border-image-source");
+gc("bi-short-slice","border-image:linear-gradient(red,blue) 1","border-image-slice");
+gc("bi-short-width","border-image:linear-gradient(red,blue) 1 / 10px","border-image-width");
+gc("bi-shortoutset","border-image:linear-gradient(red,blue) 1 / 10px / 5px","border-image-outset");
+gc("bi-shortrep","border-image:url(x.png) 1 round","border-image-repeat");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
