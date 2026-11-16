@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><body><p id="p1" translate="no">text</p>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    var el = document.getElementById('p1');
+    // ── A. translate reads as boolean ────────────────────────────────────────
+    eq('A1 translate reads false', el.translate, 'false');
+    el.translate = true;
+    eq('A2 set true', el.translate, 'true');
+    eq('A3 attr after true', el.getAttribute('translate'), 'yes');
+    el.translate = false;
+    eq('A4 set false', el.translate, 'false');
+    eq('A5 attr after false', el.getAttribute('translate'), 'no');
+    el.removeAttribute('translate');
+    eq('A6 absent translate', el.translate, 'true');
+    // ── B. other boolean IDL attributes ──────────────────────────────────────
+    eq('B1 hidden reads false', el.hidden, 'false');
+    eq('B2 draggable reads false', el.draggable, 'false');
+    eq('B3 spellcheck reads true', el.spellcheck, 'true');
+    eq('B4 contentEditable reads inherit', el.contentEditable, 'inherit');
+    eq('B5 autofocus reads false', el.autofocus, 'false');
+})();
+</script></body></html>
