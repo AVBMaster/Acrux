@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// document.fonts API
+L("fonts-ready-promise",document.fonts.ready instanceof Promise);
+L("fonts-add",typeof document.fonts.add==="function");
+L("fonts-delete",typeof document.fonts.delete==="function");
+L("fonts-clear",typeof document.fonts.clear==="function");
+L("fonts-check",typeof document.fonts.check==="function");
+L("fonts-load",typeof document.fonts.load==="function");
+L("fonts-entries",typeof document.fonts.entries==="function");
+L("fonts-foreach",typeof document.fonts.forEach==="function");
+L("fonts-has",typeof document.fonts.has==="function");
+// FontFace constructor
+try{
+  const ff=new FontFace("MyFont","url(data:font/woff2;base64,d09GMgAB)");
+  L("ff-instance",ff instanceof FontFace);
+  L("ff-family",ff.family);
+  L("ff-weight",ff.weight);
+  L("ff-style",ff.style);
+  L("ff-display",ff.display);
+  L("ff-status-initial",ff.status);
+  document.fonts.add(ff);
+  L("ff-in-set",document.fonts.has(ff));
+  document.fonts.delete(ff);
+  L("ff-deleted",!document.fonts.has(ff));
+}catch(e){L("ff-error",e.message);}
+// CSS Font Loading API load()
+try{
+  const p=document.fonts.load("16px serif");
+  L("load-returns-promise",p instanceof Promise);
+}catch(e){L("load-error",e.message);}
+// @font-face with FontFace
+try{
+  const ff2=new FontFace("TestDisplay","url(data:font/woff2;base64,d09GMgAB)",{weight:"bold",style:"italic",display:"swap"});
+  L("ff2-weight",ff2.weight);
+  L("ff2-style",ff2.style);
+  L("ff2-display",ff2.display);
+}catch(e){L("ff2-error",e.message);}
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
