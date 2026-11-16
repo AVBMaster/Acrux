@@ -1,0 +1,9 @@
+<!DOCTYPE html><html><body><script>
+function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+var hd = document.implementation.createHTMLDocument('T');
+eq('head', hd.head ? hd.head.tagName : 'null', 'HEAD');
+eq('body', hd.body ? hd.body.tagName : 'null', 'BODY');
+eq('documentElement', hd.documentElement ? hd.documentElement.tagName : 'null', 'HTML');
+eq('html children', Array.from(hd.documentElement.children).map(c=>c.tagName).join(','), 'HEAD,BODY');
+eq('title', hd.title, 'T');
+</script></body></html>

@@ -2419,6 +2419,9 @@ public class DOMImplementationHost : IDomPrototypeHost
         doc.DocumentElement = html;
         var head = doc.CreateElement("head");
         html.AppendChild(head);
+        // 'head' is a property of the document like 'body', not something walked out of the tree:
+        // a document built here otherwise answered 'other.head' null even though the element was in it.
+        doc.Head = head;
         if (!string.IsNullOrEmpty(title))
         {
             var titleEl = doc.CreateElement("title");

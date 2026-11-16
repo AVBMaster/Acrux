@@ -1,0 +1,38 @@
+<!DOCTYPE html><html><head><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    function tag(o){ return Object.prototype.toString.call(o); }
+    // ── A. DOMImplementation ─────────────────────────────────────────────────
+    var impl = document.implementation;
+    eq('A1 implementation is DOMImplementation', impl instanceof DOMImplementation, 'true');
+    eq('A2 hasFeature returns true', impl.hasFeature('HTML', '1.0'), 'true');
+    var hd = impl.createHTMLDocument('T');
+    eq('A3 createHTMLDocument title', hd.title, 'T');
+    eq('A4 createHTMLDocument is a Document', hd instanceof Document, 'true');
+    eq('A5 createHTMLDocument has a head', tag(hd.head), '[object HTMLHeadElement]');
+    var xd = impl.createDocument(null, 'root', null);
+    eq('A6 createDocument root tag', xd.documentElement.tagName, 'root');
+    eq('A7 createDocument is XML', xd.contentType, 'application/xml');
+
+    // ── B. DOMStringMap (dataset) ─────────────────────────────────────────────
+    var el = document.createElement('div');
+    el.setAttribute('data-a', '1');
+    el.setAttribute('data-long-name', 'x');
+    eq('B1 dataset reads kebab->camel', el.dataset.a, '1');
+    eq('B2 dataset camel from kebab', el.dataset.longName, 'x');
+    el.dataset.b = '2';
+    eq('B3 dataset write sets attribute', el.getAttribute('data-b'), '2');
+    el.dataset.longName = 'y';
+    eq('B4 dataset write camel->kebab', el.getAttribute('data-long-name'), 'y');
+    delete el.dataset.a;
+    eq('B5 dataset delete removes attribute', el.hasAttribute('data-a'), 'false');
+    eq('B6 dataset is DOMStringMap', tag(el.dataset), '[object DOMStringMap]');
+    eq('B7 dataset enumerates keys', Object.keys(el.dataset).sort().join(','), 'b,longName');
+
+    // ── C. the document the page is in keeps its own head ─────────────────────
+    eq('C1 the live document.head is the HTMLHeadElement', tag(document.head), '[object HTMLHeadElement]');
+    eq('C2 the live document.head is an HTMLHeadElement', document.head instanceof HTMLHeadElement, 'true');
+    eq('C3 DOMStringList is a named interface', typeof DOMStringList, 'function');
+})();
+</script></body></html>
