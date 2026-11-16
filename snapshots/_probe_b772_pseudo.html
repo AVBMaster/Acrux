@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+p::first-line{font-weight:bold;color:red;font-size:1.2em;text-transform:uppercase}
+p::first-letter{float:left;font-size:2em;color:blue;line-height:1}
+::selection{background:yellow;color:black}
+li::marker{color:purple;font-weight:bold}
+pre::before{content:"CODE:";color:gray}
+pre::after{content:"[END]";color:red}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// ::first-line computed
+const p=document.createElement("p");p.textContent="Hello world this is a longer paragraph of text to test first line styling behavior";document.body.appendChild(p);
+const fl=getComputedStyle(p,"::first-line");
+L("fl-weight",fl.fontWeight);
+L("fl-color",fl.color.split(" ").join("_"));
+L("fl-size",fl.fontSize);
+p.remove();
+// ::first-letter computed
+const pl=document.createElement("p");pl.textContent="Hello world";document.body.appendChild(pl);
+const fle=getComputedStyle(pl,"::first-letter");
+L("fle-float",fle.float);
+L("fle-color",fle.color.split(" ").join("_"));
+L("fle-size",fle.fontSize);
+L("fle-lh",fle.lineHeight);
+pl.remove();
+// ::selection computed
+const sd=document.createElement("div");sd.textContent="selectable";document.body.appendChild(sd);
+const sel=getComputedStyle(sd,"::selection");
+L("sel-bg",sel.backgroundColor.split(" ").join("_"));
+L("sel-color",sel.color.split(" ").join("_"));
+sd.remove();
+// ::marker computed
+const li=document.createElement("li");li.textContent="item";document.body.appendChild(li);
+const mk=getComputedStyle(li,"::marker");
+L("mk-color",mk.color.split(" ").join("_"));
+L("mk-weight",mk.fontWeight);
+li.remove();
+// ::before/::after content generation
+const pre=document.createElement("pre");pre.textContent="code here";document.body.appendChild(pre);
+const pbefore=getComputedStyle(pre,"::before");
+L("pbefore-content",pbefore.content===""?"(empty)":pbefore.content.split(" ").join("_"));
+L("pbefore-color",pbefore.color.split(" ").join("_"));
+const pafter=getComputedStyle(pre,"::after");
+L("pafter-content",pafter.content===""?"(empty)":pafter.content.split(" ").join("_"));
+L("pafter-color",pafter.color.split(" ").join("_"));
+pre.remove();
+// ::before/::after on element without content
+const div=document.createElement("div");div.textContent="no pseudo";document.body.appendChild(div);
+const dbefore=getComputedStyle(div,"::before");
+L("div-before-content",dbefore.content===""?"(empty)":dbefore.content.split(" ").join("_"));
+div.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
