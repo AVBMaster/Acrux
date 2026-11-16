@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// multicolumn with column-count
+let mc=document.createElement("div");mc.style.cssText="column-count:2;column-gap:20px;width:300px";
+mc.innerHTML="<p>First paragraph with some text.</p><p>Second paragraph.</p><p>Third paragraph.</p><p>Fourth.</p>";
+document.body.appendChild(mc);
+L("colcount-2-w",Math.round(mc.getBoundingClientRect().width));
+L("colcount-2-h",Math.round(mc.getBoundingClientRect().height));
+L("column-gap",getComputedStyle(mc).columnGap);
+L("column-count",getComputedStyle(mc).columnCount);
+mc.remove();
+// multicolumn with column-width
+mc=document.createElement("div");mc.style.cssText="column-width:100px;column-gap:10px;width:300px";
+mc.innerHTML="<p>Text here.</p><p>More text.</p>";
+document.body.appendChild(mc);
+L("colwidth-100-w",Math.round(mc.getBoundingClientRect().width));
+mc.remove();
+// columns shorthand
+mc=document.createElement("div");mc.style.cssText="columns:2 100px;width:400px";
+mc.innerHTML="<p>Text.</p><p>More.</p>";
+document.body.appendChild(mc);
+L("columns-shorthand-w",Math.round(mc.getBoundingClientRect().width));
+mc.remove();
+// column-span all
+mc=document.createElement("div");mc.style.cssText="column-count:2;width:300px";
+mc.innerHTML="<p>Col1</p><h2 style='column-span:all'>Full</h2><p>Col2</p>";
+document.body.appendChild(mc);
+const spanAll=mc.querySelector("h2");
+L("colspan-all-w",Math.round(spanAll.getBoundingClientRect().width));
+mc.remove();
+// column-rule
+mc=document.createElement("div");mc.style.cssText="column-count:2;column-rule:2px solid red;width:300px";
+mc.innerHTML="<p>Col1</p><p>Col2</p>";
+document.body.appendChild(mc);
+L("column-rule-style",getComputedStyle(mc).columnRuleStyle);
+L("column-rule-width",getComputedStyle(mc).columnRuleWidth);
+L("column-rule-color",getComputedStyle(mc).columnRuleColor.split(" ").join("_"));
+mc.remove();
+// column-fill
+mc=document.createElement("div");mc.style.cssText="column-count:2;column-fill:balance;width:300px;height:100px";
+mc.innerHTML="<p>Col1</p><p>Col2</p>";
+document.body.appendChild(mc);
+L("column-fill",getComputedStyle(mc).columnFill);
+mc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
