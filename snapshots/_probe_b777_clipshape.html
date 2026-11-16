@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.box{width:80px;height:60px;background:#fcc;display:inline-block;margin:5px;vertical-align:top}
+</style></head><body>
+<div id="out" style="font:12px monospace"></div>
+<div>
+<div class="box" style="clip-path:circle(50%)">C50</div>
+<div class="box" style="clip-path:ellipse(50% 40%)">E40</div>
+<div class="box" style="clip-path:polygon(0 0,100% 0,100% 100%)">P3</div>
+<div class="box" style="clip-path:inset(10px round 5px)">IR</div>
+<div class="box" style="clip-path:path('M 0 0 L 80 0 L 40 60 Z')">PATH</div>
+<div class="box" style="shape-outside:circle(50%);float:left;width:40px;height:40px;background:#ccf">SO</div>
+<div style="width:40px;display:inline-block">text after shape</div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// clip-path computed values
+gc("cp-circle","clip-path:circle(50%)","clip-path");
+gc("cp-circle-at","clip-path:circle(30% at 50% 50%)","clip-path");
+gc("cp-ellipse","clip-path:ellipse(50% 30%)","clip-path");
+gc("cp-polygon","clip-path:polygon(0 0,100% 0,50% 100%)","clip-path");
+gc("cp-inset","clip-path:inset(10px)","clip-path");
+gc("cp-inset-round","clip-path:inset(10px round 5px)","clip-path");
+gc("cp-path","clip-path:path('M 0 0 L 10 0 L 5 10 Z')","clip-path");
+gc("cp-none","clip-path:none","clip-path");
+// shape-outside
+gc("so-circle","shape-outside:circle(50%)","shape-outside");
+gc("so-ellipse","shape-outside:ellipse(50% 50%)","shape-outside");
+gc("so-inset","shape-outside:inset(10px)","shape-outside");
+gc("so-polygon","shape-outside:polygon(0 0,100% 0,50% 100%)","shape-outside");
+gc("so-none","shape-outside:none","shape-outside");
+// shape-margin
+gc("sm-5px","shape-margin:5px","shape-margin");
+gc("sm-10pct","shape-margin:10%","shape-margin");
+gc("sm-0","shape-margin:0","shape-margin");
+// mask
+gc("mask-none","mask:none","mask");
+gc("mask-image","mask:url('x.png')","mask-image");
+gc("mask-size","mask:url('x.png') center/cover","mask-size");
+gc("mask-position","mask:url('x.png') center","mask-position");
+gc("mask-repeat","mask:url('x.png') repeat","mask-repeat");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
