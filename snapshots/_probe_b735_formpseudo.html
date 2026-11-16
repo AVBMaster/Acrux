@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+input:focus{background:#cfc}
+:focus-within{background:#ccf}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// :focus
+const inp=document.createElement("input");inp.type="text";document.body.appendChild(inp);
+L("focus-not",inp.matches(":focus"));
+L("focus-visible-not",inp.matches(":focus-visible"));
+// :focus-within on parent
+const wrap=document.createElement("div");wrap.className="fw";
+const inner=document.createElement("input");inner.type="text";
+wrap.appendChild(inner);document.body.appendChild(wrap);
+L("focus-within-not",wrap.matches(":focus-within"));
+// :disabled / :enabled on various elements
+const ta=document.createElement("textarea");ta.disabled=true;document.body.appendChild(ta);
+L("textarea-disabled",ta.matches(":disabled"));
+L("textarea-enabled",ta.matches(":enabled"));
+ta.remove();
+const sel=document.createElement("select");document.body.appendChild(sel);
+L("select-enabled",sel.matches(":enabled"));
+sel.remove();
+const btn=document.createElement("button");btn.textContent="btn";document.body.appendChild(btn);
+L("button-enabled",btn.matches(":enabled"));
+btn.remove();
+// :read-only / :read-write
+const ro=document.createElement("input");ro.readOnly=true;document.body.appendChild(ro);
+L("readonly-match",ro.matches(":read-only"));
+L("readwrite-nomatch",ro.matches(":read-write"));
+ro.remove();
+const rw=document.createElement("input");rw.type="text";document.body.appendChild(rw);
+L("readwrite-match",rw.matches(":read-write"));
+rw.remove();
+// :in-range / :out-of-range
+const ir=document.createElement("input");ir.type="number";ir.min="1";ir.max="10";ir.value="5";
+document.body.appendChild(ir);
+L("in-range",ir.matches(":in-range"));
+L("out-of-range",ir.matches(":out-of-range"));
+ir.remove();
+const oor=document.createElement("input");oor.type="number";oor.min="1";oor.max="10";oor.value="20";
+document.body.appendChild(oor);
+L("out-of-range-val",oor.matches(":out-of-range"));
+oor.remove();
+// :indeterminate
+const cb=document.createElement("input");cb.type="checkbox";cb.indeterminate=true;document.body.appendChild(cb);
+L("indeterminate",cb.matches(":indeterminate"));
+cb.remove();
+// :default
+const def=document.createElement("input");def.type="checkbox";def.setAttribute("checked","");document.body.appendChild(def);
+L("default-checked",def.matches(":default"));
+def.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
