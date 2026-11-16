@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// container query units computed in container
+function gcInContainer(tag,containerCss,innerCss,prop){
+  const container=document.createElement("div");
+  container.style.cssText=containerCss;
+  const child=document.createElement("div");
+  child.setAttribute("style",innerCss);
+  container.appendChild(child);document.body.appendChild(container);
+  const v=getComputedStyle(child).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));
+  container.remove();
+}
+// cqw (1% of container width)
+gcInContainer("cqw-100","container-type:inline-size;width:200px","width:10cqw","width");
+gcInContainer("cqw-50","container-type:inline-size;width:400px","width:25cqw","width");
+// cqh (1% of container height)
+gcInContainer("cqh-100","container-type:size;width:200px;height:200px","height:10cqh","height");
+gcInContainer("cqh-50","container-type:size;width:200px;height:100px","height:25cqh","height");
+// cqi (inline size)
+gcInContainer("cqi-50","container-type:inline-size;width:300px","width:10cqi","width");
+// cqb (block size)
+gcInContainer("cqb-50","container-type:size;width:200px;height:200px","padding:10cqb","padding-top");
+// @container conditions
+gcInContainer("cq-min-width-match","container-type:inline-size;width:200px","color:blue","color");
+gcInContainer("cq-width-150","container-type:inline-size;width:200px","background:red","background-color");
+// container-type size on auto-height
+gc("ct-size-auto-h","container-type:size;width:100px","container-type");
+// container shorthand: type/name
+gc("cs-type","container:main/inline-size","container-type");
+gc("cs-name","container:main/inline-size","container-name");
+gc("cs-none","container:none","container-type");
+// aspect-ratio edge: 0 and negative
+gc("ar-zero","aspect-ratio:0","aspect-ratio");
+gc("ar-neg","aspect-ratio:-1","aspect-ratio");
+gc("ar-two-num","aspect-ratio:3/2","aspect-ratio");
+gc("ar-dec","aspect-ratio:1.5","aspect-ratio");
+gc("ar-auto","aspect-ratio:auto","aspect-ratio");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
