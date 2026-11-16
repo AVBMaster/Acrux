@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.width)+"x"+Math.round(r.height);}
+// aspect-ratio in grid
+const g=document.createElement("div");g.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:300px";
+const ga=document.createElement("div");ga.style.cssText="aspect-ratio:16/9;background:#fcc";g.appendChild(ga);
+const gb=document.createElement("div");gb.style.cssText="aspect-ratio:1/1;background:#ccf";g.appendChild(gb);
+document.body.appendChild(g);
+L("grid-ar-16-9",rect(ga));
+L("grid-ar-1-1",rect(gb));
+g.remove();
+// aspect-ratio with min-height
+const mh=document.createElement("div");mh.style.cssText="width:100px;aspect-ratio:2/1;min-height:80px";
+document.body.appendChild(mh);
+L("ar-min-height",rect(mh));
+mh.remove();
+// aspect-ratio with max-height
+const xh=document.createElement("div");xh.style.cssText="width:200px;aspect-ratio:1/1;max-height:50px";
+document.body.appendChild(xh);
+L("ar-max-height",rect(xh));
+xh.remove();
+// aspect-ratio with padding (border-box)
+const bp=document.createElement("div");bp.style.cssText="width:100px;aspect-ratio:2/1;padding:10px;box-sizing:border-box";
+document.body.appendChild(bp);
+L("ar-border-box",rect(bp));
+bp.remove();
+// aspect-ratio fraction values
+const af=document.createElement("div");af.style.cssText="width:100px;aspect-ratio:3/2";
+document.body.appendChild(af);
+L("ar-3-2",rect(af));
+af.remove();
+// aspect-ratio single number
+const an=document.createElement("div");an.style.cssText="width:100px;aspect-ratio:1.5";
+document.body.appendChild(an);
+L("ar-1-5",rect(an));
+an.remove();
+// aspect-ratio auto
+const aa=document.createElement("div");aa.style.cssText="width:100px;aspect-ratio:auto";document.body.appendChild(aa);
+L("ar-auto",rect(aa));
+aa.remove();
+// flex column aspect-ratio
+const fc=document.createElement("div");fc.style.cssText="display:flex;flex-direction:column;width:200px";
+const fc1=document.createElement("div");fc1.style.cssText="aspect-ratio:2/1;width:100px";fc.appendChild(fc1);
+document.body.appendChild(fc);
+L("flex-col-ar",rect(fc1));
+fc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
