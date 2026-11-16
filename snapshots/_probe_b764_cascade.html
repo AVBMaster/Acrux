@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+#important-id{color:red !important}
+#important-class{color:blue}
+#important-inline{color:green}
+.ts-1{transition-property:width;height;transition-duration:0.3s}
+.ts-2{transition-property:all;transition-duration:0.2s}
+.ts-3{transition-property:none;transition-duration:0.1s}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// !important beats inline
+const a=document.createElement("div");a.id="important-id";a.style.color="blue";document.body.appendChild(a);
+L("imp-id-vs-inline",getComputedStyle(a).color.split(" ").join("_"));
+a.remove();
+// !important beats class
+const b=document.createElement("div");b.className="important-class";b.style.color="red";document.body.appendChild(b);
+L("imp-class-vs-inline",getComputedStyle(b).color.split(" ").join("_"));
+b.remove();
+// !important with ID selector
+const c=document.createElement("div");c.id="important-inline";c.style.color="purple";document.body.appendChild(c);
+L("imp-inline-color",getComputedStyle(c).color.split(" ").join("_"));
+c.remove();
+// transition-property with multiple values
+const ts1=document.createElement("div");ts1.className="ts-1";document.body.appendChild(ts1);
+L("tp-multi",getComputedStyle(ts1).transitionProperty.split(" ").join("_"));
+ts1.remove();
+// transition-property all
+const ts2=document.createElement("div");ts2.className="ts-2";document.body.appendChild(ts2);
+L("tp-all",getComputedStyle(ts2).transitionProperty);
+ts2.remove();
+// transition-property none
+const ts3=document.createElement("div");ts3.className="ts-3";document.body.appendChild(ts3);
+L("tp-none",getComputedStyle(ts3).transitionProperty);
+ts3.remove();
+// transition-duration and timing-function
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("td-multi","transition:width 0.3s,height 0.5s","transition-duration");
+gc("tt-multi","transition:width 0.3s ease,height 0.5s linear","transition-timing-function");
+gc("td-single","transition:width 0.5s","transition-duration");
+gc("tt-single","transition:width 0.5s ease-in","transition-timing-function");
+gc("td-zero","transition:width 0s","transition-duration");
+// @media print
+const mp=document.createElement("div");mp.className="print-test";document.body.appendChild(mp);
+L("print-match",matchMedia("print").matches);
+mp.remove();
+// @media screen
+L("screen-match",matchMedia("screen").matches);
+// specificity: id > class > type
+const spec=document.createElement("div");spec.id="spec-id";spec.className="spec-class";
+spec.innerHTML="<span id='inner'>x</span>";
+document.body.appendChild(spec);
+L("spec-id-vs-class",getComputedStyle(spec.querySelector("#inner")).color==="rgb(255, 0, 0)"?"red-wins":getComputedStyle(spec.querySelector("#inner")).color.split(" ").join("_"));
+spec.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
