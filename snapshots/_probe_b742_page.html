@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+@page{size:A4;margin:2cm}
+@page :first{margin-top:3cm}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// page-break properties
+gc("pbb-always","page-break-before:always","page-break-before");
+gc("pbb-auto","page-break-before:auto","page-break-before");
+gc("pbb-avoid","page-break-before:avoid","page-break-before");
+gc("pba-always","page-break-after:always","page-break-after");
+gc("pbi-avoid","page-break-inside:avoid","page-break-inside");
+gc("pbi-auto","page-break-inside:auto","page-break-inside");
+// break properties (modern)
+gc("bk-before-col","break-before:column","break-before");
+gc("bk-before-page","break-before:page","break-before");
+gc("bk-after-col","break-after:column","break-after");
+gc("bk-inside-avoid","break-inside:avoid","break-inside");
+gc("bk-inside-avoid-page","break-inside:avoid-page","break-inside");
+gc("bk-inside-avoid-column","break-inside:avoid-column","break-inside");
+// orphans and widows
+gc("orphans-3","orphans:3","orphans");
+gc("widows-2","widows:2","widows");
+// box-decoration-break
+gc("bdb-clone","box-decoration-break:clone","box-decoration-break");
+gc("bdb-slice","box-decoration-break:slice","box-decoration-break");
+// CSS columns column-fill balance/auto
+gc("cf-balance","column-fill:balance","column-fill");
+gc("cf-auto","column-fill:auto","column-fill");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
