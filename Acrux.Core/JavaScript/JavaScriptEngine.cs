@@ -13936,7 +13936,7 @@ public class JavaScriptEngine : IDisposable
                             Object.defineProperty(host, '__ioOptions', { value: null, enumerable: false,
                                 configurable: true, writable: true });
                         }
-                        if (!host.__ioOptions) host.__ioOptions = { root: null, rootMargin: '0px', thresholds: [0] };
+                        if (!host.__ioOptions) host.__ioOptions = { root: null, rootMargin: '0px 0px 0px 0px', thresholds: [0] };
                         return host.__ioOptions;
                     }
                     Object.defineProperty(proto, 'root', { configurable: true, enumerable: true,

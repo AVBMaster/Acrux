@@ -1,0 +1,43 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. IntersectionObserver ──────────────────────────────────────────────
+    eq('A1 IO is fn', typeof IntersectionObserver, 'function');
+    var io = new IntersectionObserver(function(){});
+    eq('A2 root default', io.root === null, 'true');
+    eq('A3 rootMargin default', io.rootMargin, '0px 0px 0px 0px');
+    eq('A4 thresholds default', JSON.stringify(io.thresholds), '[0]');
+    eq('A5 observe no-throw', (function(){ io.observe(document.getElementById('root')); io.unobserve(document.getElementById('root')); return 'ok'; })(), 'ok');
+    eq('A6 disconnect no-throw', (function(){ io.disconnect(); return 'ok'; })(), 'ok');
+    eq('A7 takeRecords is array', Array.isArray(io.takeRecords()), 'true');
+
+    // ── B. ResizeObserver ────────────────────────────────────────────────────
+    eq('B1 RO is fn', typeof ResizeObserver, 'function');
+    var ro = new ResizeObserver(function(){});
+    eq('B2 RO observe no-throw', (function(){ ro.observe(document.createElement('div')); ro.unobserve(document.createElement('div')); return 'ok'; })(), 'ok');
+    eq('B3 RO disconnect no-throw', (function(){ ro.disconnect(); return 'ok'; })(), 'ok');
+    eq('B4 RO takeRecords', Array.isArray(ro.takeRecords()), 'true');
+
+    // ── C. MutationObserver ──────────────────────────────────────────────────
+    eq('C1 MO is fn', typeof MutationObserver, 'function');
+    var mo = new MutationObserver(function(){});
+    eq('C2 MO observe no-throw', (function(){ mo.observe(document.documentElement, {childList:true}); return 'ok'; })(), 'ok');
+    eq('C3 MO takeRecords', Array.isArray(mo.takeRecords()), 'true');
+    eq('C4 MO disconnect no-throw', (function(){ mo.disconnect(); return 'ok'; })(), 'ok');
+
+    // ── D. BroadcastChannel ──────────────────────────────────────────────────
+    eq('D1 BC is fn', typeof BroadcastChannel, 'function');
+    var bc = new BroadcastChannel('ch');
+    eq('D2 BC name', bc.name, 'ch');
+    eq('D3 BC postMessage no-throw', (function(){ bc.postMessage({a:1}); return 'ok'; })(), 'ok');
+    eq('D4 BC close no-throw', (function(){ bc.close(); return 'ok'; })(), 'ok');
+
+    // ── E. ReportingObserver ─────────────────────────────────────────────────
+    eq('E1 ReportingObserver is fn', typeof ReportingObserver, 'function');
+    var ro2 = new ReportingObserver(function(){});
+    eq('E2 RO observe no-throw', (function(){ ro2.observe(); return 'ok'; })(), 'ok');
+    eq('E3 RO takeRecords', Array.isArray(ro2.takeRecords()), 'true');
+    eq('E4 RO disconnect no-throw', (function(){ ro2.disconnect(); return 'ok'; })(), 'ok');
+})();
+</script></body></html>
