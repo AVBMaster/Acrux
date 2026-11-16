@@ -162,10 +162,15 @@ static void DrainTimers(JavaScriptEngine js)
 {
     // Run every timer that is due, then wait out the one that is next, the way the shell's pump
     // does — a case that checks something a setTimeout answers has to let that timer actually
-    // arrive. Bounded so a mistaken setInterval cannot hold the harness.
+    // arrive. Bounded so a mistaken setInterval cannot hold the harness. Microtasks (promise
+    // .then callbacks) are drained each round too, so an async case that resolves a promise
+    // after a timer fires has its callback run before the harness moves on.
     for (int round = 0; round < 400; round++)
     {
         try { js.IntegrationService?.ProcessTimers(); } catch { }
+        // Drain the microtask queue so promise .then callbacks fire; without this the
+        // async surface (crypto.subtle, fetch, streams) has no way to deliver its results.
+        try { js.IntegrationService?.MicrotaskQueue?.DrainMicrotasks(); } catch { }
         // A request the page sent answers on a task of its own; the pump keeps running while the
         // engine is holding one, or the job it queues would never be reached.
         bool waiting = false;

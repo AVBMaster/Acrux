@@ -1,0 +1,46 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. crypto.subtle async surface ────────────────────────────────────────
+    var subtle = crypto.subtle;
+    var enc = new TextEncoder().encode('test data');
+    // ── B. digest operations ──────────────────────────────────────────────────
+    Promise.all([
+        crypto.subtle.digest('SHA-256', enc),
+        crypto.subtle.digest('SHA-384', enc),
+        crypto.subtle.digest('SHA-512', enc)
+    ]).then(function(hashes) {
+        eq('B1 SHA-256 len', new Uint8Array(hashes[0]).length, '32');
+        eq('B2 SHA-384 len', new Uint8Array(hashes[1]).length, '48');
+        eq('B3 SHA-512 len', new Uint8Array(hashes[2]).length, '64');
+        // different input gives different hash
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode('different'));
+    }).then(function(h2) {
+        return crypto.subtle.digest('SHA-256', enc).then(function(h1) {
+            var h1hex = Array.from(new Uint8Array(h1)).map(function(b){ return b.toString(16); }).join(',');
+            var h2hex = Array.from(new Uint8Array(h2)).map(function(b){ return b.toString(16); }).join(',');
+            eq('B4 different inputs give different hashes', h1hex !== h2hex, 'true');
+        });
+    });
+    // ── C. generateKey + encrypt/decrypt roundtrip ───────────────────────────
+    crypto.subtle.generateKey(
+        {name: 'AES-GCM', length: 256},
+        false,
+        ['encrypt', 'decrypt']
+    ).then(function(key) {
+        eq('C1 key type', key.type, 'secret');
+        eq('C2 key algorithm', key.algorithm.name, 'AES-GCM');
+        eq('C3 key extractable', key.extractable, 'false');
+        eq('C4 key usages', key.usages.join(','), 'encrypt,decrypt');
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        var data = new TextEncoder().encode('secret message');
+        return crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, key, data).then(function(ct) {
+            eq('C5 ciphertext length > plaintext', new Uint8Array(ct).length > data.length, 'true');
+            return crypto.subtle.decrypt({name:'AES-GCM', iv:iv}, key, ct);
+        }).then(function(pt) {
+            eq('C6 decrypt roundtrip', new TextDecoder().decode(pt), 'secret message');
+        });
+    });
+})();
+</script></body></html>
