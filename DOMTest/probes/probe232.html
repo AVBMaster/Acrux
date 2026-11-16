@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. crypto.getRandomValues ────────────────────────────────────────────
+    eq('A1 crypto is object', typeof crypto, 'object');
+    eq('A2 getRandomValues is fn', typeof crypto.getRandomValues, 'function');
+    var arr = new Uint8Array(16);
+    var ret = crypto.getRandomValues(arr);
+    eq('A3 returns same array', ret === arr, 'true');
+    var nonZero = Array.from(arr).some(function(v){ return v !== 0; });
+    eq('A4 non-zero output', nonZero, 'true');
+    var arr2 = new Uint32Array(4);
+    crypto.getRandomValues(arr2);
+    eq('A5 Uint32Array works', arr2.length, '4');
+    // ── B. crypto.randomUUID ─────────────────────────────────────────────────
+    eq('B1 randomUUID is fn', typeof crypto.randomUUID, 'function');
+    var uuid = crypto.randomUUID();
+    var uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    eq('B2 UUID v4 format', uuidRe.test(uuid), 'true');
+    eq('B3 UUID length', uuid.length, '36');
+    var uuid2 = crypto.randomUUID();
+    eq('B4 UUIDs differ', uuid !== uuid2, 'true');
+    // ── C. crypto.subtle exists ──────────────────────────────────────────────
+    eq('C1 subtle is object', typeof crypto.subtle, 'object');
+    eq('C2 digest is fn', typeof crypto.subtle.digest, 'function');
+    eq('C3 encrypt is fn', typeof crypto.subtle.encrypt, 'function');
+    eq('C4 decrypt is fn', typeof crypto.subtle.decrypt, 'function');
+    eq('C5 generateKey is fn', typeof crypto.subtle.generateKey, 'function');
+    eq('C6 importKey is fn', typeof crypto.subtle.importKey, 'function');
+    eq('C7 exportKey is fn', typeof crypto.subtle.exportKey, 'function');
+    // ── D. crypto.subtle.digest SHA-256 ──────────────────────────────────────
+    var enc = new TextEncoder().encode('hello');
+    var digestPromise = crypto.subtle.digest('SHA-256', enc);
+    eq('D1 digest returns Promise', digestPromise instanceof Promise, 'true');
+    digestPromise.then(function(hash) {
+        var bytes = new Uint8Array(hash);
+        eq('D2 SHA-256 hash length', bytes.length, '32');
+        var hex = Array.from(bytes).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+        eq('D3 SHA-256 hex length', hex.length, '64');
+        // SHA-256('hello') = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+        eq('D4 SHA-256 hello', hex, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+    }).catch(function(e) {
+        eq('D4 SHA-256 hello', 'ERR:'+e.name, '2cf24dba...');
+    });
+    // ── E. digest SHA-1 ──────────────────────────────────────────────────────
+    crypto.subtle.digest('SHA-1', enc).then(function(hash) {
+        var bytes = new Uint8Array(hash);
+        eq('E1 SHA-1 hash length', bytes.length, '20');
+    }).catch(function(e) {
+        eq('E1 SHA-1 hash length', 'ERR:'+e.name, '20');
+    });
+    // ── F. bad algorithm throws ──────────────────────────────────────────────
+    crypto.subtle.digest('BAD-ALG', enc).then(function() {
+        eq('F1 bad algo rejects', 'no-reject', 'Reject');
+    }, function(e) {
+        eq('F1 bad algo rejects', 'Reject', 'Reject');
+    });
+})();
+</script></body></html>
