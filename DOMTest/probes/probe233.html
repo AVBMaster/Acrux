@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. navigator.getGamepads ─────────────────────────────────────────────
+    eq('A1 getGamepads is fn', typeof navigator.getGamepads, 'function');
+    eq('A2 returns array of 4', navigator.getGamepads().length, '4');
+    eq('A3 all null (no gamepad)', navigator.getGamepads().every(function(g){ return g === null; }), 'true');
+    // ── B. navigator.mediaDevices ────────────────────────────────────────────
+    eq('B1 mediaDevices is object', typeof navigator.mediaDevices, 'object');
+    eq('B2 mediaDevices not null', navigator.mediaDevices !== null, 'true');
+    eq('B3 getSupportedConstraints is fn', typeof navigator.mediaDevices.getSupportedConstraints, 'function');
+    // ── C. CSS.registerProperty ──────────────────────────────────────────────
+    eq('C1 registerProperty is fn', typeof CSS.registerProperty, 'function');
+    eq('C2 valid registration', (function(){ try { CSS.registerProperty({name:'--test-x', syntax:'<length>', inherits:false, initialValue:'0px'}); return 'ok'; } catch(e) { return 'ERR:'+e.name; } })(), 'ok');
+    eq('C3 bad name throws SyntaxError', (function(){ try { CSS.registerProperty({name:'bad'}); return 'no-throw'; } catch(e) { return e.name; } })(), 'SyntaxError');
+    // ── D. previously-pinned surfaces still intact ───────────────────────────
+    eq('D1 CSS.supports', typeof CSS.supports, 'function');
+    eq('D2 CSS.escape', typeof CSS.escape, 'function');
+    eq('D3 navigator.userAgent', typeof navigator.userAgent, 'string');
+    eq('D4 speechSynthesis', typeof speechSynthesis, 'object');
+})();
+</script></body></html>

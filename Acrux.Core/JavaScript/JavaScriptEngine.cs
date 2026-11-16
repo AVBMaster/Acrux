@@ -22049,6 +22049,27 @@ public class CssObjectHost
         return sb.ToString();
     }
 
+    /// <summary>CSS Properties and Values API §4: register a custom property so the engine holds it
+    /// by name with its syntax, inheritance and initial value. A name that does not start with
+    /// '--' is refused with a SyntaxError (measured on the reference).</summary>
+    public void registerProperty(object? definition)
+    {
+        var read = definition as System.Collections.Generic.IDictionary<string, object?>
+            ?? throw new Acrux.Core.Dom.DOMException("Failed to execute 'registerProperty' on 'CSS': "
+                + "parameter 1 is not of type 'PropertyDefinition'.", "TypeError");
+        var key = read.TryGetValue("name", out var nameVal) ? nameVal?.ToString() ?? "" : "";
+        if (key.Length < 3 || !key.StartsWith("--", StringComparison.Ordinal))
+            throw new Acrux.Core.Dom.DOMException("Failed to execute 'registerProperty' on 'CSS': "
+                + "The name provided must start with '--'.", "SyntaxError");
+        RegisteredProperties[key] = (
+            read.TryGetValue("syntax", out var sv) ? sv?.ToString() ?? "*" : "*",
+            read.TryGetValue("inherits", out var iv) && iv is true,
+            read.TryGetValue("initialValue", out var ivv) ? ivv?.ToString() : null);
+    }
+
+    internal static readonly System.Collections.Generic.Dictionary<string,
+        (string Syntax, bool Inherits, string? InitialValue)> RegisteredProperties = new();
+
     private static string HexEscape(int codePoint)
     {
         var hex = codePoint.ToString("X");
@@ -22141,6 +22162,15 @@ public class NavigatorHost : IDomPrototypeHost
     public bool onLine => true;
     public bool javaEnabled() => false;
 
+    /// <summary>Gamepad §5: no gamepad is connected, so the interface answers four nulls — the
+    /// slot count matches what the reference returns for a page with no connected gamepads.</summary>
+    public object?[] getGamepads() => new object?[] { null, null, null, null };
+
+    /// <summary>MediaDevices §2: the engine has no capture device wired in. The methods (enumerate,
+    /// getUserMedia) are JS-side; the property is a real CLR getter so it is reachable on the wrapper.</summary>
+    public object? mediaDevices => MediaDevicesInstance ??= new NavigatorMediaDevices();
+    internal static NavigatorMediaDevices? MediaDevicesInstance;
+
     /// <summary>Beacon (Beacon §2): a fire-and-forget POST the page never waits on. The body — a
     /// string, or the text of a Blob/File — is queued as an async request and the call answers
     /// whether the queue took it, which is all the interface lets a page observe.</summary>
@@ -22162,6 +22192,12 @@ public class NavigatorHost : IDomPrototypeHost
         }
         catch { return false; }
     }
+}
+
+public class NavigatorMediaDevices
+{
+    public object getSupportedConstraints() => new { };
+    public void setCaptureHandleConfig() { }
 }
 
 public class LocationHost : IDomPrototypeHost, IDomEnumerableHost
