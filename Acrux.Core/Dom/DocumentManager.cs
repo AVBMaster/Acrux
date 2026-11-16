@@ -42,6 +42,7 @@ public class DocumentManager
     public async Task<DocumentLoadResult> LoadHtmlAsync(string html, string? baseUrl = null, float viewportWidth = 1024f, float viewportHeight = 768f, float dpiScale = 1.0f)
     {
         Document doc;
+        var parseT0 = Acrux.Core.PerfTrace.Now();
         if (UseCustomParser)
         {
             doc = HtmlDocumentParserIntegration.ParseHtml(html);
@@ -62,27 +63,25 @@ public class DocumentManager
 
         var styleComputer = new StyleComputer();
         styleComputer.AddStylesheet(_uaStylesheet, Css.Resolver.CascadeOrigin.UserAgent);
+        Acrux.Core.PerfTrace.TraceMs("doc.Parse", parseT0);
 
         try
         {
+            var styleT0 = Acrux.Core.PerfTrace.Now();
             await LoadStylesFromHtml(doc, styleComputer, baseUrl);
             styleComputer.ComputeStyles(doc, viewportWidth, viewportHeight, resolutionDppx: dpiScale);
+            Acrux.Core.PerfTrace.TraceMs("doc.Styles", styleT0);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[CSS] Error computing styles: {ex}");
         }
 
-        try
-        {
-            var layoutEngine = new Acrux.Core.Layout.LayoutEngine();
-            layoutEngine.Layout(doc, viewportWidth, viewportHeight, dpiScale);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Layout] Error during layout: {ex}");
-        }
-
+        // No layout here: its result was assigned to a local and never read — the
+        // DocumentLoadResult carries only the document and its style computer, and the
+        // page host lays the tree out itself on its first frame (and again on any
+        // viewport change, which this fixed-size pass could not serve anyway). Dropping
+        // the call removes one full layout walk per navigation.
         return new DocumentLoadResult(doc, styleComputer);
     }
 

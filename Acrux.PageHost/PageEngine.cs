@@ -95,6 +95,9 @@ public sealed class PageEngine : IDisposable
     private bool _styleDirty = true;
     private bool _layoutDirty = true;
     private bool _dlDirty = true;
+    /// <summary>True until the first UpdatePipeline finishes. Used to attribute the one
+    /// big cold first frame to its stages (style/layout/paint) once, via PerfTrace.</summary>
+    private bool _firstPipeline = true;
     private DisplayList? _cachedDl;
     private SKColor _cachedBg = SKColors.White;
     private long _dlSerial;
@@ -2350,6 +2353,11 @@ public sealed class PageEngine : IDisposable
         long t0 = _animTrace ? Stopwatch.GetTimestamp() : 0;
         long t1 = t0;
         long tStyle = t0;
+        // Attribute the one big cold first frame to its stages: updMs shows a single
+        // multi-second number but not where it went. Cleared at the end of the pass.
+        bool firstFrame = _firstPipeline;
+        long ffStart = firstFrame ? Stopwatch.GetTimestamp() : 0;
+        long ffAfterStyle = 0, ffAfterLayout = 0;
 
         // A live effect is itself a reason to run the pipeline again: nothing else
         // about the page has changed, but its style has. Asking for the next pass
@@ -2387,6 +2395,7 @@ public sealed class PageEngine : IDisposable
                 _styleComputer.ComputeStyles(_document, _viewportW, _viewportH, resolutionDppx: _dpi * _res);
                 _stStylePass++;
                 _styleDirty = false;
+                if (firstFrame) ffAfterStyle = Stopwatch.GetTimestamp();
                 // Style can change transforms and box-affecting values without a
                 // layout pass; the cached damage verdict is only good until then.
                 _layoutGeneration++;
@@ -2441,6 +2450,7 @@ public sealed class PageEngine : IDisposable
             _incremental.Layout(_document, _viewportW, _viewportH, _dpi, 16f);
             _layoutDirty = false;
             _layoutGeneration++;
+            if (firstFrame) ffAfterLayout = Stopwatch.GetTimestamp();
 
             var bodyBox = _document.Body?.LayoutBox;
             _contentW = bodyBox?.BorderBox.Width ?? _viewportW;
@@ -2510,6 +2520,17 @@ public sealed class PageEngine : IDisposable
                 catch { }
             }
             rebuilt = true;
+        }
+
+        if (firstFrame)
+        {
+            _firstPipeline = false;
+            long now = Stopwatch.GetTimestamp();
+            double ms = (double)(now - ffStart) * 1000 / Stopwatch.Frequency;
+            double styleMs = ffAfterStyle > 0 ? (double)(ffAfterStyle - ffStart) * 1000 / Stopwatch.Frequency : 0;
+            double layoutMs = ffAfterLayout > 0 ? (double)(ffAfterLayout - ffAfterStyle) * 1000 / Stopwatch.Frequency : 0;
+            double restMs = ms - styleMs - layoutMs;
+            Acrux.Core.PerfTrace.Trace($"pipeline.firstframe total={ms:F0}ms style={styleMs:F0} layout={layoutMs:F0} paint+rest={restMs:F0}");
         }
 
         return rebuilt;
