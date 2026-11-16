@@ -1,0 +1,55 @@
+<!DOCTYPE html><html><body><div id="root"><p id="p1">hello</p><span class="cls">world</span></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. document properties ───────────────────────────────────────────────
+    eq('A1 documentElement', document.documentElement.tagName, 'HTML');
+    eq('A2 body', document.body.tagName, 'BODY');
+    eq('A3 head', document.head.tagName, 'HEAD');
+    eq('A4 title string', typeof document.title, 'string');
+    eq('A5 readyState', document.readyState, 'complete');
+    eq('A6 doctype', document.doctype === null || document.doctype.name === 'html', 'true');
+    eq('A7 characterSet', document.characterSet, 'UTF-8');
+    eq('A8 contentType', document.contentType, 'text/html');
+    eq('A9 domain string', typeof document.domain, 'string');
+    eq('A10 URL string', typeof document.URL, 'string');
+    // ── B. document query methods ────────────────────────────────────────────
+    eq('B1 getElementById', document.getElementById('p1').textContent, 'hello');
+    eq('B2 getElementById missing', document.getElementById('nope'), 'null');
+    eq('B3 querySelector', document.querySelector('#p1').id, 'p1');
+    eq('B4 querySelectorAll length', document.querySelectorAll('.cls').length, '1');
+    eq('B5 getElementsByClassName', document.getElementsByClassName('cls').length, '1');
+    eq('B6 getElementsByTagName', document.getElementsByTagName('p').length >= 1, 'true');
+    eq('B7 getElementsByName', typeof document.getElementsByName, 'function');
+    // ── C. document methods ──────────────────────────────────────────────────
+    var el = document.createElement('div');
+    eq('C1 createElement', el.tagName, 'DIV');
+    var tn = document.createTextNode('text');
+    eq('C2 createTextNode', tn.nodeType, '3');
+    var frag = document.createDocumentFragment();
+    eq('C3 createDocumentFragment', frag.nodeType, '11');
+    var comment = document.createComment('hi');
+    eq('C4 createComment', comment.nodeType, '8');
+    var attr = document.createAttribute('data-x');
+    eq('C5 createAttribute', attr.name, 'data-x');
+    // ── D. document.write / writeln ──────────────────────────────────────────
+    eq('D1 write is fn', typeof document.write, 'function');
+    eq('D2 writeln is fn', typeof document.writeln, 'function');
+    // ── E. document.elementFromPoint ─────────────────────────────────────────
+    eq('E1 elementFromPoint is fn', typeof document.elementFromPoint, 'function');
+    // ── F. document.hasFocus ─────────────────────────────────────────────────
+    eq('F1 hasFocus is fn', typeof document.hasFocus, 'function');
+    eq('F2 hasFocus returns bool', typeof document.hasFocus(), 'boolean');
+    // ── G. document.hidden / visibilityState ─────────────────────────────────
+    eq('G1 hidden is boolean', typeof document.hidden, 'boolean');
+    eq('G2 visibilityState', document.visibilityState, 'visible');
+    // ── H. document.cookie ───────────────────────────────────────────────────
+    eq('H1 cookie is string', typeof document.cookie, 'string');
+    document.cookie = 'test=1';
+    eq('H2 cookie set', document.cookie.indexOf('test=1') !== -1, 'true');
+    document.cookie = 'test=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // ── I. document.styleSheets ──────────────────────────────────────────────
+    eq('I1 styleSheets is object', typeof document.styleSheets, 'object');
+    eq('I2 styleSheets length number', typeof document.styleSheets.length, 'number');
+})();
+</script></body></html>
