@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// aspect-ratio in flex row
+const f=document.createElement("div");f.style.cssText="display:flex;gap:10px;width:300px";
+const a1=document.createElement("div");a1.style.cssText="flex:1;aspect-ratio:16/9;background:#fcc";f.appendChild(a1);
+const a2=document.createElement("div");a2.style.cssText="flex:1;aspect-ratio:1/1;background:#ccf";f.appendChild(a2);
+document.body.appendChild(f);
+L("flex-ar-16-9-h",Math.round(a1.getBoundingClientRect().height));
+L("flex-ar-1-1-h",Math.round(a2.getBoundingClientRect().height));
+L("flex-container-h",Math.round(f.getBoundingClientRect().height));
+f.remove();
+// aspect-ratio with explicit width
+const w1=document.createElement("div");w1.style.cssText="width:200px;aspect-ratio:16/9";document.body.appendChild(w1);
+L("block-ar-16-9-h",Math.round(w1.getBoundingClientRect().height));
+w1.remove();
+// aspect-ratio with explicit height
+const h1=document.createElement("div");h1.style.cssText="height:100px;aspect-ratio:16/9";document.body.appendChild(h1);
+L("block-ar-h-w",Math.round(h1.getBoundingClientRect().width));
+h1.remove();
+// aspect-ratio 1/1 block
+const sq=document.createElement("div");sq.style.cssText="width:100px;aspect-ratio:1/1";document.body.appendChild(sq);
+L("block-ar-1-1-h",Math.round(sq.getBoundingClientRect().height));
+sq.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// float left with text wrap
+const f1=document.createElement("div");f1.style.cssText="width:300px";
+const fl=document.createElement("div");fl.style.cssText="float:left;width:80px;height:60px;background:#fcc;margin:0 8px 8px 0";
+const txt=document.createElement("span");txt.textContent="Text that wraps around the floated element on the right side.";
+f1.appendChild(fl);f1.appendChild(txt);document.body.appendChild(f1);
+L("float-rect",rect(fl));
+L("float-sibling-x",Math.round(txt.getBoundingClientRect().x));
+f1.remove();
+// float right
+const f2=document.createElement("div");f2.style.cssText="width:300px";
+const fr=document.createElement("div");fr.style.cssText="float:right;width:60px;height:40px;background:#ccf";
+f2.appendChild(fr);f2.appendChild(document.createTextNode("Left text"));
+document.body.appendChild(f2);
+L("float-right-x",Math.round(fr.getBoundingClientRect().x));
+f2.remove();
+// clear:both after floats
+const f3=document.createElement("div");f3.style.cssText="width:300px";
+const fa=document.createElement("div");fa.style.cssText="float:left;width:50px;height:30px;background:#cfc";
+const cl=document.createElement("div");cl.style.cssText="clear:both;background:#eee";
+f3.appendChild(fa);f3.appendChild(cl);document.body.appendChild(f3);
+L("clear-y",Math.round(cl.getBoundingClientRect().y));
+L("float-y",Math.round(fa.getBoundingClientRect().y));
+f3.remove();
+// clear:left / clear:right
+const f4=document.createElement("div");
+const fl1=document.createElement("div");fl1.style.cssText="float:left;width:40px;height:20px;background:#fcc";
+const fl2=document.createElement("div");fl2.style.cssText="float:left;width:40px;height:20px;background:#ccf";
+const clr=document.createElement("div");clr.style.cssText="clear:left";
+f4.appendChild(fl1);f4.appendChild(fl2);f4.appendChild(clr);document.body.appendChild(f4);
+L("clear-left-y",Math.round(clr.getBoundingClientRect().y));
+f4.remove();
+// BFC via overflow:hidden
+const bfc=document.createElement("div");bfc.style.cssText="width:200px;overflow:hidden";
+const bfl=document.createElement("div");bfl.style.cssText="float:left;width:50px;height:30px;background:#fcc";
+bfc.appendChild(bfl);document.body.appendChild(bfc);
+L("bfc-h",Math.round(bfc.getBoundingClientRect().height));
+L("bfc-float-y",Math.round(bfl.getBoundingClientRect().y));
+bfc.remove();
+// two floats side by side
+const tw=document.createElement("div");
+const twa=document.createElement("div");twa.style.cssText="float:left;width:60px;height:30px;background:#fcc";
+const twb=document.createElement("div");twb.style.cssText="float:left;width:60px;height:30px;background:#ccf";
+tw.appendChild(twa);tw.appendChild(twb);document.body.appendChild(tw);
+L("two-floats-a",rect(twa));
+L("two-floats-b",rect(twb));
+tw.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
