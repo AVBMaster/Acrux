@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.row{white-space:pre;font:12px monospace}
+</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// querySelector / querySelectorAll
+const wrap=document.createElement("div");
+wrap.innerHTML="<ul><li class='a'>1</li><li class='b'>2</li><li class='a'>3</li></ul><p class='a'>P</p>";
+document.body.appendChild(wrap);
+L("qs-class",wrap.querySelector(".a").textContent);
+L("qsa-class-count",wrap.querySelectorAll(".a").length);
+L("qs-child",wrap.querySelector("ul > li.b").textContent);
+L("qs-desc",wrap.querySelectorAll("div li").length);
+L("qs-nested",wrap.querySelector("ul li:nth-child(2)").textContent);
+L("qs-pseudo",wrap.querySelectorAll("li:nth-of-type(odd)").length);
+// querySelector on element (not document)
+const ul=wrap.querySelector("ul");
+L("elem-qs",ul.querySelector("li.a").textContent);
+L("elem-qsa",ul.querySelectorAll("li.a").length);
+// :has in querySelector
+L("qs-has",wrap.querySelector("li:has(+ .b)").textContent);
+// adjacent sibling combinator
+L("adjacent-sibling",wrap.querySelector("li.a + li").textContent);
+// general sibling
+L("general-sibling",wrap.querySelectorAll("li.a ~ li").length);
+// attribute selector
+L("attr-selector",wrap.querySelectorAll("[class='a']").length);
+L("attr-contains",wrap.querySelectorAll("[class*='b']").length);
+L("attr-prefix",wrap.querySelectorAll("[class^='a']").length);
+L("attr-suffix",wrap.querySelectorAll("[class$='a']").length);
+// :not with complex
+L("not-complex",wrap.querySelectorAll("li:not(.a)").length);
+// multiple selectors
+L("multi-selector",wrap.querySelectorAll("li.a, p.a").length);
+wrap.remove();
+// CSS.supports with selector()
+L("supports-has",CSS.supports("selector(:has(> p))"));
+L("supports-not",CSS.supports("selector(:not(:last-child))"));
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
