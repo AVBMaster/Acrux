@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function rect(el){const r=el.getBoundingClientRect();return Math.round(r.x)+","+Math.round(r.y)+"_"+Math.round(r.width)+"x"+Math.round(r.height);}
+// multicolumn with explicit height forces column breaking
+let mc=document.createElement("div");
+mc.style.cssText="column-count:2;column-gap:20px;width:300px;height:100px;background:#eee";
+mc.innerHTML="<p id='p1'>First column paragraph with some text that should fill column one.</p><p id='p2'>Second column paragraph.</p><p id='p3'>Third.</p>";
+document.body.appendChild(mc);
+const p1=document.getElementById("p1"),p2=document.getElementById("p2"),p3=document.getElementById("p3");
+L("mc-p1-x",Math.round(p1.getBoundingClientRect().x));
+L("mc-p1-y",Math.round(p1.getBoundingClientRect().y));
+L("mc-p2-x",Math.round(p2.getBoundingClientRect().x));
+L("mc-p2-y",Math.round(p2.getBoundingClientRect().y));
+mc.remove();
+// multicolumn with column-rule visible
+mc=document.createElement("div");mc.style.cssText="column-count:2;column-gap:20px;column-rule:1px solid #ccc;width:300px;height:80px";
+mc.innerHTML="<p>Left col text here.</p><p>Right col text.</p>";
+document.body.appendChild(mc);
+L("mc-rule-w",Math.round(mc.getBoundingClientRect().width));
+L("mc-rule-h",Math.round(mc.getBoundingClientRect().height));
+mc.remove();
+// column-fill auto vs balance
+mc=document.createElement("div");mc.style.cssText="column-count:2;column-fill:auto;width:300px;height:60px";
+mc.innerHTML="<p>Short.</p><p>Second.</p><p>Third long paragraph here.</p><p>Fourth.</p>";
+document.body.appendChild(mc);
+L("colfill-auto-h",Math.round(mc.getBoundingClientRect().height));
+mc.remove();
+// column-span:all breaks columns
+mc=document.createElement("div");mc.style.cssText="column-count:2;column-gap:20px;width:300px";
+mc.innerHTML="<p>Col1</p><div style='column-span:all;background:#fcc'>Full width</div><p>Col2</p>";
+document.body.appendChild(mc);
+const spanAll=mc.querySelector("[style*='column-span']");
+L("colspan-all-w",Math.round(spanAll.getBoundingClientRect().width));
+mc.remove();
+// column-count with column-width auto (both auto = single column)
+mc=document.createElement("div");mc.style.cssText="column-count:auto;column-width:auto;width:300px";
+mc.innerHTML="<p>Single column.</p>";
+document.body.appendChild(mc);
+L("single-col-w",Math.round(mc.getBoundingClientRect().width));
+mc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
