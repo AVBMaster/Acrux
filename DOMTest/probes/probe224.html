@@ -1,0 +1,40 @@
+<!DOCTYPE html><html><body><script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    function ev(src){ try { return String(eval(src)); } catch(e){ return 'ERR:'+e.name; } }
+    // ── A. Intl.supportedValuesOf (ES2022) ───────────────────────────────────
+    eq('A1 supportedValuesOf is fn', typeof Intl.supportedValuesOf, 'function');
+    eq('A2 calendars', ev('Intl.supportedValuesOf("calendar").includes("gregory")'), 'true');
+    eq('A3 numberingSystems', ev('Intl.supportedValuesOf("numberingSystem").includes("latn")'), 'true');
+    eq('A4 timeZones non-empty', ev('Intl.supportedValuesOf("timeZone").length > 0'), 'true');
+    eq('A5 bad key throws RangeError', ev('(function(){try{Intl.supportedValuesOf("bogus");return "no";}catch(e){return e.name;}})()'), 'RangeError');
+
+    // ── B. Intl.DisplayNames ─────────────────────────────────────────────────
+    eq('B1 DisplayNames is fn', typeof Intl.DisplayNames, 'function');
+    eq('B2 language name', ev('new Intl.DisplayNames("en",{type:"language"}).of("en")'), 'English');
+    eq('B3 currency name', ev('new Intl.DisplayNames("en",{type:"currency"}).of("USD")'), 'US Dollar');
+    eq('B4 region name', ev('new Intl.DisplayNames("en",{type:"region"}).of("US")'), 'United States');
+    eq('B5 bad type throws RangeError', ev('(function(){try{new Intl.DisplayNames("en",{type:"bogus"});return "no";}catch(e){return e.name;}})()'), 'RangeError');
+
+    // ── C. Intl.Segmenter ────────────────────────────────────────────────────
+    eq('C1 Segmenter is fn', typeof Intl.Segmenter, 'function');
+    eq('C2 segment method', typeof new Intl.Segmenter("en").segment, 'function');
+    eq('C3 resolvedOptions granularity', new Intl.Segmenter("en").resolvedOptions().granularity, 'grapheme');
+    eq('C4 word isWordLike', [...new Intl.Segmenter("en",{granularity:"word"}).segment("a b")].filter(s=>s.isWordLike).length, '2');
+    eq('C5 sentence parts', [...new Intl.Segmenter("en",{granularity:"sentence"}).segment("Hi. Yo.")].map(s=>s.segment).join("|"), 'Hi. |Yo.');
+
+    // ── D. Intl.ListFormat ───────────────────────────────────────────────────
+    eq('D1 ListFormat is fn', typeof Intl.ListFormat, 'function');
+    eq('D2 conjunction', ev('new Intl.ListFormat("en").format(["a","b","c"])'), 'a, b, and c');
+    eq('D3 disjunction', ev('new Intl.ListFormat("en",{type:"disjunction"}).format(["a","b"])'), 'a or b');
+
+    // ── E. Intl.RelativeTimeFormat (numeric default is "always" per ECMA-402) ─
+    eq('E1 RelativeTimeFormat is fn', typeof Intl.RelativeTimeFormat, 'function');
+    eq('E2 default numeric always', ev('new Intl.RelativeTimeFormat("en").format(-1,"day")'), '1 day ago');
+    eq('E3 auto -1 day', ev('new Intl.RelativeTimeFormat("en",{numeric:"auto"}).format(-1,"day")'), 'yesterday');
+    eq('E4 auto 1 day', ev('new Intl.RelativeTimeFormat("en",{numeric:"auto"}).format(1,"day")'), 'tomorrow');
+    eq('E5 auto -1 year', ev('new Intl.RelativeTimeFormat("en",{numeric:"auto"}).format(-1,"year")'), 'last year');
+    eq('E6 auto 0 day', ev('new Intl.RelativeTimeFormat("en",{numeric:"auto"}).format(0,"day")'), 'today');
+    eq('E7 always 2 hour', ev('new Intl.RelativeTimeFormat("en").format(2,"hour")'), 'in 2 hours');
+})();
+</script></body></html>
