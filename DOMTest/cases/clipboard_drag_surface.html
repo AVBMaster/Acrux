@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. navigator.clipboard ───────────────────────────────────────────────
+    eq('A1 clipboard is object', typeof navigator.clipboard, 'object');
+    eq('A2 readText is fn', typeof navigator.clipboard.readText, 'function');
+    eq('A3 writeText is fn', typeof navigator.clipboard.writeText, 'function');
+    eq('A4 read is fn', typeof navigator.clipboard.read, 'function');
+    eq('A5 write is fn', typeof navigator.clipboard.write, 'function');
+    // ── B. ClipboardEvent ────────────────────────────────────────────────────
+    eq('B1 ClipboardEvent is fn', typeof ClipboardEvent, 'function');
+    var ce = new ClipboardEvent('copy', {clipboardData: null});
+    eq('B2 type', ce.type, 'copy');
+    eq('B3 clipboardData', ce.clipboardData === null, 'true');
+    // ── C. ClipboardItem ─────────────────────────────────────────────────────
+    eq('C1 ClipboardItem is fn', typeof ClipboardItem, 'function');
+    var blob = new Blob(['hello'], {type: 'text/plain'});
+    var item = new ClipboardItem({'text/plain': blob});
+    eq('C2 types', Array.from(item.types).join(','), 'text/plain');
+    eq('C3 getType is fn', typeof item.getType, 'function');
+    // ── D. DataTransfer ──────────────────────────────────────────────────────
+    eq('D1 DataTransfer is fn', typeof DataTransfer, 'function');
+    var dt = new DataTransfer();
+    dt.setData('text/plain', 'copied');
+    eq('D2 getData', dt.getData('text/plain'), 'copied');
+    eq('D3 types', Array.from(dt.types).join(','), 'text/plain');
+    eq('D4 clearData no-throw', (function(){ dt.clearData(); return dt.getData('text/plain'); })(), '');
+    // ── E. DragEvent ─────────────────────────────────────────────────────────
+    eq('E1 DragEvent is fn', typeof DragEvent, 'function');
+    var de = new DragEvent('dragstart');
+    eq('E2 type', de.type, 'dragstart');
+    eq('E3 dataTransfer', de.dataTransfer === null, 'true');
+})();
+</script></body></html>

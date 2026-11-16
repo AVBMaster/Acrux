@@ -131,6 +131,18 @@ public class Clipboard
 {
     public async Task<string> ReadText() => "";
     public async Task WriteText(string text) { }
+    public async Task<System.Collections.Generic.IEnumerable<ClipboardItem>> Read() =>
+        System.Linq.Enumerable.Empty<ClipboardItem>();
+    public async Task Write(System.Collections.Generic.IEnumerable<ClipboardItem> items) { }
+}
+
+public class ClipboardItem
+{
+    public ClipboardItem(object? items) { }
+    public string[] Types => System.Array.Empty<string>();
+    public System.Threading.Tasks.Task<Blob> GetType(string type) =>
+        System.Threading.Tasks.Task.FromException<Blob>(
+            new DOMException("The clipboard item has no data of that type.", "NotFoundError"));
 }
 public class MediaSession { }
 public class ShareData

@@ -22176,6 +22176,12 @@ public class NavigatorHost : IDomPrototypeHost
     public object? mediaDevices => MediaDevicesInstance ??= new NavigatorMediaDevices();
     internal static NavigatorMediaDevices? MediaDevicesInstance;
 
+    /// <summary>Clipboard §4: the clipboard the navigator hands out. The engine has no system
+    /// clipboard, so readText answers empty and writeText is a no-op — but the object is reachable
+    /// so a page feature-testing with typeof succeeds.</summary>
+    public Acrux.Core.Dom.Html.Clipboard clipboard => ClipboardInstance ??= new Acrux.Core.Dom.Html.Clipboard();
+    internal static Acrux.Core.Dom.Html.Clipboard? ClipboardInstance;
+
     /// <summary>Beacon (Beacon §2): a fire-and-forget POST the page never waits on. The body — a
     /// string, or the text of a Blob/File — is queued as an async request and the call answers
     /// whether the queue took it, which is all the interface lets a page observe.</summary>
