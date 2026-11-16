@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:8px;font:14px monospace}</style></head><body><div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// Test column-count with fixed width and varying content
+function testCols(count,gap,width,contentLen){
+  const d=document.createElement("div");
+  d.style.cssText=`column-count:${count};column-gap:${gap}px;width:${width}px`;
+  d.textContent="lorem ipsum dolor sit amet ".repeat(contentLen);
+  document.body.appendChild(d);
+  const r=d.getBoundingClientRect();
+  const cs=getComputedStyle(d);
+  const result={w:Math.round(r.width),h:Math.round(r.height),count:cs.columnCount,gap:cs.columnGap};
+  d.remove();return result;
+}
+// 2 columns, 300px, short text (1 line)
+let r=testCols(2,20,300,1);
+L("2col-short-w",r.w);L("2col-short-h",r.h);L("2col-short-count",r.count);
+// 2 columns, 300px, medium text
+r=testCols(2,20,300,5);
+L("2col-medium-w",r.w);L("2col-medium-h",r.h);
+// 3 columns, 450px
+r=testCols(3,15,450,5);
+L("3col-450-w",r.w);L("3col-450-h",r.h);
+// 2 columns, 600px, long text
+r=testCols(2,20,600,10);
+L("2col-600-w",r.w);L("2col-600-h",r.h);
+// column-count 1
+r=testCols(1,0,300,5);
+L("1col-300-w",r.w);L("1col-300-h",r.h);L("1col-300-count",r.count);
+// column-span:all layout
+const mc=document.createElement("div");mc.style.cssText="column-count:2;column-gap:20px;width:400px";
+mc.innerHTML="<p id='c1'>Before span.</p><div id='spanner' style='column-span:all;background:#fcc'>Spanning</div><p id='c2'>After span.</p><p id='c3'>More after.</p>";
+document.body.appendChild(mc);
+const c1=document.getElementById("c1"),spanner=document.getElementById("spanner"),c2=document.getElementById("c2"),c3=document.getElementById("c3");
+L("before-span-x",Math.round(c1.getBoundingClientRect().x));
+L("span-all-w",Math.round(spanner.getBoundingClientRect().width));
+L("after-span-x",Math.round(c2.getBoundingClientRect().x));
+L("after-span-y",Math.round(c2.getBoundingClientRect().y));
+mc.remove();
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
