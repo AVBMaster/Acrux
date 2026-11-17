@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// logical margin
+gc("ml-xs","margin-inline-start:10px","margin-left");
+gc("ml-xe","margin-inline-end:10px","margin-right");
+gc("ml-bs","margin-block-start:10px","margin-top");
+gc("ml-be","margin-block-end:10px","margin-bottom");
+gc("ml-x","margin-inline:5px 15px","margin-left");
+gc("ml-b","margin-block:5px 15px","margin-top");
+// logical padding
+gc("pl-xs","padding-inline-start:10px","padding-left");
+gc("pl-x","padding-inline:5px 15px","padding-left");
+// logical border
+gc("bl-xs","border-inline-start:3px solid red","border-left-width");
+gc("bl-xs-color","border-inline-start:3px solid red","border-left-color");
+gc("bl-xs-style","border-inline-start:3px solid red","border-left-style");
+// logical inset
+gc("ins-xs","inset-inline-start:10px","left");
+gc("ins-xe","inset-inline-end:10px","right");
+gc("ins-bs","inset-block-start:10px","top");
+gc("ins-be","inset-block-end:10px","bottom");
+// logical with rtl
+gc("ml-xs-rtl","direction:rtl;margin-inline-start:10px","margin-right");
+gc("ins-xs-rtl","direction:rtl;inset-inline-start:10px","right");
+// text-align logical
+gc("ta-start","text-align:start","text-align");
+gc("ta-end","text-align:end","text-align");
+// inherit/initial/unset/revert need a parent+child pair to show the effect
+function pair(tag, parentCss, childCss, prop){
+  const p=document.createElement("div"); p.setAttribute("style",parentCss);
+  const c=document.createElement("div"); c.setAttribute("style",childCss);
+  p.appendChild(c); document.body.appendChild(p);
+  const v=getComputedStyle(c).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_"))); p.remove();
+}
+pair("col-child-none","color:red","" ,"color");                 // child inherits red
+pair("col-child-initial","color:red","color:initial","color"); // initial = UA black
+pair("col-child-inherit","color:red","color:inherit","color"); // inherit = red
+pair("col-child-unset","color:red","color:unset","color");     // inherited prop: unset=inherit=red
+pair("col-child-revert","color:red","color:revert","color");   // revert to UA
+pair("ml-child-unset","margin-left:40px","margin-left:unset","margin-left"); // non-inherited: unset=initial=0px
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
