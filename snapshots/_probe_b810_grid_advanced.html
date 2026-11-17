@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// grid-template-columns edge cases
+gc("gtc-fr","display:grid;grid-template-columns:1fr 2fr 1fr","grid-template-columns");
+gc("gtc-minmax","display:grid;grid-template-columns:minmax(100px,1fr)","grid-template-columns");
+gc("gtc-autofill","display:grid;grid-template-columns:repeat(auto-fill,100px)","grid-template-columns");
+gc("gtc-autofit","display:grid;grid-template-columns:repeat(auto-fit,100px)","grid-template-columns");
+gc("gtc-mincontent","display:grid;grid-template-columns:min-content","grid-template-columns");
+gc("gtc-maxcontent","display:grid;grid-template-columns:max-content","grid-template-columns");
+gc("gtc-fitcontent","display:grid;grid-template-columns:fit-content(100px)","grid-template-columns");
+gc("gtc-subgrid","display:grid;grid-template-columns:subgrid","grid-template-columns");
+gc("gtc-masonry","display:grid;grid-template-columns:repeat(2,masonry)","grid-template-columns");
+// grid-auto-rows
+gc("gar-auto","display:grid;grid-auto-rows:auto","grid-auto-rows");
+gc("gar-100","display:grid;grid-auto-rows:100px","grid-auto-rows");
+gc("gar-fr","display:grid;grid-auto-rows:1fr","grid-auto-rows");
+gc("gar-minmax","display:grid;grid-auto-rows:minmax(50px,auto)","grid-auto-rows");
+// grid-column / grid-row shorthand
+gc("gcol-1-3","display:grid;grid-column:1/3","grid-column");
+gc("gcol-span2","display:grid;grid-column:span 2","grid-column");
+gc("grow-1-3","display:grid;grid-row:1/3","grid-row");
+// grid-area named
+gc("garea-named","display:grid;grid-template-areas:'header header' 'sidebar main';grid-area:main","grid-area");
+// justify-self / align-self
+gc("gjs-start","display:grid;justify-self:start","justify-self");
+gc("gjs-center","display:grid;justify-self:center","justify-self");
+gc("gas-end","display:grid;align-self:end","align-self");
+// place-items
+gc("gpi-center","display:grid;place-items:center","place-items");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
