@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.t1:has(.x){color:red}
+.t2:is(.a,.b){color:green}
+.t3:where(.c){color:blue}
+.t4:focus-visible{color:purple}
+.t5:focus-within{color:orange}
+.t6:empty{color:gray}
+li.t7:nth-of-type(2){color:teal}
+.t8[lang="en"]{color:maroon}
+.t9:not(.nope){color:olive}
+.t10:target{color:navy}
+.t11:root{color:black}
+input.t12:checked{color:crimson}
+.t13:hover{color:pink}
+.t14:active{color:gold}
+.t15:visited{color:violet}
+</style></head><body>
+<div class="t1" id="t1"><span class="x">has</span></div>
+<div class="t2 a" id="t2">is</div>
+<div class="t3 c" id="t3">where</div>
+<div class="t4" id="t4" tabindex="0">focusvisible</div>
+<div class="t5" id="t5"><input></div>
+<div class="t6" id="t6"></div>
+<ol><li class="t7" id="t7a">1</li><li class="t7" id="t7b">2</li></ol>
+<div class="t8" id="t8" lang="en">lang</div>
+<div class="t9" id="t9">not</div>
+<div class="t10" id="t10">target</div>
+<input class="t12" id="t12" type="checkbox" checked>
+<div class="t13" id="t13">hover</div>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function c(tag,id){
+  const d=document.getElementById(id);if(!d){L(tag,"MISSING");return;}
+  L(tag,"color="+getComputedStyle(d).color.trim().split(" ").join("_"));
+}
+c("has","t1");c("is","t2");c("where","t3");c("focusvisible","t4");
+c("focuswithin","t5");c("empty","t6");c("nthoftype2","t7b");
+c("lang","t8");c("not","t9");c("target","t10");c("checked","t12");
+c("hover","t13");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
