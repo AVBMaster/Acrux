@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// position values
+gc("pos-static","position:static","position");
+gc("pos-relative","position:relative","position");
+gc("pos-absolute","position:absolute","position");
+gc("pos-fixed","position:fixed","position");
+gc("pos-sticky","position:sticky","position");
+// z-index
+gc("zi-auto","z-index:auto","z-index");
+gc("zi-0","z-index:0","z-index");
+gc("zi-10","z-index:10","z-index");
+gc("zi-neg","z-index:-1","z-index");
+// top/right/bottom/left
+gc("top-10","top:10px","top");
+gc("top-auto","top:auto","top");
+gc("top-pct","top:50%","top");
+gc("right-20","right:20px","right");
+gc("bottom-5","bottom:5px","bottom");
+gc("left-auto","left:auto","left");
+// inset shorthand
+gc("inset-all","inset:10px 20px 30px 40px","top");
+gc("inset-2","inset:5px 10px","bottom");
+// flex properties
+gc("flex-grow","display:flex;flex-grow:2","flex-grow");
+gc("flex-shrink","display:flex;flex-shrink:0","flex-shrink");
+gc("flex-basis","display:flex;flex-basis:200px","flex-basis");
+gc("flex-sh","display:flex;flex:1 1 auto","flex-grow");
+gc("flex-sh-b","display:flex;flex:1 1 auto","flex-basis");
+gc("flex-dir","display:flex;flex-direction:column","flex-direction");
+gc("flex-wrap","display:flex;flex-wrap:wrap","flex-wrap");
+gc("flex-flow","display:flex;flex-flow:row wrap","flex-flow");
+// flex justify/align
+gc("jc-start","display:flex;justify-content:flex-start","justify-content");
+gc("jc-center","display:flex;justify-content:center","justify-content");
+gc("jc-space","display:flex;justify-content:space-between","justify-content");
+gc("ai-stretch","display:flex;align-items:stretch","align-items");
+gc("ai-baseline","display:flex;align-items:baseline","align-items");
+gc("ac-center","display:flex;align-content:center","align-content");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
