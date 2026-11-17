@@ -335,6 +335,17 @@ button {
 button:active {
   border-style: inset;
 }
+/* A disabled button keeps its face colour but fades its label to a
+   translucent buttontext (measured on b808: color rgba(16,16,16,0.3) over
+   an opaque rgb(239,239,239) background — unlike the text field, which
+   dims the text to a solid grey and washes the background). */
+button:disabled,
+input[type="button" i]:disabled,
+input[type="submit" i]:disabled,
+input[type="reset" i]:disabled {
+  color: rgba(16, 16, 16, 0.3);
+  background-color: buttonface;
+}
 input {
   display: inline-block;
   appearance: auto;
