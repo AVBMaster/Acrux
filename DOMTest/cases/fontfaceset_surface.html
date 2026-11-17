@@ -1,0 +1,40 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. FontFaceSet constructor ───────────────────────────────────────────
+    eq('A1 FontFaceSet is fn', typeof FontFaceSet, 'function');
+    eq('A2 window.FontFaceSet is fn', typeof window.FontFaceSet, 'function');
+    // ── B. document.fonts ────────────────────────────────────────────────────
+    eq('B1 document.fonts is object', typeof document.fonts, 'object');
+    eq('B2 document.fonts.constructor.name is string', typeof document.fonts.constructor.name, 'string');
+    eq('B3 document.fonts instanceof FontFaceSet', document.fonts instanceof FontFaceSet, 'true');
+    // ── C. FontFace ──────────────────────────────────────────────────────────
+    eq('C1 FontFace is fn', typeof FontFace, 'function');
+    // ── D. FontFaceSetLoadEvent ──────────────────────────────────────────────
+    eq('D1 FontFaceSetLoadEvent is fn', typeof FontFaceSetLoadEvent, 'function');
+    // ── E. document.fonts surface ────────────────────────────────────────────
+    eq('E1 document.fonts.status', document.fonts.status, 'loaded');
+    eq('E2 document.fonts.size number', typeof document.fonts.size, 'number');
+    eq('E3 document.fonts.ready is Promise', document.fonts.ready instanceof Promise, 'true');
+    eq('E4 document.fonts.add is fn', typeof document.fonts.add, 'function');
+    eq('E5 document.fonts.delete is fn', typeof document.fonts.delete, 'function');
+    eq('E6 document.fonts.clear is fn', typeof document.fonts.clear, 'function');
+    eq('E7 document.fonts.has is fn', typeof document.fonts.has, 'function');
+    eq('E8 document.fonts.check is fn', typeof document.fonts.check, 'function');
+    eq('E9 document.fonts.load is fn', typeof document.fonts.load, 'function');
+    // ── F. FontFace constructor ──────────────────────────────────────────────
+    eq('F1 FontFace.constructor.name is string', typeof FontFace.constructor.name, 'string');
+    eq('F2 FontFaceSet.constructor.name is string', typeof FontFaceSet.constructor.name, 'string');
+    eq('F3 FontFaceSetLoadEvent.constructor.name is string', typeof FontFaceSetLoadEvent.constructor.name, 'string');
+    // ── G. FontFace instance ─────────────────────────────────────────────────
+    var face = new FontFace('Test', 'url(test.woff)');
+    eq('G1 face.family', face.family, 'Test');
+    eq('G2 face.status', face.status, 'unloaded');
+    eq('G3 face instanceof FontFace', face instanceof FontFace, 'true');
+    document.fonts.add(face);
+    eq('G4 document.fonts.has(face)', document.fonts.has(face), 'true');
+    document.fonts.delete(face);
+    eq('G5 document.fonts.has(face) after delete', document.fonts.has(face), 'false');
+})();
+</script></body></html>
