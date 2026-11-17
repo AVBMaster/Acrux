@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// border-image longhands
+gc("bi-source","border-image-source:url(x.png)","border-image-source");
+gc("bi-slice","border-image-slice:27","border-image-slice");
+gc("bi-slice-fill","border-image-slice:27 fill","border-image-slice");
+gc("bi-width","border-image-width:10px","border-image-width");
+gc("bi-outset","border-image-outset:5px","border-image-outset");
+gc("bi-repeat","border-image-repeat:round","border-image-repeat");
+gc("bi-repeat2","border-image-repeat:stretch round","border-image-repeat");
+gc("bi-sh","border-image:url(x.png) 27 30 round","border-image-source");
+gc("bi-sh-slice","border-image:url(x.png) 27 30 round","border-image-slice");
+gc("bi-sh-rep","border-image:url(x.png) 27 30 round","border-image-repeat");
+// gradient as border-image
+gc("bi-grad","border-image:linear-gradient(red,blue) 27","border-image-source");
+// multiple backgrounds
+gc("mbg-2","background-image:url(a.png),url(b.png)","background-image");
+gc("mbg-pos","background-position:0 0,center","background-position");
+gc("mbg-repeat","background-repeat:no-repeat,repeat-x","background-repeat");
+gc("mbg-size","background-size:cover,contain","background-size");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
