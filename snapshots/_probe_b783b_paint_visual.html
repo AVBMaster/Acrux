@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:20px monospace}
+.wrap{position:relative;width:1000px;height:420px}
+.box{position:absolute;width:60px;height:40px;background:#9cf}
+.lbl{position:absolute;font:10px monospace;color:#000}
+</style></head><body>
+<div class="wrap">
+<!-- row 1 y=10 -->
+<div class="box" style="left:10px;top:10px;box-shadow:5px 5px 0 red"></div>
+<div class="box" style="left:100px;top:10px;box-shadow:0 0 8px blue"></div>
+<div class="box" style="left:190px;top:10px;box-shadow:inset 4px 4px 0 green"></div>
+<div class="box" style="left:280px;top:10px;box-shadow:3px 3px 2px 4px purple"></div>
+<div class="box" style="left:370px;top:10px;box-shadow:5px 5px 0 red, 12px 12px 0 orange"></div>
+<!-- row 2 y=90 : radius -->
+<div class="box" style="left:10px;top:90px;border-radius:50%;background:#f80"></div>
+<div class="box" style="left:100px;top:90px;border-radius:16px;background:#f80"></div>
+<div class="box" style="left:190px;top:90px;border-radius:20px 0 20px 0;background:#f80"></div>
+<div class="box" style="left:280px;top:90px;border-radius:10px / 20px;background:#f80"></div>
+<!-- row 3 y=170 : filter -->
+<div class="box" style="left:10px;top:170px;filter:blur(3px)"></div>
+<div class="box" style="left:100px;top:170px;filter:brightness(0.5)"></div>
+<div class="box" style="left:190px;top:170px;filter:drop-shadow(4px 4px 0 red)"></div>
+<!-- row 4 y=250 : text-shadow -->
+<div style="position:absolute;left:10px;top:250px;font:24px monospace;color:#000;text-shadow:3px 3px 0 red">Hello</div>
+<div style="position:absolute;left:150px;top:250px;font:24px monospace;color:#000;text-shadow:0 0 3px blue">Glow</div>
+</div>
+</body></html>

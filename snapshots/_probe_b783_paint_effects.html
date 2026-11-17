@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.box{width:60px;height:40px;background:#9cf;display:inline-block;margin:14px;vertical-align:top}
+</style></head><body>
+<div id="out"></div>
+<div>
+<div class="box" style="box-shadow:5px 5px 0 red"></div>
+<div class="box" style="box-shadow:0 0 8px blue"></div>
+<div class="box" style="box-shadow:inset 4px 4px 0 green"></div>
+<div class="box" style="box-shadow:3px 3px 2px 4px purple"></div>
+<div class="box" style="box-shadow:5px 5px 0 red, 10px 10px 0 orange"></div>
+<div class="box" style="border-radius:16px"></div>
+<div class="box" style="border-radius:50%"></div>
+<div class="box" style="border-radius:20px 0 20px 0"></div>
+<div class="box" style="border-radius:10px / 20px"></div>
+<div class="box" style="filter:blur(3px)"></div>
+<div class="box" style="filter:brightness(0.5)"></div>
+<div class="box" style="filter:drop-shadow(4px 4px 2px red)"></div>
+<div class="box" style="text-shadow:2px 2px 0 red">T</div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("bs-0","box-shadow:5px 5px 0 red","box-shadow");
+gc("bs-blur","box-shadow:0 0 8px blue","box-shadow");
+gc("bs-inset","box-shadow:inset 4px 4px 0 green","box-shadow");
+gc("bs-spread","box-shadow:3px 3px 2px 4px purple","box-shadow");
+gc("bs-multi","box-shadow:5px 5px 0 red, 10px 10px 0 orange","box-shadow");
+gc("bs-none","box-shadow:none","box-shadow");
+gc("br-16","border-radius:16px","border-radius");
+gc("br-50pct","border-radius:50%","border-radius");
+gc("br-4val","border-radius:20px 0 20px 0","border-radius");
+gc("br-elliptical","border-radius:10px / 20px","border-radius");
+gc("br-tl","border-radius:10px / 20px","border-top-left-radius");
+gc("br-one","border-radius:10px","border-top-left-radius");
+gc("ts-0","text-shadow:2px 2px 0 red","text-shadow");
+gc("ts-blur","text-shadow:0 0 4px blue","text-shadow");
+gc("ts-none","text-shadow:none","text-shadow");
+gc("filt-blur","filter:blur(3px)","filter");
+gc("filt-bright","filter:brightness(0.5)","filter");
+gc("filt-drop","filter:drop-shadow(4px 4px 2px red)","filter");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
