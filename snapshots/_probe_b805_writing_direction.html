@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// direction
+gc("dir-ltr","direction:ltr",["direction"]);
+gc("dir-rtl","direction:rtl",["direction"]);
+gc("dir-inherit","direction:inherit",["direction"]);
+// writing-mode
+gc("wm-h-tb","writing-mode:horizontal-tb",["writing-mode"]);
+gc("wm-v-rl","writing-mode:vertical-rl",["writing-mode"]);
+gc("wm-v-lr","writing-mode:vertical-lr",["writing-mode"]);
+// unicode-bidi
+gc("ub-normal","unicode-bidi:normal",["unicode-bidi"]);
+gc("ub-embed","unicode-bidi:embed",["unicode-bidi"]);
+gc("ub-isolate","unicode-bidi:isolate",["unicode-bidi"]);
+gc("ub-override","unicode-bidi:bidi-override",["unicode-bidi"]);
+gc("ub-plaintext","unicode-bidi:plaintext",["unicode-bidi"]);
+// text-orientation
+gc("to-mixed","text-orientation:mixed",["text-orientation"]);
+gc("to-upright","text-orientation:upright",["text-orientation"]);
+gc("to-sideways","text-orientation:sideways",["text-orientation"]);
+// text-combine-upright
+gc("tcu-none","text-combine-upright:none",["text-combine-upright"]);
+gc("tcu-all","text-combine-upright:all",["text-combine-upright"]);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
