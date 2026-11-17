@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+gc("ct-none","contain:none","contain");
+gc("ct-strict","contain:strict","contain");
+gc("ct-content","contain:content","contain");
+gc("ct-size","contain:size","contain");
+gc("ct-inline","contain:inline-size","contain");
+gc("ct-layout","contain:layout","contain");
+gc("ct-paint","contain:paint","contain");
+gc("ct-style","contain:style","contain");
+gc("ct-two","contain:size layout","contain");
+gc("cv-visible","content-visibility:visible","content-visibility");
+gc("cv-hidden","content-visibility:hidden","content-visibility");
+gc("cv-auto","content-visibility:auto","content-visibility");
+gc("wc-none","will-change:none","will-change");
+gc("wc-auto","will-change:auto","will-change");
+gc("wc-one","will-change:transform","will-change");
+gc("wc-two","will-change:transform,opacity","will-change");
+gc("wc-invalid","will-change:2px","will-change");
+gc("sst-none","scroll-snap-type:none","scroll-snap-type");
+gc("sst-x","scroll-snap-type:x mandatory","scroll-snap-type");
+gc("sst-y","scroll-snap-type:y proximity","scroll-snap-type");
+gc("ssa-none","scroll-snap-align:none","scroll-snap-align");
+gc("ssa-start","scroll-snap-align:start","scroll-snap-align");
+gc("ssa-center","scroll-snap-align:center","scroll-snap-align");
+gc("ssa-end","scroll-snap-align:end","scroll-snap-align");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
