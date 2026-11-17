@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.c1{counter-reset:item}
+.c1::before{counter-increment:item;content:counter(item) ". "}
+.c2{counter-reset:sec 5}
+.c2::before{counter-increment:sec;content:counter(sec)}
+.c3::after{content:"[" counter(x,upper-alpha) "]";counter-reset:x;counter-increment:x}
+.c5{counter-reset:num 3}
+.c5::before{counter-reset:num;counter-increment:num;content:counter(num,decimal-leading-zero)}
+.t10{counter-reset:n 10;counter-increment:n -3}
+.t10::before{content:counter(n)}
+.t11{counter-reset:n}
+.t11::before{counter-increment:n 5;content:counter(n)}
+.c7::before{content:counter(sec,lower-roman)}
+.c8::before{content:counter(sec,upper-roman)}
+</style></head><body>
+<div class="c1" id="c1">item</div>
+<div class="c2" id="c2">sec</div>
+<div class="c3" id="c3">alpha</div>
+<div class="c5" id="c5">num</div>
+<div class="t10" id="t10">neg</div>
+<div class="t11" id="t11">inc5</div>
+<div class="c7" id="c7" style="counter-reset:sec 4">roman4</div>
+<div class="c8" id="c8" style="counter-reset:sec 9">roman9</div>
+<div id="out" style="font:12px monospace"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function before(id){const d=document.getElementById(id);const v=getComputedStyle(d,"::before").content.trim();L(id,"before="+(v===""?"(empty)":v.split(" ").join("_")));}
+function after(id){const d=document.getElementById(id);const v=getComputedStyle(d,"::after").content.trim();L(id,"after="+(v===""?"(empty)":v.split(" ").join("_")));}
+before("c1");before("c2");after("c3");before("c5");
+before("t10");before("t11");before("c7");before("c8");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
