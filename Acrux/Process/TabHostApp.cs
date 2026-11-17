@@ -1031,15 +1031,18 @@ internal sealed class TabHost : IDisposable, IPageEngineSink
     /// </summary>
     private static unsafe void ShiftRasterRows(byte* buf, int hPx, int rowBytes, int d)
     {
+        // The visible rows shift as one contiguous block (the copy direction guarantees the
+        // destination never overruns the source), so a single memmove replaces a per-row loop
+        // — the per-line call overhead was the only cost here, and it ran on every blit frame.
         if (d > 0)
         {
-            for (int y = 0; y + d < hPx; y++)
-                Buffer.MemoryCopy(buf + (long)(y + d) * rowBytes, buf + (long)y * rowBytes, rowBytes, rowBytes);
+            int rows = hPx - d;
+            Buffer.MemoryCopy(buf + (long)d * rowBytes, buf, (long)rows * rowBytes, (long)rows * rowBytes);
         }
         else if (d < 0)
         {
-            for (int y = hPx - 1; y + d >= 0; y--)
-                Buffer.MemoryCopy(buf + (long)(y + d) * rowBytes, buf + (long)y * rowBytes, rowBytes, rowBytes);
+            int rows = hPx + d;
+            Buffer.MemoryCopy(buf, buf - (long)d * rowBytes, (long)rows * rowBytes, (long)rows * rowBytes);
         }
     }
 
