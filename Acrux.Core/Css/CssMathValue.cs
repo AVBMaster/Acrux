@@ -90,6 +90,8 @@ public static class CssMathValue
                     // An address is not an expression, whatever characters it happens to hold.
                     if (word.Equals("url", StringComparison.OrdinalIgnoreCase))
                         sb.Append(word).Append('(').Append(argument).Append(')');
+                    else if (word.Equals("env", StringComparison.OrdinalIgnoreCase))
+                        sb.Append(ResolveEnv(argument));
                     else
                     {
                         var inner = Fold(argument);
@@ -373,6 +375,43 @@ public static class CssMathValue
         => text.IndexOf("var(", StringComparison.OrdinalIgnoreCase) >= 0
          || text.IndexOf("env(", StringComparison.OrdinalIgnoreCase) >= 0
          || text.IndexOf("attr(", StringComparison.OrdinalIgnoreCase) >= 0;
+
+    /// <summary>The environment variables <c>env()</c> resolves to a length. The four safe-area
+    /// insets (CSS Safe Area Insets) are the ones the engine knows; without a viewport inset they
+    /// are all 0px, which is what the reference engine answers on a page with no notch (measured).</summary>
+    private static readonly HashSet<string> KnownEnv = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "safe-area-inset-top", "safe-area-inset-right",
+        "safe-area-inset-bottom", "safe-area-inset-left",
+    };
+
+    /// <summary>The length <c>env(name, fallback)</c> stands for. A known name answers its own value
+    /// (0px here) and never the fallback — the fallback is only for a name the engine does not know.
+    /// An unknown name answers the fallback, or 0px when none is given (measured on the reference
+    /// engine: 'env(safe-area-bogus)' is 0px, 'env(safe-area-bogus, 9px)' is 9px, and
+    /// 'env(safe-area-inset-top, 5px)' is 0px because the name is known).</summary>
+    private static string ResolveEnv(string argument)
+    {
+        int sep = MatchingComma(argument);
+        var name = (sep < 0 ? argument : argument[..sep]).Trim();
+        if (KnownEnv.Contains(name)) return "0px";
+        if (sep < 0) return "0px";
+        return Fold(argument[(sep + 1)..].Trim());
+    }
+
+    /// <summary>The index of the first comma at the top level of <paramref name="text"/>, or -1.</summary>
+    private static int MatchingComma(string text)
+    {
+        int depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') { if (depth == 0) return -1; depth--; }
+            else if (c == ',' && depth == 0) return i;
+        }
+        return -1;
+    }
 
     /// <summary>Whether the whole text is one foldable function call and nothing around it.
     /// 'clamp(1px, 2%, 3px)' is, '1px + clamp(2px, 3%)' is not — the name has to start the text and

@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<div id="parent" style="color:red;font-size:20px;cursor:pointer;user-select:none">
+  <div id="child">child text</div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function safe(tag,fn){
+  try{ L(tag,fn()); }catch(e){ L(tag,"ERR:"+e.name+":"+e.message.split(" ").join("_")); }
+}
+function gcs(tag,el,prop){
+  safe(tag,()=>{const v=getComputedStyle(el).getPropertyValue(prop).trim();
+    return prop+"="+(v===""?"(empty)":v.split(" ").join("_"));});
+}
+const scope=document.getElementById("parent");
+const child=document.getElementById("child");
+gcs("env-bottom",scope,"margin-bottom");
+safe("env-parse",()=>{const d=document.createElement("div");d.setAttribute("style","padding:env(safe-area-inset-top)");document.body.appendChild(d);const v=getComputedStyle(d).paddingTop;d.remove();return "env(safe-area-inset-top)="+v;});
+safe("env-parse2",()=>{const d=document.createElement("div");d.setAttribute("style","padding:calc(env(safe-area-inset-bottom) + 10px)");document.body.appendChild(d);const v=getComputedStyle(d).paddingBottom;d.remove();return "calc(env+10px)="+v;});
+gcs("wc-auto",scope,"will-change");
+safe("wc-parse",()=>{const d=document.createElement("div");d.setAttribute("style","will-change:transform, opacity");document.body.appendChild(d);const v=getComputedStyle(d).willChange;d.remove();return "will-change="+v.split(" ").join("_");});
+safe("wc-one",()=>{const d=document.createElement("div");d.setAttribute("style","will-change:transform");document.body.appendChild(d);const v=getComputedStyle(d).willChange;d.remove();return "will-change="+v;});
+gcs("cur-inherit",child,"cursor");
+gcs("cur-parent",scope,"cursor");
+safe("cur-crosshair",()=>{const d=document.createElement("div");d.setAttribute("style","cursor:crosshair");document.body.appendChild(d);const v=getComputedStyle(d).cursor;d.remove();return "cursor="+v;});
+safe("cur-notallowed",()=>{const d=document.createElement("div");d.setAttribute("style","cursor:not-allowed");document.body.appendChild(d);const v=getComputedStyle(d).cursor;d.remove();return "cursor="+v;});
+safe("cur-grab",()=>{const d=document.createElement("div");d.setAttribute("style","cursor:grab");document.body.appendChild(d);const v=getComputedStyle(d).cursor;d.remove();return "cursor="+v;});
+gcs("us-inherit",child,"user-select");
+gcs("us-parent",scope,"user-select");
+safe("all-unset-us",()=>{const before=getComputedStyle(child).userSelect;child.setAttribute("style","all:unset");const after=getComputedStyle(child).userSelect;child.removeAttribute("style");return "us_before="+before+"_after_all-unset="+after;});
+safe("all-unset-color",()=>{const before=getComputedStyle(child).color;child.setAttribute("style","all:unset");const after=getComputedStyle(child).color;child.removeAttribute("style");return "color_before="+before.split(" ").join("_")+"_after_all-unset="+after.split(" ").join("_");});
+safe("revert-color",()=>{const before=getComputedStyle(child).color;child.setAttribute("style","color:revert");const after=getComputedStyle(child).color;child.removeAttribute("style");return "color_before="+before.split(" ").join("_")+"_after_revert="+after.split(" ").join("_");});
+safe("unset-cursor",()=>{child.setAttribute("style","cursor:crosshair");const a=getComputedStyle(child).cursor;child.setAttribute("style","cursor:unset");const b=getComputedStyle(child).cursor;child.removeAttribute("style");return "cursor_set="+a+"_unset="+b;});
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

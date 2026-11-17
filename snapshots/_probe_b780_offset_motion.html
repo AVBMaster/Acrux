@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.box{width:40px;height:40px;background:#e33}
+</style></head><body>
+<div id="out"></div>
+<div class="box" id="m1" style="offset-path:path('M 0 0 L 100 0')"></div>
+<div class="box" id="m2" style="offset-path:circle(50px at 50px 50px);offset-distance:50%"></div>
+<div class="box" id="m3" style="offset-path:ray(45deg);offset-distance:40px"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+gc("op-path","offset-path:path('M 0 0 L 100 0')","offset-path");
+gc("op-circle","offset-path:circle(50px)","offset-path");
+gc("op-ray","offset-path:ray(45deg)","offset-path");
+gc("op-none","offset-path:none","offset-path");
+gc("od-50pct","offset-path:ray(0deg);offset-distance:50%","offset-distance");
+gc("od-40px","offset-path:ray(0deg);offset-distance:40px","offset-distance");
+gc("od-0","offset-path:ray(0deg);offset-distance:0","offset-distance");
+gc("or-auto","offset-path:ray(45deg);offset-rotate:auto","offset-rotate");
+gc("or-45deg","offset-path:ray(45deg);offset-rotate:45deg","offset-rotate");
+gc("or-auto-45","offset-path:ray(45deg);offset-rotate:auto 45deg","offset-rotate");
+gc("oa-0","offset-anchor:0 0","offset-anchor");
+gc("oa-center","offset-anchor:center","offset-anchor");
+gc("oa-10-20","offset-anchor:10px 20px","offset-anchor");
+gc("opos-0","offset-position:0 0","offset-position");
+gc("opos-center","offset-position:center","offset-position");
+// used transform of the motion-path boxes
+const m1=document.getElementById("m1");
+L("m1-transform",getComputedStyle(m1).transform);
+L("m1-offset-distance",getComputedStyle(m1).offsetDistance);
+const m2=document.getElementById("m2");
+L("m2-transform",getComputedStyle(m2).transform);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
