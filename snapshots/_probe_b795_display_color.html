@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// display values
+gc("dp-block","display:block","display");
+gc("dp-inline","display:inline","display");
+gc("dp-inblock","display:inline-block","display");
+gc("dp-flex","display:flex","display");
+gc("dp-none","display:none","display");
+gc("dp-contents","display:contents","display");
+gc("dp-table","display:table","display");
+gc("dp-grid","display:grid","display");
+// visibility
+gc("vis-v","visibility:visible","visibility");
+gc("vis-h","visibility:hidden","visibility");
+gc("vis-c","visibility:collapse","visibility");
+// opacity
+gc("op-0","opacity:0","opacity");
+gc("op-05","opacity:0.5","opacity");
+gc("op-1","opacity:1","opacity");
+gc("op-neg","opacity:-1","opacity");
+gc("op-2","opacity:2","opacity");
+// box-sizing
+gc("bs-cb","box-sizing:content-box","box-sizing");
+gc("bs-bb","box-sizing:border-box","box-sizing");
+// overflow
+gc("ov-v","overflow:visible","overflow");
+gc("ov-h","overflow:hidden","overflow");
+gc("ov-s","overflow:scroll","overflow");
+gc("ov-a","overflow:auto","overflow");
+// font properties
+gc("fs-16","font-size:16px","font-size");
+gc("fs-em","font-size:1.5em","font-size");
+gc("fs-large","font-size:large","font-size");
+gc("fw-bold","font-weight:bold","font-weight");
+gc("fw-700","font-weight:700","font-weight");
+gc("fst-italic","font-style:italic","font-style");
+gc("fv-sc","font-variant:small-caps","font-variant");
+gc("lh-n","line-height:normal","line-height");
+gc("lh-num","line-height:1.5","line-height");
+gc("lh-px","line-height:24px","line-height");
+// color
+gc("c-red","color:red","color");
+gc("c-rgb","color:rgb(255,0,0)","color");
+gc("c-rgba","color:rgba(255,0,0,0.5)","color");
+gc("c-hex","color:#ff0000","color");
+gc("c-hex8","color:#ff000080","color");
+gc("c-hsl","color:hsl(0,100%,50%)","color");
+gc("c-transparent","color:transparent","color");
+gc("c-cur","color:currentColor","color");
+gc("c-inherit","color:inherit","color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
