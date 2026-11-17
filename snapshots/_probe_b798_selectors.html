@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+.sel-class{color:red}
+div.sel-divclass{color:green}
+#sel-id{color:blue}
+.sel-multi-a.sel-multi-b{color:purple}
+.sel-not:not(.nope){color:orange}
+.sel-first:first-child{color:brown}
+li.sel-nth:nth-child(2){color:teal}
+.sel-parent > .sel-child{color:olive}
+.sel-adj + .sel-next{color:navy}
+.sel-pre ~ .sel-sib{color:aqua}
+</style></head><body>
+<div class="sel-class" id="t1">class</div>
+<div class="sel-divclass" id="t2">divclass</div>
+<div id="sel-id">id</div>
+<div class="sel-multi-a sel-multi-b" id="t4">multi</div>
+<div class="sel-not" id="t5">not</div>
+<div class="sel-first" id="t6">firstchild</div>
+<ul><li class="sel-nth" id="t7">li1</li><li class="sel-nth" id="t8">li2</li></ul>
+<div class="sel-parent"><div class="sel-child" id="t9">child</div></div>
+<div class="sel-adj"></div><div class="sel-next" id="t10">next</div>
+<div class="sel-pre"></div><div class="sel-sib" id="t11">sib</div>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function c(tag,id){
+  const d=document.getElementById(id);if(!d){L(tag,"MISSING");return;}
+  const v=getComputedStyle(d).color.trim();
+  L(tag,"color="+(v===""?"(empty)":v.split(" ").join("_")));
+}
+c("class","t1");c("divclass","t2");c("id","sel-id");c("multi","t4");
+c("not","t5");c("firstchild","t6");c("nth1","t7");c("nth2","t8");
+c("child","t9");c("adjacent","t10");c("sibling","t11");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
