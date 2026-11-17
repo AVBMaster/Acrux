@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+input,button,textarea,select{font:inherit}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function formProbe(tag,html,props){
+  const isArr=Array.isArray(props);
+  const sel=isArr?null:props.__el;
+  const list=isArr?props:props.pl;
+  const t=document.createElement("div");t.innerHTML=html;document.body.appendChild(t);
+  const el=sel ? t.querySelector(sel) : t.firstElementChild;const cs=getComputedStyle(el);
+  for(const p of list){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  t.remove();
+}
+formProbe("legend","<fieldset><legend>Legend</legend></fieldset>",{__el:"legend",pl:["display","padding-top","margin-top"]});
+formProbe("input-text","<input type=text>",["display","box-sizing","border-width","border-style","padding-top","background-color","color"]);
+formProbe("input-checkbox","<input type=checkbox>",["display","width","height","border-width"]);
+formProbe("input-radio","<input type=radio>",["display","border-radius"]);
+formProbe("button","<button>",["display","border-width","border-style","padding-top","background-color","color"]);
+formProbe("textarea","<textarea>",["display","border-width","font-family"]);
+formProbe("select","<select><option>x</option></select>",["display","border-width","background-color"]);
+formProbe("fieldset","<fieldset><legend>L</legend></fieldset>",["display","border-width","margin-top","padding-top"]);
+formProbe("input-disabled","<input disabled>",["color","background-color","opacity"]);
+formProbe("input-readonly","<input readonly>",["color"]);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
