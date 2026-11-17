@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+#host{position:relative;width:400px;height:200px;background:#eef}
+</style></head><body>
+<div id="host">
+<div id="r1" style="position:relative;left:10px;top:5px;width:50px;height:20px"></div>
+<div id="a1" style="position:absolute;left:20px;top:10px;width:60px;height:30px"></div>
+<div id="a2" style="position:absolute;right:10px;bottom:5px;width:40px;height:25px"></div>
+<div id="a3" style="position:absolute;left:0;right:0;top:0;height:15px"></div>
+<div id="f1" style="float:left;width:80px;height:40px;background:#cfc"></div>
+<div id="f2" style="float:right;width:60px;height:40px;background:#fcc"></div>
+<div id="cl" style="clear:both;height:10px"></div>
+<div id="n1" style="width:100px;height:20px;background:#ccf"></div>
+</div>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function r(tag,id){
+  const d=document.getElementById(id);const b=d.getBoundingClientRect();const h=document.getElementById("host").getBoundingClientRect();
+  L(tag,"x="+Math.round(b.x-h.x)+"_y="+Math.round(b.y-h.y)+"_w="+Math.round(b.width)+"_h="+Math.round(b.height));
+}
+r("r1-rel","r1");r("a1-abs","a1");r("a2-abs-right","a2");r("a3-abs-fill","a3");
+r("f1-floatleft","f1");r("f2-floatright","f2");r("cl-clear","cl");r("n1-normal","n1");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
