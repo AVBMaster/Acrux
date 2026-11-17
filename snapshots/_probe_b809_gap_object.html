@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// flex gap longhands
+gc("gap-1","display:flex;gap:10px",["row-gap","column-gap"]);
+gc("gap-2","display:flex;gap:5px 15px",["row-gap","column-gap"]);
+gc("gap-pct","display:flex;gap:10%","row-gap");
+gc("gap-norm","display:flex;gap:normal","row-gap");
+// object-fit
+gc("of-fill","object-fit:fill","object-fit");
+gc("of-contain","object-fit:contain","object-fit");
+gc("of-cover","object-fit:cover","object-fit");
+gc("of-none","object-fit:none","object-fit");
+gc("of-scaledown","object-fit:scale-down","object-fit");
+// object-position
+gc("op-center","object-position:center","object-position");
+gc("op-px","object-position:10px 20px","object-position");
+gc("op-pct","object-position:25% 75%","object-position");
+// shape-outside
+gc("so-none","shape-outside:none","shape-outside");
+gc("so-circle","shape-outside:circle(50%)","shape-outside");
+gc("so-margin","shape-margin:10px","shape-margin");
+// text-emphasis-position two-value
+gc("tep-under","text-emphasis-position:under left","text-emphasis-position");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
