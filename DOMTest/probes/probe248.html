@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. localStorage ──────────────────────────────────────────────────────
+    localStorage.clear();
+    eq('A1 length initial', localStorage.length, '0');
+    localStorage.setItem('k1', 'v1');
+    eq('A2 length after set', localStorage.length, '1');
+    eq('A3 getItem', localStorage.getItem('k1'), 'v1');
+    eq('A4 key(0)', localStorage.key(0), 'k1');
+    eq('A5 key(1) null', localStorage.key(1), 'null');
+    eq('A6 key(-1) null', localStorage.key(-1), 'null');
+    eq('A7 has k1', localStorage.getItem('k1') !== null, 'true');
+    localStorage.setItem('k1', 'v2');
+    eq('A8 overwrite', localStorage.getItem('k1'), 'v2');
+    localStorage.removeItem('k1');
+    eq('A9 after remove', localStorage.getItem('k1'), 'null');
+    eq('A10 length after remove', localStorage.length, '0');
+    localStorage.clear();
+    eq('A11 clear', localStorage.length, '0');
+    // ── B. sessionStorage ────────────────────────────────────────────────────
+    sessionStorage.clear();
+    sessionStorage.setItem('s1', 'sv1');
+    eq('B1 sessionStorage length', sessionStorage.length, '1');
+    eq('B2 sessionStorage getItem', sessionStorage.getItem('s1'), 'sv1');
+    sessionStorage.clear();
+    eq('B3 sessionStorage clear', sessionStorage.length, '0');
+    // ── C. StorageEvent constructor ─────────────────────────────────────────
+    eq('C1 StorageEvent is fn', typeof StorageEvent, 'function');
+    var se = new StorageEvent('storage', {key:'k', newValue:'nv', oldValue:'ov', url:'https://x', storageArea:localStorage});
+    eq('C2 type', se.type, 'storage');
+    eq('C3 key', se.key, 'k');
+    eq('C4 newValue', se.newValue, 'nv');
+    eq('C5 oldValue', se.oldValue, 'ov');
+    eq('C6 url', se.url, 'https://x');
+    eq('C7 storageArea', se.storageArea === localStorage, 'true');
+    eq('C8 bubbles', se.bubbles, 'false');
+    // ── D. Storage surface ───────────────────────────────────────────────────
+    eq('D1 Storage is fn', typeof Storage, 'function');
+    eq('D2 getItem is fn', typeof localStorage.getItem, 'function');
+    eq('D3 setItem is fn', typeof localStorage.setItem, 'function');
+    eq('D4 removeItem is fn', typeof localStorage.removeItem, 'function');
+    eq('D5 clear is fn', typeof localStorage.clear, 'function');
+    eq('D6 key is fn', typeof localStorage.key, 'function');
+    localStorage.clear();
+})();
+</script></body></html>
