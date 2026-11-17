@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+// MediaQueryList serialisation round-trip
+function mq(tag,query){
+  const m=window.matchMedia(query);
+  L(tag,query+"=>"+(m.media===""?"(empty)":m.media.split(" ").join("_"))+"_matches="+m.matches);
+}
+mq("mq-all","all");
+mq("mq-screen","screen");
+mq("mq-print","print");
+mq("mq-width","(min-width: 100px)");
+mq("mq-maxw","(max-width: 100px)");
+mq("mq-exactw","(width: 100px)");
+mq("mq-orient","(orientation: landscape)");
+mq("mq-res","(min-resolution: 96dpi)");
+mq("mq-color","(color)");
+mq("mq-bogus","(min-width: )");
+mq("mq-and","screen and (min-width: 100px)");
+mq("mq-comma","screen, print");
+mq("mq-not","not screen");
+mq("mq-only","only screen");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
