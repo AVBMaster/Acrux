@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;background:#fff}
+.r{width:120px;height:50px;background:#fff;margin:10px 0;position:relative}
+</style></head><body>
+<div class="r" id="ts1" style="text-shadow:4px 4px 0 red;font-size:20px">Shadow</div>
+<div class="r" id="ts2" style="text-shadow:0 0 4px blue;font-size:20px">Glow</div>
+<div class="r" id="bs1" style="box-shadow:5px 5px 0 green"></div>
+<div class="r" id="bs2" style="box-shadow:inset 0 0 0 4px purple"></div>
+<div class="r" id="bs3" style="box-shadow:0 0 8px 2px orange"></div>
+<div class="r" id="bd1" style="border:3px solid black;border-radius:0"></div>
+<div class="r" id="bd2" style="border:3px solid black;border-radius:15px"></div>
+<div class="r" id="flt1" style="filter:invert(1);background:#000"></div>
+<div class="r" id="flt2" style="filter:opacity(0.4);background:red"></div>
+<div id="out" style="font:12px monospace"></div>
+<script>
+const out=[];
+function probe(tag,id,x,y){
+  const d=document.getElementById(id);
+  const r=d.getBoundingClientRect();
+  // sample the pixel via a 1x1 canvas read isn't possible; report box for reference
+  out.push("L~"+tag+"~box=x="+Math.round(r.x)+"_y="+Math.round(r.y)+"_w="+Math.round(r.width)+"_h="+Math.round(r.height));
+}
+probe("ts1","ts1");probe("ts2","ts2");probe("bs1","bs1");probe("bs2","bs2");
+probe("bs3","bs3");probe("bd1","bd1");probe("bd2","bd2");probe("flt1","flt1");probe("flt2","flt2");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
