@@ -1,0 +1,15 @@
+<!doctype html><html><body><div id="out"></div><script>
+const out=[];
+function g(t,c){const d=document.createElement("div");d.setAttribute("style","background-image:"+c);document.body.appendChild(d);const v=getComputedStyle(d).backgroundImage.trim();out.push("L~"+t+"~"+(v===""?"(empty)":v.split(" ").join("_")));d.remove();}
+g("rrg-a","repeating-radial-gradient(red 0 5px, blue 5px 10px)");
+g("rrg-b","repeating-radial-gradient(circle, red, blue 10px, red 20px)");
+g("rrg-c","repeating-radial-gradient(red, blue)");
+g("rrg-d","repeating-radial-gradient(ellipse at center, red 0px, blue 20px)");
+g("rg-d","radial-gradient(red 0 5px, blue 5px 10px)");
+g("rg-shape","radial-gradient(circle 20px, red, blue)");
+g("rg-pct","radial-gradient(50% 50%, red, blue)");
+g("rg-ellipselen","radial-gradient(ellipse 100px 50px, red, blue)");
+g("lg-dbl","linear-gradient(45deg, red 0 10px, blue 10px 20px)");
+g("cg-dbl","conic-gradient(red 0 30deg, blue 30deg 60deg)");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

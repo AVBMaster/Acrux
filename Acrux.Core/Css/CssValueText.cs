@@ -2408,6 +2408,13 @@ public static class CssValueText
             inner = CanonicalConicGradient(inner);
         if (lowered == "linear-gradient" || lowered == "repeating-linear-gradient")
             inner = CanonicalLinearGradient(inner);
+        // A colour stop may carry TWO positions ('red 0 5px', CSS Images 4), which the reference
+        // engine prints as two stops of the one colour ('red 0px, red 5px'). Every gradient family
+        // does this, so the expansion runs once here after the prologue canonicalisers (which own
+        // the first argument and so must not see their stops re-split). A conic stop's bare 0 is an
+        // angle (0deg), the others' a length (0px).
+        if (name.EndsWith("gradient", StringComparison.OrdinalIgnoreCase))
+            inner = ExpandDoublePositionStops(inner, conic: lowered is "conic-gradient" or "repeating-conic-gradient");
         // A function name is ASCII case-insensitive on the way in, but the CSSOM prints the few
         // that carry a capital in their canonical spelling — the transform family above all, so
         // 'TRANSLATEZ(10px)' reads back 'translateZ(10px)' and not 'translatez(10px)' (measured).
@@ -2718,6 +2725,84 @@ public static class CssValueText
 
         // An angle direction — kept as written.
         return inner;
+    }
+
+    /// <summary>
+    /// Expand a colour stop that carries two positions (<c>red 0 5px</c>, CSS Images 4) into the
+    /// two stops of the one colour the reference engine prints (<c>red 0px, red 5px</c>). A stop is
+    /// a colour and at most one position; two positions in a row after the colour is the
+    /// double-position form, and it is the only shape that grows. A bare <c>0</c> among a stop's
+    /// positions takes the unit the gradient's own axis prints — a length for a linear or radial
+    /// stop, an angle for a conic stop — so <c>red 0</c> reads <c>red 0px</c> or <c>red 0deg</c>
+    /// (measured, all four gradient families).
+    /// </summary>
+    private static string ExpandDoublePositionStops(string inner, bool conic = false)
+    {
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return inner;
+        var result = new List<string>();
+        foreach (var raw in args)
+        {
+            var arg = raw.Trim();
+            var words = SplitTopLevelWords(arg);
+            // A double-position stop is a COLOUR followed by two positions ('red 0 5px'); requiring
+            // the colour in front is what keeps a radial prologue's size pair ('50% 50%', two
+            // radii) and a conic's 'from 90deg at 30% 40%' from being misread as a stop that grows.
+            int colourEnd = -1;
+            for (int i = 0; i < words.Count; i++)
+            {
+                if (!ColorParser.IsColorToken(words[i])) break;
+                colourEnd = i;
+            }
+            // The two positions run from the word after the colour to the end of the argument; a
+            // double-position stop is exactly two of them, and it prints as TWO stops of the one
+            // colour — 'red 0 5px' reads 'red 0px, red 5px' (measured, all four families).
+            int posStart = colourEnd + 1;
+            int posCount = words.Count - posStart;
+            if (colourEnd < 0 || posCount != 2
+                || !IsStopPosition(words[posStart]) || !IsStopPosition(words[posStart + 1]))
+            { result.Add(NormalizeBareZeroStop(arg, words, conic)); continue; }
+            var colour = string.Join(" ", words.Take(posStart));
+            var pos1 = NormalizeStopPosition(words[posStart], conic);
+            var pos2 = NormalizeStopPosition(words[posStart + 1], conic);
+            result.Add((colour + " " + pos1).Trim());
+            result.Add((colour + " " + pos2).Trim());
+        }
+        return string.Join(", ", result);
+    }
+
+    /// <summary>True for a token that can be a colour stop's position: a length, a percentage, an
+    /// angle, or a bare <c>0</c> — which is the zero position in whatever unit the gradient's own
+    /// axis prints, and is exactly the spelling a double-position stop's first position carries
+    /// ('red 0 5px').</summary>
+    private static bool IsStopPosition(string token)
+    {
+        if (token.Length == 0) return false;
+        if (token == "0") return true;
+        if (IsLengthOrPercentageToken(token)) return true;
+        return IsAngleToken(token);
+    }
+
+    /// <summary>A bare <c>0</c> in a single-position stop takes the unit the gradient's axis prints.
+    /// Only the position (the last word, when it is a bare 0) is re-spelled.</summary>
+    private static string NormalizeBareZeroStop(string arg, List<string> words, bool conic)
+    {
+        if (words.Count == 0) return arg;
+        var last = words[^1];
+        if (last == "0")
+        {
+            words[^1] = conic ? "0deg" : "0px";
+            return string.Join(" ", words);
+        }
+        return arg;
+    }
+
+    /// <summary>Give a stop position its printed unit: a bare <c>0</c> becomes <c>0px</c> or
+    /// <c>0deg</c>, any other position is already unit-bearing and is kept.</summary>
+    private static string NormalizeStopPosition(string token, bool conic)
+    {
+        if (token == "0") return conic ? "0deg" : "0px";
+        return token;
     }
 
     /// <summary>True for a token that is an angle — a number with one of the four angle units.

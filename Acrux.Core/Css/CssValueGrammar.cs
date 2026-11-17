@@ -956,18 +956,19 @@ public static class CssValueGrammar
         if (prologue.Length == 0) return true;
 
         var words = SplitComponents(prologue);
-        // A prologue is only present when it names a shape, a size keyword or 'at'; otherwise the
-        // first argument is the first colour stop and there is no shape/size pair to check.
-        bool hasPrologue = false;
-        foreach (var w in words)
+        // A prologue is only present when the FIRST word names a shape, a size keyword or 'at'.
+        // Deciding on the first word alone is what keeps a colour stop from being misread as a
+        // prologue: a double-position stop ('red 0 5px', CSS Images 4) carries lengths, and
+        // scanning every word would take the '5px' for a size, then reject 'red' as a shape it
+        // cannot be. A real prologue never begins with a colour (measured, both engines).
+        if (words.Count == 0) return true;
         {
-            var lower = w.ToLowerInvariant();
-            if (lower == "at" || lower is "circle" or "ellipse"
-                || lower is "closest-side" or "closest-corner" or "farthest-side" or "farthest-corner")
-            { hasPrologue = true; break; }
-            if (IsRadialSizeWord(w)) { hasPrologue = true; break; }
+            var firstLower = words[0].ToLowerInvariant();
+            bool firstBeginsPrologue = firstLower == "at" || firstLower is "circle" or "ellipse"
+                || firstLower is "closest-side" or "closest-corner" or "farthest-side" or "farthest-corner"
+                || IsRadialSizeWord(words[0]);
+            if (!firstBeginsPrologue) return true;
         }
-        if (!hasPrologue) return true;
 
         string? shape = null;
         int lengthCount = 0, percentageCount = 0;
