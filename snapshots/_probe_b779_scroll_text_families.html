@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// scroll-margin family
+gc("sm-10px","scroll-margin:10px","scroll-margin-top");
+gc("sm-10px-right","scroll-margin:10px","scroll-margin-right");
+gc("sm-all","scroll-margin:5px 10px 15px 20px","scroll-margin-left");
+gc("sm-top-20px","scroll-margin-top:20px","scroll-margin-top");
+gc("sm-left-neg","scroll-margin-left:-5px","scroll-margin-left");
+gc("sm-inline-start","scroll-margin-inline-start:8px","scroll-margin-inline-start");
+gc("sm-block-end","scroll-margin-block-end:12px","scroll-margin-block-end");
+// scroll-padding family
+gc("sp-10px","scroll-padding:10px","scroll-padding-top");
+gc("sp-all","scroll-padding:5px 10px 15px 20px","scroll-padding-left");
+gc("sp-pct","scroll-padding-top:10%","scroll-padding-top");
+gc("sp-inline","scroll-padding-inline-start:8px","scroll-padding-inline-start");
+// font-optical-sizing
+gc("fos-auto","font-optical-sizing:auto","font-optical-sizing");
+gc("fos-none","font-optical-sizing:none","font-optical-sizing");
+// font-variation-settings
+gc("fvs-normal","font-variation-settings:normal","font-variation-settings");
+gc("fvs-wght","font-variation-settings:'wght' 700","font-variation-settings");
+// font-feature-settings
+gc("ffs-normal","font-feature-settings:normal","font-feature-settings");
+gc("ffs-kern","font-feature-settings:'kern'","font-feature-settings");
+gc("ffs-liga-off","font-feature-settings:'liga' 0","font-feature-settings");
+// text-justify
+gc("tj-auto","text-justify:auto","text-justify");
+gc("tj-none","text-justify:none","text-justify");
+gc("tj-inter-word","text-justify:inter-word","text-justify");
+gc("tj-distribute","text-justify:distribute","text-justify");
+// hanging-punctuation
+gc("hp-none","hanging-punctuation:none","hanging-punctuation");
+gc("hp-first","hanging-punctuation:first","hanging-punctuation");
+gc("hp-allow-end","hanging-punctuation:allow-end","hanging-punctuation");
+// text-rendering
+gc("tr-auto","text-rendering:auto","text-rendering");
+gc("tr-optimizeSpeed","text-rendering:optimizeSpeed","text-rendering");
+gc("tr-optimizeLegibility","text-rendering:optimizeLegibility","text-rendering");
+gc("tr-geometricPrecision","text-rendering:geometricPrecision","text-rendering");
+// transition-behavior (new in Chrome 122+)
+gc("tb-normal","transition-behavior:normal","transition-behavior");
+gc("tb-allow-discrete","transition-behavior:allow-discrete","transition-behavior");
+// scroll-snap-align + scroll-snap-type
+gc("ssa-none","scroll-snap-align:none","scroll-snap-align");
+gc("ssa-start","scroll-snap-align:start","scroll-snap-align");
+gc("ssa-both","scroll-snap-align:both","scroll-snap-align");
+gc("sst-none","scroll-snap-type:none","scroll-snap-type");
+gc("sst-x-mandatory","scroll-snap-type:x mandatory","scroll-snap-type");
+gc("sst-y-proximity","scroll-snap-type:y proximity","scroll-snap-type");
+// scroll-snap-stop
+gc("sss-normal","scroll-snap-stop:normal","scroll-snap-stop");
+gc("sss-always","scroll-snap-stop:always","scroll-snap-stop");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
