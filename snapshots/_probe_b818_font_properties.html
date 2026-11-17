@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// font-family
+gc("ff-serif","font-family:serif","font-family");
+gc("ff-sans","font-family:sans-serif","font-family");
+gc("ff-mono","font-family:monospace","font-family");
+gc("ff-named","font-family:Arial","font-family");
+gc("ff-multi","font-family:Arial,sans-serif","font-family");
+gc("ff-quoted","font-family:'Times New Roman'","font-family");
+gc("ff-inherit","font-family:inherit","font-family");
+// font-weight
+gc("fw-normal","font-weight:normal","font-weight");
+gc("fw-bold","font-weight:bold","font-weight");
+gc("fw-bolder","font-weight:bolder","font-weight");
+gc("fw-lighter","font-weight:lighter","font-weight");
+gc("fw-100","font-weight:100","font-weight");
+gc("fw-900","font-weight:900","font-weight");
+// font-style
+gc("fs-normal","font-style:normal","font-style");
+gc("fs-italic","font-style:italic","font-style");
+gc("fs-oblique","font-style:oblique","font-style");
+// font-variant
+gc("fv-normal","font-variant:normal","font-variant");
+gc("fv-smallcaps","font-variant:small-caps","font-variant");
+gc("fv-allsc","font-variant:all-small-caps","font-variant");
+// text-decoration
+gc("td-none","text-decoration:none","text-decoration");
+gc("td-underline","text-decoration:underline","text-decoration");
+gc("td-overline","text-decoration:overline","text-decoration");
+gc("td-linethrough","text-decoration:line-through","text-decoration");
+gc("td-thick","text-decoration:underline;text-decoration-thickness:3px","text-decoration-thickness");
+// line-height
+gc("lh-normal","line-height:normal","line-height");
+gc("lh-num","line-height:1.5","line-height");
+gc("lh-px","line-height:20px","line-height");
+gc("lh-pct","line-height:150%","line-height");
+// letter-spacing word-spacing
+gc("ls-normal","letter-spacing:normal","letter-spacing");
+gc("ls-2px","letter-spacing:2px","letter-spacing");
+gc("ws-normal","word-spacing:normal","word-spacing");
+gc("ws-5px","word-spacing:5px","word-spacing");
+// font shorthand
+gc("font-sh","font:bold 16px/1.5 Arial,sans-serif",["font-weight","font-size","line-height","font-family"]);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
