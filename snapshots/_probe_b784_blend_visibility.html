@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// mix-blend-mode
+["normal","multiply","screen","overlay","darken","lighten","color-dodge","color-burn","hard-light","soft-light","difference","exclusion","hue","saturation","color","luminosity"].forEach(m=>gc("mbm-"+m,"mix-blend-mode:"+m,"mix-blend-mode"));
+// isolation
+gc("iso-auto","isolation:auto","isolation");
+gc("iso-isolate","isolation:isolate","isolation");
+// background-blend-mode
+gc("bbm-normal","background-blend-mode:normal","background-blend-mode");
+gc("bbm-multiply","background-blend-mode:multiply","background-blend-mode");
+gc("bbm-multi","background-blend-mode:multiply, screen","background-blend-mode");
+// backdrop-filter
+gc("bdf-none","backdrop-filter:none","backdrop-filter");
+gc("bdf-blur","backdrop-filter:blur(4px)","backdrop-filter");
+gc("bdf-bright","backdrop-filter:brightness(0.7)","backdrop-filter");
+// opacity
+gc("op-0","opacity:0","opacity");
+gc("op-05","opacity:0.5","opacity");
+gc("op-1","opacity:1","opacity");
+gc("op-2","opacity:2","opacity");
+// image-rendering
+gc("ir-auto","image-rendering:auto","image-rendering");
+gc("ir-crisp","image-rendering:crisp-edges","image-rendering");
+gc("ir-pixel","image-rendering:pixelated","image-rendering");
+// visibility
+gc("vis-visible","visibility:visible","visibility");
+gc("vis-hidden","visibility:hidden","visibility");
+gc("vis-collapse","visibility:collapse","visibility");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>

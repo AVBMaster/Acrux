@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:0/0 monospace}
+.wrap{position:relative;width:600px;height:300px}
+.stack{position:absolute;width:80px;height:80px}
+</style></head><body>
+<div class="wrap">
+<!-- A: multiply over red — orange box over red square, blend multiply -->
+<div style="position:absolute;left:10px;top:10px;width:80px;height:80px;background:#ff0"></div>
+<div class="stack" style="left:10px;top:10px;background:#f0f;mix-blend-mode:multiply"></div>
+<!-- B: screen blend -->
+<div style="position:absolute;left:110px;top:10px;width:80px;height:80px;background:#000"></div>
+<div class="stack" style="left:110px;top:10px;background:#404040;mix-blend-mode:screen"></div>
+<!-- C: difference -->
+<div style="position:absolute;left:210px;top:10px;width:80px;height:80px;background:#fff"></div>
+<div class="stack" style="left:210px;top:10px;background:#808080;mix-blend-mode:difference"></div>
+<!-- D: isolation isolate — magenta should NOT blend with yellow parent -->
+<div style="position:absolute;left:310px;top:10px;width:80px;height:80px;background:#ff0">
+  <div style="position:absolute;left:0;top:0;width:40px;height:40px;background:#f0f;mix-blend-mode:multiply;isolation:isolate"></div>
+</div>
+<!-- E: visibility hidden child -->
+<div style="position:absolute;left:410px;top:10px;width:80px;height:80px;background:#00f">
+  <div style="position:absolute;left:20px;top:20px;width:40px;height:40px;background:#f00;visibility:hidden"></div>
+</div>
+<!-- F: opacity 0.5 box over checker -->
+<div style="position:absolute;left:10px;top:120px;width:80px;height:80px;background:#000"></div>
+<div style="position:absolute;left:10px;top:120px;width:80px;height:80px;background:#fff;opacity:0.5"></div>
+</div>
+</body></html>
