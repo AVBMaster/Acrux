@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// text-align
+gc("ta-left","text-align:left","text-align");
+gc("ta-right","text-align:right","text-align");
+gc("ta-center","text-align:center","text-align");
+gc("ta-justify","text-align:justify","text-align");
+gc("ta-start","text-align:start","text-align");
+gc("ta-end","text-align:end","text-align");
+// vertical-align
+gc("va-baseline","vertical-align:baseline","vertical-align");
+gc("va-top","vertical-align:top","vertical-align");
+gc("va-middle","vertical-align:middle","vertical-align");
+gc("va-bottom","vertical-align:bottom","vertical-align");
+gc("va-sub","vertical-align:sub","vertical-align");
+gc("va-super","vertical-align:super","vertical-align");
+gc("va-px","vertical-align:5px","vertical-align");
+gc("va-pct","vertical-align:20%","vertical-align");
+// white-space
+gc("ws-normal","white-space:normal","white-space");
+gc("ws-nowrap","white-space:nowrap","white-space");
+gc("ws-pre","white-space:pre","white-space");
+gc("ws-prewrap","white-space:pre-wrap","white-space");
+gc("ws-preline","white-space:pre-line","white-space");
+gc("ws-break","white-space:break-spaces","white-space");
+// word-break / overflow-wrap
+gc("wb-normal","word-break:normal","word-break");
+gc("wb-all","word-break:break-all","word-break");
+gc("wb-keep","word-break:keep-all","word-break");
+gc("ow-normal","overflow-wrap:normal","overflow-wrap");
+gc("ow-anywhere","overflow-wrap:anywhere","overflow-wrap");
+gc("ow-breakword","overflow-wrap:break-word","overflow-wrap");
+// text-transform
+gc("tt-none","text-transform:none","text-transform");
+gc("tt-up","text-transform:uppercase","text-transform");
+gc("tt-low","text-transform:lowercase","text-transform");
+gc("tt-cap","text-transform:capitalize","text-transform");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
