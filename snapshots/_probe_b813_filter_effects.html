@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// filter functions
+gc("f-blur","filter:blur(3px)","filter");
+gc("f-brightness","filter:brightness(0.5)","filter");
+gc("f-contrast","filter:contrast(0.5)","filter");
+gc("f-grayscale","filter:grayscale(1)","filter");
+gc("f-hue","filter:hue-rotate(90deg)","filter");
+gc("f-invert","filter:invert(0.5)","filter");
+gc("f-opacity","filter:opacity(0.5)","filter");
+gc("f-saturate","filter:saturate(2)","filter");
+gc("f-sepia","filter:sepia(0.5)","filter");
+gc("f-drop","filter:drop-shadow(2px 2px 0 red)","filter");
+gc("f-multi","filter:blur(1px) brightness(0.8) saturate(1.5)","filter");
+gc("f-none","filter:none","filter");
+// backdrop-filter
+gc("bf-blur","backdrop-filter:blur(5px)","backdrop-filter");
+gc("bf-bright","backdrop-filter:brightness(0.7)","backdrop-filter");
+gc("bf-none","backdrop-filter:none","backdrop-filter");
+// mix-blend-mode
+gc("mbm-multiply","mix-blend-mode:multiply","mix-blend-mode");
+gc("mbm-screen","mix-blend-mode:screen","mix-blend-mode");
+gc("mbm-overlay","mix-blend-mode:overlay","mix-blend-mode");
+// isolation
+gc("iso-isolate","isolation:isolate","isolation");
+gc("iso-auto","isolation:auto","isolation");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
