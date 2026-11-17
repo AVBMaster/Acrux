@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gcs(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+function rect(tag,html){
+  const d=document.createElement("div");d.setAttribute("style",html);document.body.appendChild(d);
+  const b=d.getBoundingClientRect();L(tag,"w="+Math.round(b.width)+"_h="+Math.round(b.height));d.remove();
+}
+// grid computed
+gcs("g-tpl","display:grid;grid-template-columns:100px 1fr 2fr","grid-template-columns");
+gcs("g-rows","display:grid;grid-template-rows:50px auto","grid-template-rows");
+gcs("g-area","display:grid;grid-template-areas:'a b'","grid-template-areas");
+gcs("g-gp","display:grid;gap:10px","gap");
+gcs("g-auto","display:grid;grid-auto-flow:column","grid-auto-flow");
+gcs("g-ac","display:grid;align-content:center","align-content");
+gcs("g-jc","display:grid;justify-content:end","justify-content");
+gcs("g-gcol","display:grid;grid-column:1 / 3","grid-column");
+gcs("g-grow","display:grid;grid-row:span 2","grid-row");
+// grid geometry: 2 fixed cols 100px + 10px gap
+rect("g2-geom","display:grid;grid-template-columns:100px 100px;gap:10px;height:50px");
+// table
+gcs("t-bc","border-collapse:collapse","border-collapse");
+gcs("t-bs","border-spacing:5px","border-spacing");
+gcs("t-cap","caption-side:top","caption-side");
+gcs("t-empty","empty-cells:hide","empty-cells");
+gcs("t-tl","table-layout:fixed","table-layout");
+gcs("t-va","vertical-align:middle","vertical-align");
+// table geometry: 2 cols 100px each
+rect("t-geom","display:table;border-collapse:collapse;width:200px;height:40px");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
