@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+ol{padding-left:40px}
+ul{padding-left:40px}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// list-style longhands
+gc("ls-disc","list-style:disc",["list-style-type","list-style-position","list-style-image"]);
+gc("ls-decimal","list-style:decimal",["list-style-type"]);
+gc("ls-inside","list-style:inside",["list-style-position"]);
+gc("ls-none","list-style:none",["list-style-type"]);
+gc("lst-square","list-style-type:square","list-style-type");
+gc("lst-alpha","list-style-type:lower-alpha","list-style-type");
+gc("lst-roman","list-style-type:upper-roman","list-style-type");
+gc("lsp-outside","list-style-position:outside","list-style-position");
+gc("lsp-inside","list-style-position:inside","list-style-position");
+// markers via li
+const ul=document.createElement("ul");ul.id="ul1";
+const li=document.createElement("li");li.textContent="x";ul.appendChild(li);
+document.body.appendChild(ul);
+const cs=getComputedStyle(li);
+L("li-marker-type","list-style-type="+cs.listStyleType);
+L("li-marker-pos","list-style-position="+cs.listStylePosition);
+L("li-display","display="+cs.display);
+ul.remove();
+// quotes
+gc("q-default","quotes","quotes");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
