@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// overflow family
+gc("ov-x","overflow-x:hidden","overflow-x");
+gc("ov-y","overflow-y:scroll","overflow-y");
+gc("ov-clip","overflow:clip","overflow");
+gc("ov-both","overflow:hidden visible","overflow-x");
+// text-overflow
+gc("to-clip","text-overflow:clip","text-overflow");
+gc("to-ellip","text-overflow:ellipsis","text-overflow");
+// word/letter spacing
+gc("ws-2px","word-spacing:2px","word-spacing");
+gc("ls-3px","letter-spacing:3px","letter-spacing");
+// white-space
+gc("whs-nowrap","white-space:nowrap","white-space");
+gc("whs-pre","white-space:pre","white-space");
+gc("whs-prewrap","white-space:pre-wrap","white-space");
+gc("whs-preline","white-space:pre-line","white-space");
+gc("whs-breaksp","white-space:break-spaces","white-space");
+// word-break / overflow-wrap
+gc("wb-normal","word-break:normal","word-break");
+gc("wb-breakall","word-break:break-all","word-break");
+gc("wb-keepall","word-break:keep-all","word-break");
+gc("ow-normal","overflow-wrap:normal","overflow-wrap");
+gc("ow-anywhere","overflow-wrap:anywhere","overflow-wrap");
+gc("ow-breakword","overflow-wrap:break-word","overflow-wrap");
+// line-break
+gc("lb-auto","line-break:auto","line-break");
+gc("lb-loose","line-break:loose","line-break");
+gc("lb-strict","line-break:strict","line-break");
+// text-transform
+gc("tt-up","text-transform:uppercase","text-transform");
+gc("tt-low","text-transform:lowercase","text-transform");
+gc("tt-cap","text-transform:capitalize","text-transform");
+gc("tt-none","text-transform:none","text-transform");
+// vertical-align
+gc("va-super","vertical-align:super","vertical-align");
+gc("va-10px","vertical-align:10px","vertical-align");
+gc("va-middle","vertical-align:middle","vertical-align");
+// line-height
+gc("lh-num","line-height:1.5","line-height");
+gc("lh-px","line-height:20px","line-height");
+gc("lh-norm","line-height:normal","line-height");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
