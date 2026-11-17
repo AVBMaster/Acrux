@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function two(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// #205: logical + physical longhand in ONE rule — last declared wins
+two("ml-after-phys","margin-left:5px;margin-inline-start:10px","margin-left");
+two("phys-after-ml","margin-inline-start:10px;margin-left:5px","margin-left");
+two("pl-after-phys","padding-left:5px;padding-inline-start:10px","padding-left");
+two("phys-after-pl","padding-inline-start:10px;padding-left:5px","padding-left");
+two("bl-after-phys","border-left-width:5px;border-inline-start-width:10px","border-left-width");
+two("phys-after-bl","border-inline-start-width:10px;border-left-width:5px","border-left-width");
+two("ins-after-phys","left:5px;inset-inline-start:10px","left");
+two("phys-after-ins","inset-inline-start:10px;left:5px","left");
+// control: same-name twice — last wins (should already work)
+two("same-twice","margin-left:5px;margin-left:10px","margin-left");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
