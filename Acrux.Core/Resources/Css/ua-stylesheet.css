@@ -359,6 +359,20 @@ input {
   box-sizing: border-box;
   writing-mode: horizontal-tb;
 }
+/* A disabled control is greyed: the reference engine dims the text and
+   washes the background toward the control's own face colour rather than
+   leaving it enabled-looking (measured on a disabled text input: color
+   rgb(84,84,84), background rgba(239,239,239,0.3)). The alpha sits over the
+   control's own white/buttonface background, so the composited look is the
+   washed grey. This rule is author-overridable (0,2,0 specificity beats the
+   element defaults above but loses to any author declaration). */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: rgb(84, 84, 84);
+  background-color: rgba(239, 239, 239, 0.3);
+  cursor: default;
+}
 input[type="hidden" i] {
   display: none;
   appearance: none;
