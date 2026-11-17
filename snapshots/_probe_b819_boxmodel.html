@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// width/height
+gc("w-100","width:100px",["width","height"]);
+gc("w-auto","width:auto","width");
+gc("w-pct","width:50%","width");
+gc("w-min","width:min-content","width");
+gc("w-max","width:max-content","width");
+gc("h-50","height:50px","height");
+gc("h-auto","height:auto","height");
+// min/max
+gc("minw","min-width:50px","min-width");
+gc("maxw","max-width:200px","max-width");
+gc("minh","min-height:30px","min-height");
+gc("maxh","max-height:80px","max-height");
+// margin
+gc("mg-1","margin:10px","margin-top");
+gc("mg-2","margin:5px 10px","margin-right");
+gc("mg-3","margin:1px 2px 3px 4px","margin-left");
+gc("mg-auto","margin:0 auto","margin-left");
+gc("mgneg","margin:-5px","margin-top");
+// padding
+gc("pd-1","padding:10px","padding-top");
+gc("pd-2","padding:5px 10px","padding-right");
+gc("pd-4","padding:1px 2px 3px 4px","padding-bottom");
+// box-sizing
+gc("bs-content","box-sizing:content-box","box-sizing");
+gc("bs-border","box-sizing:border-box","box-sizing");
+// border
+gc("bd-1","border:1px solid black","border-top-width");
+gc("bd-style","border:1px solid black","border-top-style");
+gc("bd-color","border:1px solid red","border-top-color");
+gc("bd-radius","border-radius:5px","border-top-left-radius");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
