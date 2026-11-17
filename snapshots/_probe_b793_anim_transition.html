@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fade{0%{opacity:0}100%{opacity:1}}
+@keyframes slide{from{margin-left:0}to{margin-left:100px}}
+@keyframes multi{0%{opacity:0}50%{opacity:0.5}100%{opacity:1}}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// transition computed
+gc("tr-dur","transition-duration:2s","transition-duration");
+gc("tr-prop","transition-property:opacity","transition-property");
+gc("tr-timing","transition-timing-function:ease-in","transition-timing-function");
+gc("tr-delay","transition-delay:0.5s","transition-delay");
+gc("tr-all","transition:all 0.3s ease","transition-property");
+gc("tr-none","transition:none","transition-property");
+gc("tr-multi","transition:opacity 0.3s, transform 0.5s","transition-property");
+// animation computed
+gc("an-name","animation-name:spin","animation-name");
+gc("an-dur","animation-duration:3s","animation-duration");
+gc("an-iter","animation-iteration-count:infinite","animation-iteration-count");
+gc("an-dir","animation-direction:reverse","animation-direction");
+gc("an-fill","animation-fill-mode:forwards","animation-fill-mode");
+gc("an-play","animation-play-state:paused","animation-play-state");
+gc("an-timing","animation-timing-function:linear","animation-timing-function");
+gc("an-sh","animation:spin 2s linear infinite","animation-name");
+gc("an-sh-dur","animation:spin 2s linear infinite","animation-duration");
+gc("an-none","animation:none","animation-name");
+// animation events available
+gc("an-delay","animation-delay:1s","animation-delay");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
