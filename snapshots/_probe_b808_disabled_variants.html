@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function fp(tag,html,props){
+  const t=document.createElement("div");t.innerHTML=html;document.body.appendChild(t);
+  const el=t.firstElementChild;const cs=getComputedStyle(el);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  t.remove();
+}
+// disabled variants across control kinds
+fp("ta-disabled","<textarea disabled>",["color","background-color"]);
+fp("sel-disabled","<select disabled><option>x</option></select>",["color","background-color"]);
+fp("btn-disabled","<button disabled>B</button>",["color","background-color"]);
+fp("inp-btn-disabled","<input type=button disabled value=B>",["color","background-color"]);
+// enabled controls must stay enabled-looking (regression guard)
+fp("ta-enabled","<textarea>",["color","background-color"]);
+fp("btn-enabled","<button>B</button>",["color","background-color"]);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
