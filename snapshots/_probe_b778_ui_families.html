@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:14px monospace}
+.box{width:80px;height:60px;background:#fcc;display:inline-block;margin:5px;vertical-align:top}
+</style></head><body>
+<div id="out" style="font:12px monospace"></div>
+<div>
+<div class="box" style="outline:2px solid red;outline-offset:4px">OUT</div>
+<div class="box" style="outline:3px dashed blue;outline-offset:-5px">OUT2</div>
+<div class="box" style="accent-color:red"><input type="checkbox" checked style="accent-color:red"></div>
+<div class="box" style="caret-color:transparent"><input style="caret-color:transparent"></div>
+</div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// outline family computed
+gc("out-2px-red","outline:2px solid red","outline-color");
+gc("out-2px-red-style","outline:2px solid red","outline-style");
+gc("out-2px-red-width","outline:2px solid red","outline-width");
+gc("out-offset-4px","outline:2px solid red;outline-offset:4px","outline-offset");
+gc("out-offset-neg","outline:2px solid red;outline-offset:-5px","outline-offset");
+gc("out-style-dashed","outline:3px dashed blue","outline-style");
+gc("out-style-dotted","outline:dotted","outline-style");
+gc("out-style-double","outline:double","outline-style");
+gc("out-style-none","outline:none","outline-style");
+gc("out-width-thin","outline:thin solid","outline-width");
+gc("out-width-medium","outline:medium solid","outline-width");
+gc("out-width-thick","outline:thick solid","outline-width");
+gc("out-width-5px","outline:5px solid","outline-width");
+// accent-color
+gc("accent-red","accent-color:red","accent-color");
+gc("accent-auto","accent-color:auto","accent-color");
+gc("accent-rgb","accent-color:rgb(0,128,255)","accent-color");
+// caret-color
+gc("caret-red","caret-color:red","caret-color");
+gc("caret-auto","caret-color:auto","caret-color");
+gc("caret-transparent","caret-color:transparent","caret-color");
+// appearance
+gc("app-none","appearance:none","appearance");
+gc("app-auto","appearance:auto","appearance");
+// touch-action
+gc("touch-none","touch-action:none","touch-action");
+gc("touch-pan-x","touch-action:pan-x","touch-action");
+gc("touch-pan-y","touch-action:pan-y","touch-action");
+gc("touch-manipulation","touch-action:manipulation","touch-action");
+gc("touch-pinch-zoom","touch-action:pinch-zoom","touch-action");
+// overscroll-behavior
+gc("over-auto","overscroll-behavior:auto","overscroll-behavior");
+gc("over-contain","overscroll-behavior:contain","overscroll-behavior");
+gc("over-none","overscroll-behavior:none","overscroll-behavior");
+gc("over-x-none","overscroll-behavior-x:none","overscroll-behavior-x");
+gc("over-y-contain","overscroll-behavior-y:contain","overscroll-behavior-y");
+// scrollbar-width / scrollbar-color
+gc("sb-width-auto","scrollbar-width:auto","scrollbar-width");
+gc("sb-width-thin","scrollbar-width:thin","scrollbar-width");
+gc("sb-width-none","scrollbar-width:none","scrollbar-width");
+gc("sb-color","scrollbar-color:red blue","scrollbar-color");
+gc("sb-color-auto","scrollbar-color:auto","scrollbar-color");
+// user-select
+gc("user-auto","user-select:auto","user-select");
+gc("user-none","user-select:none","user-select");
+gc("user-text","user-select:text","user-select");
+gc("user-all","user-select:all","user-select");
+// color-scheme
+gc("cs-normal","color-scheme:normal","color-scheme");
+gc("cs-light","color-scheme:light","color-scheme");
+gc("cs-dark","color-scheme:dark","color-scheme");
+gc("cs-light-dark","color-scheme:light dark","color-scheme");
+// resize
+gc("resize-none","resize:none","resize");
+gc("resize-both","resize:both","resize");
+gc("resize-horizontal","resize:horizontal","resize");
+gc("resize-vertical","resize:vertical","resize");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
