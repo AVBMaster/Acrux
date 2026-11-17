@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,prop){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const v=getComputedStyle(d).getPropertyValue(prop).trim();
+  L(tag,prop+"="+(v===""?"(empty)":v.split(" ").join("_")));d.remove();
+}
+// border longhands
+gc("bd-w","border-width:3px","border-top-width");
+gc("bd-style","border-style:dashed","border-top-style");
+gc("bd-color","border-color:red","border-top-color");
+gc("bd-sh","border:2px solid blue","border-top-width");
+gc("bd-sh-c","border:2px solid blue","border-left-color");
+gc("bd-top","border-top:4px dotted green","border-top-style");
+// border-radius
+gc("br-all","border-radius:10px","border-radius");
+gc("br-tl","border-radius:10px 20px","border-top-left-radius");
+gc("br-4","border-radius:1px 2px 3px 4px","border-bottom-right-radius");
+gc("br-slash","border-radius:10px / 5px","border-radius");
+// background
+gc("bg-color","background-color:red","background-color");
+gc("bg-repeat","background-repeat:no-repeat","background-repeat");
+gc("bg-pos","background-position:center","background-position");
+gc("bg-size","background-size:cover","background-size");
+gc("bg-attach","background-attachment:fixed","background-attachment");
+gc("bg-clip","background-clip:padding-box","background-clip");
+gc("bg-origin","background-origin:border-box","background-origin");
+gc("bg-sh","background:red","background-color");
+gc("bg-sh-img","background:url(x.png) no-repeat","background-repeat");
+// outline
+gc("ol-w","outline-width:3px","outline-width");
+gc("ol-style","outline-style:solid","outline-style");
+gc("ol-color","outline-color:red","outline-color");
+gc("ol-sh","outline:2px solid red","outline-width");
+gc("ol-offset","outline-offset:4px","outline-offset");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
