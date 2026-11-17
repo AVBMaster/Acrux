@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+/* author rule the page can revert past */
+.rv{display:inline-block}
+.rl1{display:inline-block}
+.rl2{display:inline-block}
+/* a second author layer to step back through */
+@layer base { .rl2{display:block} }
+@layer top { .rl2{display:inline-block} }
+</style></head><body>
+<div class="rv" id="rv">revert display</div>
+<div class="rl1" id="rl1">revert-layer 1</div>
+<div class="rl2" id="rl2">revert-layer 2</div>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function sh(tag,el,css,prop){
+  const before=getComputedStyle(el).getPropertyValue(prop).trim();
+  el.setAttribute("style",css);
+  const after=getComputedStyle(el).getPropertyValue(prop).trim();
+  el.removeAttribute("style");
+  L(tag,prop+":"+(before===""?"(empty)":before.split(" ").join("_"))+"->"+(after===""?"(empty)":after.split(" ").join("_")));
+}
+// revert on an author-declared display goes back past the author rule to UA
+sh("revert-display",document.getElementById("rv"),"display:revert","display");
+// revert-layer steps back one layer
+sh("revertlayer-rl1",document.getElementById("rl1"),"display:revert-layer","display");
+sh("revertlayer-rl2",document.getElementById("rl2"),"display:revert-layer","display");
+// revert on a non-display property the UA also declares (color -> UA black)
+sh("revert-color",document.getElementById("rv"),"color:revert","color");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
