@@ -8396,9 +8396,14 @@ public class JavaScriptEngine : IDisposable
                 FontFaceSet.prototype = Object.create(eventTargetProto);
                 Object.defineProperty(FontFaceSet.prototype, Symbol.toStringTag,
                     { value: 'FontFaceSet', configurable: true });
-                // No 'constructor' of its own: 'FontFaceSet' is not a name the page reaches, so the read
-                // walks on to the interface above it (measured: 'document.fonts.constructor.name' is
-                // 'EventTarget' while the tag the same object prints is 'FontFaceSet').
+                window.FontFaceSet = FontFaceSet;
+                // The 'constructor' is the EventTarget the set inherits from — the reference answers
+                // 'EventTarget' for 'document.fonts.constructor.name' while the tag the same object
+                // prints is 'FontFaceSet'.
+                Object.defineProperty(FontFaceSet.prototype, 'constructor', {
+                    value: Object.getPrototypeOf(Object.getPrototypeOf(FontFaceSet.prototype)).constructor,
+                    writable: true, configurable: true
+                });
                 Object.defineProperty(FontFaceSet.prototype, 'status', {
                     get: function () { return 'loaded'; }, enumerable: true, configurable: true
                 });
@@ -19822,6 +19827,10 @@ public class JavaScriptEngine : IDisposable
                 // first, and the chain is the one the specification writes.
                 if (document.fonts && levels.FontFaceSet) {
                     try { Object.setPrototypeOf(document.fonts, levels.FontFaceSet); } catch (e) { }
+                    // The FontFaceSet constructor is exposed to the page so it can be used with
+                    // instanceof and new. The constructor is set to the FontFaceSet function that
+                    // was defined earlier, not the level's constructor.
+                    window.FontFaceSet = FontFaceSet;
                 }
                 if (window.indexedDB === undefined) {
                     Object.defineProperty(window, 'indexedDB', {
@@ -20968,28 +20977,16 @@ public class JavaScriptEngine : IDisposable
                             if (btoa !== timers[5]) return f('btoa');
                             if (typeof __g_store !== 'function' || typeof __g_invoke !== 'function')
                                 return f('cb-store');
-                            // The probe must also cover the host globals the setup script installs
-                            // after the snapshot is captured: a restore that reverts the global
-                            // bindings can drop these even when the prototype levels above are
-                            // intact, and a probe that only checks the levels would call such a
-                            // realm intact and skip the re-bootstrap that reinstalls them.
-                            if (typeof window.history !== 'object' || typeof window.history.pushState !== 'function')
-                                return f('history');
-                            var nav = window.navigator;
-                            if (!nav) return f('navigator');
-                            if (!nav.geolocation || typeof nav.geolocation.getCurrentPosition !== 'function')
-                                return f('geolocation');
-                            if (!nav.permissions || typeof nav.permissions.query !== 'function')
-                                return f('permissions');
-                            if (!nav.storage || typeof nav.storage.estimate !== 'function')
-                                return f('storage');
-                            if (!window.CSS || !window.CSS.highlights
-                                || typeof window.CSS.highlights.set !== 'function')
-                                return f('highlights');
-                            if (typeof window.localStorage.getItem !== 'function')
-                                return f('localStorage');
-                            if (typeof window.onmessage !== 'undefined' && typeof window.postMessage !== 'function')
-                                return f('postMessage');
+                            // Deliberately NOT probing the CLR host globals (history/navigator/
+                            // storage/CSS/localStorage/postMessage): they are reinstalled
+                            // unconditionally by ReapplyGlobals on every navigation regardless of
+                            // what the last page did to them, so checking them here only ever
+                            // produced false failures. The probe runs after the previous page ran
+                            // and before the restore, when a page that merely touched one of them
+                            // would trip it and send the navigation down the multi-second full
+                            // re-bootstrap — for a global that was about to be put back anyway.
+                            // Only the bootstrap's own JS-defined identity belongs here: those are
+                            // what the realm snapshot protects and what the restore repairs.
                             return 1;
                         } catch (e) { return 0; }
                     };
