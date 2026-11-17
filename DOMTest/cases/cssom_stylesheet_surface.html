@@ -1,0 +1,66 @@
+<!DOCTYPE html><html><head><style id="s1">body { color: red; } p { margin: 0; }</style></head><body><div id="root"></div>
+<script>
+(function () {
+    function eq(l,g,w){ window.__T(l, String(g)===String(w), 'got=['+g+'] want=['+w+']'); }
+    // ── A. document.styleSheets ──────────────────────────────────────────────
+    eq('A1 styleSheets is object', typeof document.styleSheets, 'object');
+    eq('A2 styleSheets length >= 1', document.styleSheets.length >= 1, 'true');
+    var sheet = document.styleSheets[0];
+    eq('A3 sheet is CSSStyleSheet', sheet instanceof CSSStyleSheet, 'true');
+    eq('A4 sheet type', sheet.type, 'text/css');
+    // ── B. CSSStyleSheet methods ─────────────────────────────────────────────
+    eq('B1 cssRules is object', typeof sheet.cssRules, 'object');
+    eq('B2 cssRules length', sheet.cssRules.length, '2');
+    var rule0 = sheet.cssRules[0];
+    eq('B3 rule0 is CSSStyleRule', rule0 instanceof CSSStyleRule, 'true');
+    eq('B4 rule0 selectorText', rule0.selectorText, 'body');
+    eq('B5 rule0 style is CSSStyleDeclaration', rule0.style instanceof CSSStyleDeclaration, 'true');
+    eq('B6 rule0 style color', rule0.style.color, 'red');
+    // ── C. insertRule / deleteRule ───────────────────────────────────────────
+    var idx = sheet.insertRule('#root { color: blue; }', sheet.cssRules.length);
+    eq('C1 insertRule returns index', idx, '2');
+    eq('C2 cssRules length after insert', sheet.cssRules.length, '3');
+    eq('C3 new rule selector', sheet.cssRules[2].selectorText, '#root');
+    sheet.deleteRule(2);
+    eq('C4 cssRules length after delete', sheet.cssRules.length, '2');
+    // ── D. CSSStyleSheet constructor ─────────────────────────────────────────
+    eq('D1 CSSStyleSheet is fn', typeof CSSStyleSheet, 'function');
+    var newSheet = new CSSStyleSheet();
+    eq('D2 newSheet cssRules length', newSheet.cssRules.length, '0');
+    newSheet.insertRule('a { color: green; }', 0);
+    eq('D3 newSheet insertRule', newSheet.cssRules.length, '1');
+    newSheet.insertRule('b { color: yellow; }', 1);
+    eq('D4 newSheet insertRule at 1', newSheet.cssRules.length, '2');
+    // ── E. CSSRule types ─────────────────────────────────────────────────────
+    eq('E1 CSSRule is fn', typeof CSSRule, 'function');
+    eq('E2 CSSStyleRule is fn', typeof CSSStyleRule, 'function');
+    eq('E3 CSSMediaRule is fn', typeof CSSMediaRule, 'function');
+    eq('E4 CSSFontFaceRule is fn', typeof CSSFontFaceRule, 'function');
+    eq('E5 CSSKeyframesRule is fn', typeof CSSKeyframesRule, 'function');
+    eq('E6 CSSKeyframeRule is fn', typeof CSSKeyframeRule, 'function');
+    eq('E7 CSSPageRule is fn', typeof CSSPageRule, 'function');
+    eq('E8 CSSNamespaceRule is fn', typeof CSSNamespaceRule, 'function');
+    eq('E9 CSSImportRule is fn', typeof CSSImportRule, 'function');
+    eq('E10 CSSSupportsRule is fn', typeof CSSSupportsRule, 'function');
+    // ── F. CSSRule constants ─────────────────────────────────────────────────
+    eq('F1 STYLE_RULE', CSSRule.STYLE_RULE, '1');
+    eq('F2 MEDIA_RULE', CSSRule.MEDIA_RULE, '4');
+    eq('F3 FONT_FACE_RULE', CSSRule.FONT_FACE_RULE, '5');
+    eq('F4 KEYFRAMES_RULE', CSSRule.KEYFRAMES_RULE, '7');
+    eq('F5 IMPORT_RULE', CSSRule.IMPORT_RULE, '3');
+    // ── G. MediaList ─────────────────────────────────────────────────────────
+    eq('G1 MediaList is fn', typeof MediaList, 'function');
+    // ── H. CSSStyleDeclaration ───────────────────────────────────────────────
+    var style = rule0.style;
+    eq('H1 getPropertyValue', style.getPropertyValue('color'), 'red');
+    eq('H2 setProperty no-throw', (function(){ style.setProperty('font-size', '16px'); return style.getPropertyValue('font-size'); })(), '16px');
+    eq('H3 removeProperty', (function(){ style.removeProperty('font-size'); return style.getPropertyValue('font-size'); })(), '');
+    eq('H4 length number', typeof style.length, 'number');
+    eq('H5 item(0) string', typeof style.item(0), 'string');
+    // ── I. getComputedStyle ──────────────────────────────────────────────────
+    var cs = getComputedStyle(document.getElementById('root'));
+    eq('I1 computedStyle is object', typeof cs, 'object');
+    eq('I2 computedStyle color', typeof cs.color, 'string');
+    eq('I3 computedStyle display', cs.display, 'block');
+})();
+</script></body></html>
