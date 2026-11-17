@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+gc("td-u","text-decoration:underline",["text-decoration-line","text-decoration-style","text-decoration-color"]);
+gc("td-lt","text-decoration:line-through wavy red",["text-decoration-line","text-decoration-style","text-decoration-color"]);
+gc("td-overline","text-decoration:overline",["text-decoration-line"]);
+gc("td-thick","text-decoration:underline;text-decoration-thickness:3px",["text-decoration-thickness"]);
+gc("td-offset","text-decoration:underline;text-underline-offset:4px",["text-underline-offset"]);
+gc("te-dot","text-emphasis:dot",["text-emphasis-style"]);
+gc("te-color","text-emphasis-color:red",["text-emphasis-color"]);
+gc("te-pos","text-emphasis-position:under right",["text-emphasis-position"]);
+gc("ls-norm","letter-spacing:normal",["letter-spacing"]);
+gc("ws-norm","word-spacing:normal",["word-spacing"]);
+gc("font-sh","font:italic bold 16px/1.5 serif",["font-style","font-weight","font-size","line-height","font-family"]);
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
