@@ -2063,10 +2063,13 @@ public partial class ElementHost : IDomPrototypeHost
         set => _element.SetAttribute("spellcheck", value ? "true" : "false");
     }
 
-    public string? translate
+    /// <summary>HTML §5.5.2: the translate state is an enumerated yes/no attribute, absent meaning
+    /// inherit from the parent (and true at the root). The IDL attribute is boolean: reading gives
+    /// false only when the attribute is explicitly 'no'; writing puts 'yes' or 'no' on the element.</summary>
+    public bool translate
     {
-        get => _element.GetAttribute("translate");
-        set => _element.SetAttribute("translate", value);
+        get => _element.GetAttribute("translate") != "no";
+        set => _element.SetAttribute("translate", value ? "yes" : "no");
     }
 
     // 'attachShadow' and 'shadowRoot' live with the shadow tree in ElementHost.Tables.cs.
