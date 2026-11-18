@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// display:table family
+gc("disp-table","display:table","display");
+gc("disp-row","display:table-row","display");
+gc("disp-cell","display:table-cell","display");
+gc("disp-caption","display:table-caption","display");
+gc("disp-col","display:table-column","display");
+gc("disp-colgroup","display:table-column-group","display");
+gc("disp-rowgroup","display:table-row-group","display");
+gc("disp-headergroup","display:table-header-group","display");
+gc("disp-footergroup","display:table-footer-group","display");
+// table properties
+gc("tbl-collapse","display:table;border-collapse:collapse","border-collapse");
+gc("tbl-separate","display:table;border-collapse:separate","border-collapse");
+gc("tbl-spacing","display:table;border-spacing:5px","border-spacing");
+gc("tbl-layout","display:table;table-layout:fixed","table-layout");
+gc("tbl-caption","display:table;caption-side:top","caption-side");
+gc("tbl-capside","display:table;caption-side:bottom","caption-side");
+// empty-cells
+gc("tbl-empty","display:table;empty-cells:show","empty-cells");
+gc("tbl-emptyside","display:table;empty-cells:hide","empty-cells");
+// vertical-align in cells
+gc("va-top","display:table-cell;vertical-align:top","vertical-align");
+gc("va-mid","display:table-cell;vertical-align:middle","vertical-align");
+gc("va-bot","display:table-cell;vertical-align:bottom","vertical-align");
+gc("va-base","display:table-cell;vertical-align:baseline","vertical-align");
+// border-collapse on regular element
+gc("bc-collapse","border-collapse:collapse","border-collapse");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
