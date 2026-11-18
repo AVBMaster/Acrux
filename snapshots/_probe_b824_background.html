@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// background shorthand longhand extraction
+gc("bg-color","background:red","background-color");
+gc("bg-repeat","background:url(x.png) no-repeat","background-repeat");
+gc("bg-pos","background:url(x.png) center","background-position");
+gc("bg-attach","background:url(x.png) fixed","background-attachment");
+gc("bg-clip","background:url(x.png) content-box","background-clip");
+gc("bg-origin","background:url(x.png) border-box","background-origin");
+// background-position forms
+gc("bp-center","background-position:center","background-position");
+gc("bp-top","background-position:top","background-position");
+gc("bp-px","background-position:10px 20px","background-position");
+gc("bp-pct","background-position:50% 50%","background-position");
+gc("bp-left","background-position:left top","background-position");
+// background-size
+gc("bsz-cover","background-size:cover","background-size");
+gc("bsz-contain","background-size:contain","background-size");
+gc("bsz-px","background-size:100px 50px","background-size");
+gc("bsz-auto","background-size:auto","background-size");
+gc("bsz-pct","background-size:50% 50%","background-size");
+// background-repeat forms
+gc("br-no","background-repeat:no-repeat","background-repeat");
+gc("br-repeat","background-repeat:repeat","background-repeat");
+gc("br-x","background-repeat:repeat-x","background-repeat");
+gc("br-y","background-repeat:repeat-y","background-repeat");
+gc("br-round","background-repeat:round","background-repeat");
+gc("br-space","background-repeat:space","background-repeat");
+// background-attachment
+gc("ba-scroll","background-attachment:scroll","background-attachment");
+gc("ba-fixed","background-attachment:fixed","background-attachment");
+gc("ba-local","background-attachment:local","background-attachment");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
