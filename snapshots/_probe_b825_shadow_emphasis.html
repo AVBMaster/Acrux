@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// text-shadow
+gc("ts-none","text-shadow:none","text-shadow");
+gc("ts-1","text-shadow:1px 1px 2px red","text-shadow");
+gc("ts-2","text-shadow:0 0 3px blue","text-shadow");
+gc("ts-multi","text-shadow:1px 1px 0 red,2px 2px 0 blue","text-shadow");
+// box-shadow
+gc("bs-none","box-shadow:none","box-shadow");
+gc("bs-1","box-shadow:1px 1px 2px red","box-shadow");
+gc("bs-inset","box-shadow:inset 0 0 5px black","box-shadow");
+gc("bs-spread","box-shadow:0 0 0 5px green","box-shadow");
+gc("bs-multi","box-shadow:1px 1px 0 red,2px 2px 0 blue","box-shadow");
+// text-decoration-color / style
+gc("tdc-red","text-decoration-color:red","text-decoration-color");
+gc("tdc-inherit","text-decoration-color:inherit","text-decoration-color");
+gc("tds-solid","text-decoration-style:solid","text-decoration-style");
+gc("tds-wavy","text-decoration-style:wavy","text-decoration-style");
+gc("tds-dotted","text-decoration-style:dotted","text-decoration-style");
+gc("tds-dashed","text-decoration-style:dashed","text-decoration-style");
+gc("tds-double","text-decoration-style:double","text-decoration-style");
+// text-emphasis
+gc("te-none","text-emphasis:none","text-emphasis-style");
+gc("te-dot","text-emphasis:dot","text-emphasis-style");
+gc("te-circle","text-emphasis:circle","text-emphasis-style");
+gc("te-double","text-emphasis:double-circle","text-emphasis-style");
+gc("te-triangle","text-emphasis:triangle","text-emphasis-style");
+gc("te-sesame","text-emphasis:sesame","text-emphasis-style");
+// font-variant
+gc("fv-normal","font-variant:normal","font-variant");
+gc("fv-sc","font-variant:small-caps","font-variant");
+gc("fv-all-sc","font-variant:all-small-caps","font-variant");
+gc("fv-petite","font-variant:petite-caps","font-variant");
+gc("fv-unicase","font-variant:unicase","font-variant");
+gc("fv-titling","font-variant:titling-caps","font-variant");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
