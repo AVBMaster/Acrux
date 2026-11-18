@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@keyframes slide {from{margin-left:0}to{margin-left:100px}}
+@keyframes fade {from{opacity:0}to{opacity:1}}
+@keyframes multi {0%{opacity:0}50%{opacity:0.5}100%{opacity:1}}
+body{margin:8px;font:12px monospace}
+</style></head><body>
+<div id="out"></div>
+<script>
+const out=[];
+function L(t,v){out.push("L~"+t+"~"+String(v).split(" ").join("_"));}
+function gc(tag,css,props){
+  if(typeof props==="string") props=[props];
+  const d=document.createElement("div");d.setAttribute("style",css);document.body.appendChild(d);
+  const cs=getComputedStyle(d);
+  for(const p of props){const v=cs.getPropertyValue(p).trim();L(tag,p+"="+(v===""?"(empty)":v.split(" ").join("_")));}
+  d.remove();
+}
+// animation-name
+gc("an-none","animation:none","animation-name");
+gc("an-slide","animation:slide 1s","animation-name");
+gc("an-fade","animation:fade 2s","animation-name");
+gc("an-multi","animation:multi 1s","animation-name");
+// animation-duration
+gc("ad-1s","animation:slide 1s","animation-duration");
+gc("ad-500ms","animation:slide 500ms","animation-duration");
+gc("ad-0","animation:slide 0s","animation-duration");
+// animation-timing-function
+gc("at-ease","animation:slide 1s ease","animation-timing-function");
+gc("at-linear","animation:slide 1s linear","animation-timing-function");
+gc("at-easein","animation:slide 1s ease-in","animation-timing-function");
+gc("at-cubic","animation:slide 1s cubic-bezier(0.25,0.1,0.25,1)","animation-timing-function");
+gc("at-steps","animation:slide 1s steps(5)","animation-timing-function");
+// animation-iteration-count
+gc("ai-1","animation:slide 1s 1","animation-iteration-count");
+gc("ai-3","animation:slide 1s 3","animation-iteration-count");
+gc("ai-infinite","animation:slide 1s infinite","animation-iteration-count");
+// animation-direction
+gc("ad-normal","animation:slide 1s normal","animation-direction");
+gc("ad-reverse","animation:slide 1s reverse","animation-direction");
+gc("ad-alternate","animation:slide 1s alternate","animation-direction");
+// animation-fill-mode
+gc("af-none","animation:slide 1s none","animation-fill-mode");
+gc("af-forwards","animation:slide 1s forwards","animation-fill-mode");
+gc("af-backwards","animation:slide 1s backwards","animation-fill-mode");
+gc("af-both","animation:slide 1s both","animation-fill-mode");
+// animation-play-state
+gc("ap-running","animation:slide 1s running","animation-play-state");
+gc("ap-paused","animation:slide 1s paused","animation-play-state");
+// animation-delay
+gc("adelay-0","animation:slide 1s 0s","animation-delay");
+gc("adelay-05","animation:slide 1s 0.5s","animation-delay");
+document.getElementById("out").textContent=out.join("\n");
+</script></body></html>
